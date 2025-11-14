@@ -31,7 +31,7 @@ function umh_create_db_tables() {
         email VARCHAR(100) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         phone VARCHAR(20),
-        role VARCHAR(50) NOT NULL, -- 'owner', 'admin_staff', 'finance_staff', 'marketing'
+        role VARCHAR(50) NOT NULL, -- [PERBAIKAN] 'owner', 'admin_staff', 'finance_staff', 'marketing_staff', 'hr_staff', 'sopir', dll (Dinamis)
         auth_token VARCHAR(255),
         token_expires DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active', -- 'active', 'inactive'

@@ -1,14 +1,12 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { createRoot } from '@wordpress/element';
+import { createRoot } from 'react-dom/client';
 
-// --- (Poin 4) Komponen Login Kustom ---
+// Komponen Login Kustom
 const CustomLoginForm = ({ onLoginSuccess }) => {
-    const [username, setUsername] = useState('');
+    const [email, setEmail] = useState(''); // [PERBAIKAN] Diubah dari username
     const [password, setPassword] = useState('');
-    const [error, setError] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-
-    // Ambil data WP (terutama api_url)
+    const [error, setError] = useState(null);
     const wpData = window.umh_wp_data || { api_url: '/wp-json/umh/v1/' };
 
     const handleSubmit = async (e) => {
@@ -19,19 +17,16 @@ const CustomLoginForm = ({ onLoginSuccess }) => {
         try {
             const response = await fetch(`${wpData.api_url}users/login`, {
                 method: 'POST',
-                headers: {
+                headers: { // [PERBAIKAN] Menambahkan header yang hilang
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ email: email, password: password }), // [PERBAIKAN] Mengirim 'email'
             });
 
             const data = await response.json();
-
             if (!response.ok) {
                 throw new Error(data.message || 'Login gagal.');
             }
-
-            // Panggil callback dari parent (App) dengan data (token dan user)
             onLoginSuccess(data);
 
         } catch (err) {
@@ -47,13 +42,13 @@ const CustomLoginForm = ({ onLoginSuccess }) => {
                 <p style={styles.loginSubtitle}>Silakan masuk (Owner/Karyawan)</p>
                 <form onSubmit={handleSubmit}>
                     <div style={styles.inputGroup}>
-                        <label htmlFor="username" style={styles.label}>Username atau Email</label>
+                        <label htmlFor="email" style={styles.label}>Email</label> {/* [PERBAIKAN] Label diubah */}
                         <input
-                            type="text"
-                            id="username"
+                            type="email" // [PERBAIKAN] Tipe diubah
+                            id="email"
                             style={styles.input}
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
+                            value={email} // [PERBAIKAN] Value diubah
+                            onChange={(e) => setEmail(e.target.value)} // [PERBAIKAN] Handler diubah
                             required
                         />
                     </div>
@@ -81,15 +76,12 @@ const CustomLoginForm = ({ onLoginSuccess }) => {
 // --- (Poin 1, 2, 4) Logika Autentikasi ---
 
 // 1. Buat API Client (Helper)
-// Ini akan mengabstraksi logic fetch dan penambahan header
 const createApiClient = (getToken) => {
     const request = async (endpoint, options = {}) => {
         const token = getToken();
         const wpData = window.umh_wp_data || { api_url: '/wp-json/umh/v1/' };
-
         const headers = {
             'Content-Type': 'application/json',
-            ...options.headers,
         };
 
         // Tambahkan token jika ada
@@ -97,8 +89,7 @@ const createApiClient = (getToken) => {
             headers['Authorization'] = `Bearer ${token}`;
         }
         
-        // Tambahkan nonce JIKA ini adalah panggilan admin WP (opsional tapi bagus)
-        // Panggilan wp-login akan menanganinya secara terpisah
+        // [PERBAIKAN] Selalu kirim Nonce jika ini admin WP
         if (window.umh_wp_data?.is_wp_admin && window.umh_wp_data?.api_nonce) {
              headers['X-WP-Nonce'] = window.umh_wp_data.api_nonce;
         }
@@ -114,30 +105,26 @@ const createApiClient = (getToken) => {
             throw new Error(errorData.message || `Error ${response.status}`);
         }
         
-        // Handle no content response
         if (response.status === 204) {
             return null;
         }
-
         return response.json();
     };
 
     return {
-        get: (endpoint, options) => request(endpoint, { ...options, method: 'GET' }),
-        post: (endpoint, body, options) => request(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
-        put: (endpoint, body, options) => request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(body) }),
-        del: (endpoint, options) => request(endpoint, { ...options, method: 'DELETE' }),
+        get: (endpoint, options = {}) => request(endpoint, { ...options, method: 'GET' }),
+        post: (endpoint, body, options = {}) => request(endpoint, { ...options, method: 'POST', body: JSON.stringify(body) }),
+        put: (endpoint, body, options = {}) => request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(body) }),
+        del: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
     };
 };
 
 // 2. Buat Konteks Autentikasi
 const AuthContext = createContext(null);
-
 const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(() => localStorage.getItem('umh_auth_token'));
     const [isLoading, setIsLoading] = useState(true);
-
     const apiClient = createApiClient(() => token);
 
     // Efek untuk memuat user saat startup (Poin 1, 2, 4)
@@ -145,7 +132,6 @@ const AuthProvider = ({ children }) => {
         const bootstrapAuth = async () => {
             const wpData = window.umh_wp_data;
             const existingToken = localStorage.getItem('umh_auth_token');
-
             try {
                 // Skenario 1: Ini adalah Admin WP (Poin 1 & 2)
                 if (wpData && wpData.is_wp_admin) {
@@ -154,13 +140,15 @@ const AuthProvider = ({ children }) => {
                         const response = await fetch(`${wpData.api_url}auth/wp-login`, {
                             method: 'POST',
                             headers: {
-                                // Kirim Nonce untuk membuktikan ini panggilan yang sah
                                 'X-WP-Nonce': wpData.api_nonce, 
                                 'Content-Type': 'application/json',
                             },
                         });
                         
-                        if (!response.ok) throw new Error('WP Admin auto-login gagal.');
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.message || 'WP Admin auto-login gagal.');
+                        }
                         
                         const data = await response.json(); // { token, user }
                         console.log('WP Admin auto-login berhasil.');
@@ -169,9 +157,6 @@ const AuthProvider = ({ children }) => {
                         localStorage.setItem('umh_auth_token', data.token);
                         
                     } catch (adminLoginError) {
-                        // Gagal login sebagai admin? Ini aneh.
-                        // Mungkin token nonce kedaluwarsa. 
-                        // Jatuh ke login kustom untuk saat ini.
                         console.error('WP Admin auto-login error:', adminLoginError);
                         // Hapus token yang mungkin rusak
                         localStorage.removeItem('umh_auth_token');
@@ -184,7 +169,6 @@ const AuthProvider = ({ children }) => {
                     console.log('Token lokal ditemukan, memverifikasi...');
                     try {
                         // Set token sementara agar apiClient bisa menggunakannya
-                        // (Meskipun state belum update, apiClient akan mengambilnya dari local func)
                         const apiClientForVerify = createApiClient(() => existingToken);
                         const userData = await apiClientForVerify.get('users/me');
                         
@@ -203,11 +187,9 @@ const AuthProvider = ({ children }) => {
                 // Skenario 3: Bukan Admin WP & tidak ada token (Poin 4)
                 } else {
                     console.log('Bukan admin & tidak ada token. Tampilkan login.');
-                    // Tidak perlu melakukan apa-apa, user = null (tampilkan login)
                 }
 
             } catch (error) {
-                // Catch-all error
                 console.error('Bootstrap auth error:', error);
                 localStorage.removeItem('umh_auth_token');
                 setToken(null);
@@ -236,7 +218,6 @@ const AuthProvider = ({ children }) => {
         localStorage.removeItem('umh_auth_token');
         // Kita tidak perlu "logout" dari WP, hanya dari app React
     };
-
     const authContextValue = {
         user,
         token,
@@ -261,7 +242,6 @@ const useAuth = () => {
     }
     return context;
 };
-
 // --- Komponen Aplikasi Utama ---
 
 const DashboardComponent = () => {
@@ -272,14 +252,11 @@ const DashboardComponent = () => {
     const loadJamaah = async () => {
         setLoadingData(true);
         try {
-            // Gunakan api client dari konteks!
             const data = await api.get('jamaah');
             setJamaah(data);
         } catch (error) {
             console.error("Gagal mengambil data jamaah:", error);
-            // Hapus alert() agar tidak mengganggu
-            // alert("Gagal mengambil data: " + error.message); 
-            if (error.message.includes('401') || error.message.includes('Token')) {
+            if (error.message.includes('401') || error.message.includes('Token') || error.message.includes('403')) {
                 logout(); // Token mungkin tidak valid, paksa logout
             }
         } finally {
@@ -321,8 +298,6 @@ const DashboardComponent = () => {
 // Komponen App Utama (Router)
 const App = () => {
     const { user, isLoading, login } = useAuth();
-
-    // Tampilkan loading spinner
     if (isLoading) {
         return <div style={styles.loading}>Memuat Autentikasi...</div>;
     }
@@ -331,11 +306,9 @@ const App = () => {
     if (!user) {
         return <CustomLoginForm onLoginSuccess={login} />;
     }
-
     // (Poin 1 & 4) Jika ada user, tampilkan dashboard
     return <DashboardComponent />;
 };
-
 // Render Aplikasi
 const rootElement = document.getElementById('umh-react-app-root');
 if (rootElement) {

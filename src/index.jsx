@@ -237,20 +237,36 @@ const CustomLoginForm = ({ onLoginSuccess }) => {
 };
 
 
-// --- [BARU] Komponen UI Helper ---
+// --- [PERBAIKAN] Komponen UI Helper ---
 
 const Modal = ({ show, onClose, title, children }) => {
     if (!show) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        // 1. Kontainer Utama (z-50)
+        <div 
+            className="fixed inset-0 z-50 flex justify-center items-center p-4" 
+            aria-labelledby="modal-title" 
+            role="dialog" 
+            aria-modal="true"
+        >
+            {/* 2. Backdrop/Overlay. Dibuat terpisah. */}
+            <div 
+                className="fixed inset-0 bg-black bg-opacity-50" 
+                aria-hidden="true"
+                onClick={onClose} // Menambahkan fungsi tutup saat overlay diklik
+            ></div>
+
+            {/* 3. Panel Modal. Diberi 'relative' dan 'z-10' (atau z-50) agar di atas backdrop */}
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col relative z-10">
+                {/* Header */}
                 <div className="flex justify-between items-center p-5 border-b">
-                    <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+                    <h3 id="modal-title" className="text-xl font-semibold text-gray-900">{title}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
+                {/* Body (tempat form) */}
                 <div className="p-6 overflow-y-auto">
                     {children}
                 </div>
@@ -258,6 +274,7 @@ const Modal = ({ show, onClose, title, children }) => {
         </div>
     );
 };
+// --- Akhir Perbaikan ---
 
 const FormInput = ({ label, value, onChange, type = 'text', required = false, ...props }) => (
     <div>
@@ -309,7 +326,7 @@ const StatCard = ({ title, value }) => (
 );
 
 
-// --- [BARU] Halaman Dashboard ---
+// --- Halaman Dashboard ---
 const DashboardComponent = () => {
     const { api } = useAuth();
     const [stats, setStats] = useState(null);
@@ -346,7 +363,7 @@ const DashboardComponent = () => {
 };
 
 
-// --- [BARU] Halaman Manajemen Paket ---
+// --- Halaman Manajemen Paket ---
 const PackagesComponent = () => {
     const { api } = useAuth();
     const [packages, setPackages] = useState([]);
@@ -686,7 +703,7 @@ const JamaahComponent = () => {
 };
 
 
-// --- [BARU] Halaman Manajemen Keuangan ---
+// --- Halaman Manajemen Keuangan ---
 const FinanceComponent = () => {
     const { api } = useAuth();
     const [transactions, setTransactions] = useState([]);

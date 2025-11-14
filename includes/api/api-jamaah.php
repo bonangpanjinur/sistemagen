@@ -1,193 +1,287 @@
 <?php
 // File: includes/api/api-jamaah.php
+// Mengelola semua data jemaah, manifest, dan pembayaran terkait.
 
 if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly.
+    exit; // Exit if accessed directly
 }
 
-// Registrasi endpoint untuk jamaah
-function umh_register_jamaah_api_routes() {
-    
-    // GET all jamaah (dengan filter)
-    register_rest_route('umh/v1', '/jamaah', [
-        'methods' => 'GET',
-        'callback' => 'umh_get_all_jamaah',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
+add_action('rest_api_init', 'umh_register_jamaah_routes');
+
+function umh_register_jamaah_routes() {
+    $namespace = 'umh/v1'; // Namespace baru yang konsisten
+
+    // Endpoint untuk CRUD Jamaah
+    register_rest_route($namespace, '/jamaah', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_get_all_jamaah',
+            'permission_callback' => 'umh_check_api_permission',
+        ],
+        [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => 'umh_create_jamaah',
+            'permission_callback' => 'umh_check_api_permission',
+            'args' => umh_get_jamaah_schema(),
+        ],
     ]);
 
-    // POST create new jamaah
-    register_rest_route('umh/v1', '/jamaah', [
-        'methods' => 'POST',
-        'callback' => 'umh_create_jamaah',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
+    // Endpoint untuk satu Jamaah (by ID)
+    register_rest_route($namespace, '/jamaah/(?P<id>\d+)', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_get_jamaah_by_id',
+            'permission_callback' => 'umh_check_api_permission',
+        ],
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => 'umh_update_jamaah',
+            'permission_callback' => 'umh_check_api_permission',
+            'args' => umh_get_jamaah_schema(true), // true for update
+        ],
+        [
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => 'umh_delete_jamaah',
+            'permission_callback' => 'umh_check_api_permission',
+        ],
     ]);
 
-    // GET specific jamaah by ID
-    register_rest_route('umh/v1', '/jamaah/(?P<id>\d+)', [
-        'methods' => 'GET',
-        'callback' => 'umh_get_jamaah_by_id',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
-    ]);
-
-    // PUT update jamaah by ID
-    register_rest_route('umh/v1', '/jamaah/(?P<id>\d+)', [
-        'methods' => 'PUT',
-        'callback' => 'umh_update_jamaah',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
-    ]);
-
-    // DELETE jamaah by ID
-    register_rest_route('umh/v1', '/jamaah/(?P<id>\d+)', [
-        'methods' => 'DELETE',
-        'callback' => 'umh_delete_jamaah',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
-    ]);
-
-    // GET jamaah by package ID
-    register_rest_route('umh/v1', '/packages/(?P<package_id>\d+)/jamaah', [
-        'methods' => 'GET',
-        'callback' => 'umh_get_jamaah_by_package',
-        'permission_callback' => 'umh_check_api_permission', // **PERBAIKAN: Terapkan keamanan**
+    // Endpoint untuk pembayaran (dari api-manifest.php)
+    register_rest_route($namespace, '/jamaah/(?P<id>\d+)/payment', [
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => 'umh_update_jamaah_payment',
+            'permission_callback' => 'umh_check_api_permission',
+            'args' => [
+                'payment_status' => [
+                    'type' => 'string',
+                    'required' => true,
+                    'enum' => ['pending', 'paid', 'refunded'],
+                ],
+                'amount_paid' => [
+                    'type' => 'number',
+                    'required' => false,
+                ],
+            ],
+        ],
     ]);
 }
-add_action('rest_api_init', 'umh_register_jamaah_api_routes');
+
+// Skema data Jamaah untuk validasi
+function umh_get_jamaah_schema($is_update = false) {
+    $schema = [
+        'package_id' => ['type' => 'integer', 'required' => !$is_update],
+        'user_id' => ['type' => 'integer', 'required' => false],
+        'full_name' => ['type' => 'string', 'required' => !$is_update],
+        'id_number' => ['type' => 'string', 'required' => !$is_update],
+        'passport_number' => ['type' => 'string', 'required' => false],
+        'phone' => ['type' => 'string', 'required' => false],
+        'email' => ['type' => 'string', 'format' => 'email', 'required' => false],
+        'address' => ['type' => 'string', 'required' => false],
+        'gender' => ['type' => 'string', 'enum' => ['male', 'female'], 'required' => false],
+        'birth_date' => ['type' => 'string', 'format' => 'date', 'required' => false],
+        'status' => ['type' => 'string', 'enum' => ['pending', 'approved', 'rejected', 'waitlist'], 'default' => 'pending'],
+        'payment_status' => ['type' => 'string', 'enum' => ['pending', 'paid', 'refunded'], 'default' => 'pending'],
+        'total_price' => ['type' => 'number', 'required' => false],
+        'amount_paid' => ['type' => 'number', 'default' => 0],
+        'notes' => ['type' => 'string', 'required' => false],
+    ];
+
+    if ($is_update) {
+        foreach ($schema as $key => &$field) {
+            $field['required'] = false;
+        }
+    }
+
+    return $schema;
+}
 
 
-// --- Implementasi Callback ---
-// (Tetap sama seperti sebelumnya, karena keamanan ditangani oleh permission_callback)
-
+// Callback: Get All Jamaah
 function umh_get_all_jamaah(WP_REST_Request $request) {
     global $wpdb;
     $table_name = $wpdb->prefix . 'umh_jamaah';
-    $package_id = $request->get_param('package_id');
+    $package_table = $wpdb->prefix . 'umh_packages';
 
-    $query = "SELECT * FROM $table_name";
+    // Ambil parameter query
+    $package_id = $request->get_param('package_id');
+    $status = $request->get_param('status');
+    $payment_status = $request->get_param('payment_status');
+
+    $query = "SELECT j.*, p.package_name FROM $table_name j LEFT JOIN $package_table p ON j.package_id = p.id WHERE 1=1";
+
     if (!empty($package_id)) {
-        $query .= $wpdb->prepare(" WHERE package_id = %d", (int)$package_id);
+        $query .= $wpdb->prepare(" AND j.package_id = %d", $package_id);
+    }
+    if (!empty($status)) {
+        $query .= $wpdb->prepare(" AND j.status = %s", $status);
+    }
+    if (!empty($payment_status)) {
+        $query .= $wpdb->prepare(" AND j.payment_status = %s", $payment_status);
     }
 
-    $results = $wpdb->get_results($query);
+    $results = $wpdb->get_results($query, ARRAY_A);
+    
+    if ($results === false) {
+        return new WP_Error('db_error', __('Database error.', 'umh'), ['status' => 500]);
+    }
+
     return new WP_REST_Response($results, 200);
 }
 
+// Callback: Create Jamaah
 function umh_create_jamaah(WP_REST_Request $request) {
     global $wpdb;
     $table_name = $wpdb->prefix . 'umh_jamaah';
-    $params = $request->get_json_params();
 
-    // Validasi data (contoh sederhana)
-    if (empty($params['full_name']) || empty($params['package_id'])) {
-        return new WP_Error('missing_params', 'Nama lengkap dan ID Paket tidak boleh kosong.', ['status' => 400]);
-    }
-
-    $data = [
-        'package_id' => (int)$params['package_id'],
-        'full_name' => sanitize_text_field($params['full_name']),
-        'passport_no' => sanitize_text_field($params['passport_no'] ?? ''),
-        'ktp_no' => sanitize_text_field($params['ktp_no'] ?? ''),
-        'birth_date' => sanitize_text_field($params['birth_date'] ?? null),
-        'gender' => sanitize_text_field($params['gender'] ?? 'Laki-laki'),
-        'phone_number' => sanitize_text_field($params['phone_number'] ?? ''),
-        'address' => sanitize_textarea_field($params['address'] ?? ''),
-        'status' => sanitize_text_field($params['status'] ?? 'Pending'),
-        // tambahkan field lain sesuai kebutuhan
-    ];
+    $data = $request->get_json_params();
     
-    // Hapus null values agar default database bisa diterapkan
-    $data = array_filter($data, function($value) { return $value !== null; });
-
-    $wpdb->insert($table_name, $data);
-    $new_id = $wpdb->insert_id;
-
-    if ($new_id) {
-        $new_jamaah = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE jamaah_id = %d", $new_id));
-        return new WP_REST_Response($new_jamaah, 201);
-    } else {
-        return new WP_Error('create_failed', 'Gagal menambahkan jamaah.', ['status' => 500]);
+    // Ambil harga paket jika total_price tidak diset
+    if (!isset($data['total_price']) && isset($data['package_id'])) {
+        $package_table = $wpdb->prefix . 'umh_packages';
+        $price = $wpdb->get_var($wpdb->prepare("SELECT price FROM $package_table WHERE id = %d", $data['package_id']));
+        $data['total_price'] = $price ? (float)$price : 0;
     }
+    
+    // Set default values jika tidak ada
+    $data['amount_paid'] = $data['amount_paid'] ?? 0;
+    $data['status'] = $data['status'] ?? 'pending';
+    $data['payment_status'] = $data['payment_status'] ?? 'pending';
+    $data['created_at'] = current_time('mysql');
+
+    // Filter data sesuai skema
+    $schema = umh_get_jamaah_schema();
+    $insert_data = [];
+    foreach ($schema as $key => $value) {
+        if (isset($data[$key])) {
+            $insert_data[$key] = $data[$key];
+        }
+    }
+    // Tambahkan field non-skema
+    $insert_data['created_at'] = current_time('mysql');
+    $insert_data['updated_at'] = current_time('mysql');
+
+
+    $result = $wpdb->insert($table_name, $insert_data);
+
+    if ($result === false) {
+        return new WP_Error('db_error', __('Failed to create jamaah.', 'umh'), ['status' => 500, 'db_error' => $wpdb->last_error]);
+    }
+
+    $new_id = $wpdb->insert_id;
+    // umh_create_log_entry('create', 'jamaah', $new_id, $data); // Asumsi fungsi log ada
+
+    return new WP_REST_Response(['id' => $new_id, 'message' => 'Jamaah created successfully.'], 201);
 }
 
+// Callback: Get Jamaah by ID
 function umh_get_jamaah_by_id(WP_REST_Request $request) {
     global $wpdb;
+    $id = (int)$request['id'];
     $table_name = $wpdb->prefix . 'umh_jamaah';
-    $jamaah_id = (int) $request['id'];
-
-    $jamaah = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE jamaah_id = %d", $jamaah_id));
+    $package_table = $wpdb->prefix . 'umh_packages';
+    
+    $query = $wpdb->prepare("SELECT j.*, p.package_name FROM $table_name j LEFT JOIN $package_table p ON j.package_id = p.id WHERE j.id = %d", $id);
+    $jamaah = $wpdb->get_row($query, ARRAY_A);
 
     if (!$jamaah) {
-        return new WP_Error('not_found', 'Jamaah tidak ditemukan.', ['status' => 404]);
+        return new WP_Error('not_found', __('Jamaah not found.', 'umh'), ['status' => 404]);
     }
 
     return new WP_REST_Response($jamaah, 200);
 }
 
+// Callback: Update Jamaah
 function umh_update_jamaah(WP_REST_Request $request) {
     global $wpdb;
+    $id = (int)$request['id'];
     $table_name = $wpdb->prefix . 'umh_jamaah';
-    $jamaah_id = (int) $request['id'];
 
-    $jamaah = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE jamaah_id = %d", $jamaah_id));
-    if (!$jamaah) {
-        return new WP_Error('not_found', 'Jamaah tidak ditemukan.', ['status' => 404]);
-    }
-
-    $params = $request->get_json_params();
-    $update_data = [];
-
-    // Daftar field yang diizinkan untuk diupdate
-    $allowed_fields = ['package_id', 'full_name', 'passport_no', 'ktp_no', 'birth_date', 'gender', 'phone_number', 'address', 'status'];
+    $data = $request->get_json_params();
+    $data['updated_at'] = current_time('mysql');
     
-    foreach ($allowed_fields as $field) {
-        if (isset($params[$field])) {
-            if ($field === 'package_id') {
-                $update_data[$field] = (int)$params[$field];
-            } elseif ($field === 'address') {
-                 $update_data[$field] = sanitize_textarea_field($params[$field]);
-            } else {
-                $update_data[$field] = sanitize_text_field($params[$field]);
-            }
+    // Filter data sesuai skema
+    $schema = umh_get_jamaah_schema(true);
+    $update_data = [];
+     foreach ($schema as $key => $value) {
+        if (isset($data[$key])) {
+            $update_data[$key] = $data[$key];
         }
     }
+    // Tambahkan field non-skema
+    $update_data['updated_at'] = current_time('mysql');
 
     if (empty($update_data)) {
-        return new WP_Error('no_data', 'Tidak ada data untuk diupdate.', ['status' => 400]);
+         return new WP_Error('bad_request', __('No data provided for update.', 'umh'), ['status' => 400]);
     }
 
-    $wpdb->update($table_name, $update_data, ['jamaah_id' => $jamaah_id]);
-
-    $updated_jamaah = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE jamaah_id = %d", $jamaah_id));
-    return new WP_REST_Response($updated_jamaah, 200);
-}
-
-function umh_delete_jamaah(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_jamaah';
-    $jamaah_id = (int) $request['id'];
-
-    $result = $wpdb->delete($table_name, ['jamaah_id' => $jamaah_id], ['%d']);
+    $result = $wpdb->update($table_name, $update_data, ['id' => $id]);
 
     if ($result === false) {
-        return new WP_Error('delete_failed', 'Gagal menghapus jamaah.', ['status' => 500]);
+        return new WP_Error('db_error', __('Failed to update jamaah.', 'umh'), ['status' => 500, 'db_error' => $wpdb->last_error]);
     }
+    
     if ($result === 0) {
-        return new WP_Error('not_found', 'Jamaah tidak ditemukan untuk dihapus.', ['status' => 404]);
+        return new WP_REST_Response(['message' => 'No changes detected.'], 200);
     }
 
-    return new WP_REST_Response(['message' => 'Jamaah berhasil dihapus.'], 200);
+    // umh_create_log_entry('update', 'jamaah', $id, $data); // Asumsi fungsi log ada
+
+    return new WP_REST_Response(['id' => $id, 'message' => 'Jamaah updated successfully.'], 200);
 }
 
-
-function umh_get_jamaah_by_package(WP_REST_Request $request) {
+// Callback: Delete Jamaah
+function umh_delete_jamaah(WP_REST_Request $request) {
     global $wpdb;
+    $id = (int)$request['id'];
     $table_name = $wpdb->prefix . 'umh_jamaah';
-    $package_id = (int) $request['package_id'];
 
-    $results = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_name WHERE package_id = %d", $package_id));
-    
-    if (is_null($results)) {
-         return new WP_Error('db_error', 'Gagal mengambil data jamaah.', ['status' => 500]);
+    $result = $wpdb->delete($table_name, ['id' => $id]);
+
+    if ($result === false) {
+        return new WP_Error('db_error', __('Failed to delete jamaah.', 'umh'), ['status' => 500]);
     }
     
-    return new WP_REST_Response($results, 200);
+    if ($result === 0) {
+        return new WP_Error('not_found', __('Jamaah not found to delete.', 'umh'), ['status' => 404]);
+    }
+
+    // umh_create_log_entry('delete', 'jamaah', $id); // Asumsi fungsi log ada
+
+    return new WP_REST_Response(['id' => $id, 'message' => 'Jamaah deleted successfully.'], 200);
 }
-?>
+
+
+// --- FUNGSI DARI API-MANIFEST.PHP YANG DIGABUNG ---
+
+// Callback: Update Payment Status (dari api-manifest.php)
+function umh_update_jamaah_payment(WP_REST_Request $request) {
+    global $wpdb;
+    $id = (int) $request['id'];
+    $table_name = $wpdb->prefix . 'umh_jamaah';
+
+    $data = $request->get_json_params();
+    $update_data = [
+        'payment_status' => $data['payment_status'],
+        'updated_at' => current_time('mysql'),
+    ];
+
+    if (isset($data['amount_paid'])) {
+        $update_data['amount_paid'] = (float)$data['amount_paid'];
+    }
+
+    $result = $wpdb->update($table_name, $update_data, ['id' => $id]);
+
+    if ($result === false) {
+        return new WP_Error('db_error', __('Failed to update payment status.', 'umh'), ['status' => 500]);
+    }
+
+    // umh_create_log_entry('update_payment', 'jamaah', $id, $update_data);
+
+    // TODO: Integrasi dengan api-finance untuk mencatat transaksi ini secara otomatis
+    // if ($data['payment_status'] == 'paid') {
+    //    umh_create_finance_entry(...);
+    // }
+
+    return new WP_REST_Response(['id' => $id, 'message' => 'Payment status updated.'], 200);
+}

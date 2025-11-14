@@ -1,106 +1,142 @@
 <?php
 // File: includes/api/api-categories.php
-// Mengelola CRUD untuk umroh_categories
+// Mengelola endpoint untuk kategori (misal: keuangan).
 
 if (!defined('ABSPATH')) {
-    exit;
+    exit; // Exit if accessed directly
 }
 
-/**
- * Mendapatkan semua Kategori dalam format hierarkis
- * Endpoint: GET /umroh/v1/categories
- */
-function umroh_api_get_categories(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_categories';
+add_action('rest_api_init', 'umh_register_categories_routes');
 
-    $results = $wpdb->get_results("SELECT * FROM $table_name ORDER BY parent_id ASC, name ASC", ARRAY_A);
+function umh_register_categories_routes() {
+    $namespace = 'umh/v1'; // Namespace baru yang konsisten
+    $table_name = 'umh_categories'; // Menggunakan tabel UMH yang baru
 
-    $categories = [];
-    foreach ($results as $item) {
-        if ($item['parent_id'] == 0) {
-            $categories[$item['id']] = $item;
-            $categories[$item['id']]['children'] = [];
-        } else {
-            // Asumsi parent_id selalu dimuat sebelum children, karena di-order
-            if (isset($categories[$item['parent_id']])) {
-                $categories[$item['parent_id']]['children'][] = $item;
-            } else {
-                // Jika parent belum dimuat (kasus error data), masukkan sebagai top level untuk mencegah loop
-                $categories[$item['id']] = $item;
-                $categories[$item['id']]['children'] = [];
+    // Endpoint untuk CRUD Kategori
+    register_rest_route($namespace, '/categories', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => function(WP_REST_Request $request) use ($table_name) {
+                return umh_get_items($request, $table_name);
+            },
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+        [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => function(WP_REST_Request $request) use ($table_name) {
+                return umh_create_item($request, $table_name, ['name', 'type']);
+            },
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+
+    // Endpoint untuk satu Kategori (by ID)
+    register_rest_route($namespace, '/categories/(?P<id>\d+)', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => function(WP_REST_Request $request) use ($table_name) {
+                return umh_get_item_by_id($request, $table_name);
+            },
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+        [
+            'methods' => WP_REST_Server::EDITABLE,
+            'callback' => function(WP_REST_Request $request) use ($table_name) {
+                return umh_update_item($request, $table_name, ['name', 'type']);
+            },
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+        [
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => function(WP_REST_Request $request) use ($table_name) {
+                return umh_delete_item($request, $table_name);
+            },
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+}
+
+// Catatan: Fungsi umh_get_items, umh_create_item, dll.
+// adalah fungsi generik yang ada di file template Anda (misal: api-tasks.php).
+// Pastikan fungsi-fungsi tersebut ada dan berfungsi, atau ganti
+// dengan implementasi CRUD yang spesifik seperti di api-jamaah.php.
+
+// Jika fungsi generik belum ada, berikut implementasi sederhananya:
+
+if (!function_exists('umh_get_items')) {
+    function umh_get_items(WP_REST_Request $request, $table_slug) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . $table_slug;
+        $results = $wpdb->get_results("SELECT * FROM $table_name", ARRAY_A);
+        return new WP_REST_Response($results, 200);
+    }
+}
+
+if (!function_exists('umh_get_item_by_id')) {
+    function umh_get_item_by_id(WP_REST_Request $request, $table_slug) {
+        global $wpdb;
+        $id = (int) $request['id'];
+        $table_name = $wpdb->prefix . $table_slug;
+        $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id), ARRAY_A);
+        if (!$item) {
+            return new WP_Error('not_found', __('Item not found.', 'umh'), ['status' => 404]);
+        }
+        return new WP_REST_Response($item, 200);
+    }
+}
+
+if (!function_exists('umh_create_item')) {
+    function umh_create_item(WP_REST_Request $request, $table_slug, $allowed_keys) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . $table_slug;
+        $data = $request->get_json_params();
+        $insert_data = [];
+        foreach ($allowed_keys as $key) {
+            if (isset($data[$key])) {
+                $insert_data[$key] = $data[$key];
             }
         }
+        if (empty($insert_data)) {
+            return new WP_Error('bad_request', __('No valid data provided.', 'umh'), ['status' => 400]);
+        }
+        
+        $insert_data['created_at'] = current_time('mysql');
+        $insert_data['updated_at'] = current_time('mysql');
+        
+        $wpdb->insert($table_name, $insert_data);
+        return new WP_REST_Response(['id' => $wpdb->insert_id, 'message' => 'Item created.'], 201);
     }
-
-    // Mengubah array asosiatif menjadi array list (hanya top level)
-    return wp_send_json_success(array_values($categories));
 }
 
-/**
- * Membuat Kategori Baru
- * Endpoint: POST /umroh/v1/categories
- */
-function umroh_api_create_category(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_categories';
-    
-    $name = sanitize_text_field($request['name']);
-    $parent_id = absint($request['parent_id']);
+if (!function_exists('umh_update_item')) {
+    function umh_update_item(WP_REST_Request $request, $table_slug, $allowed_keys) {
+        global $wpdb;
+        $id = (int) $request['id'];
+        $table_name = $wpdb->prefix . $table_slug;
+        $data = $request->get_json_params();
+        $update_data = [];
+        foreach ($allowed_keys as $key) {
+            if (isset($data[$key])) {
+                $update_data[$key] = $data[$key];
+            }
+        }
+        if (empty($update_data)) {
+            return new WP_Error('bad_request', __('No valid data provided.', 'umh'), ['status' => 400]);
+        }
 
-    if (empty($name)) {
-        return wp_send_json_error('Nama kategori tidak boleh kosong.', 400);
+        $update_data['updated_at'] = current_time('mysql');
+        
+        $wpdb->update($table_name, $update_data, ['id' => $id]);
+        return new WP_REST_Response(['id' => $id, 'message' => 'Item updated.'], 200);
     }
-
-    $data = [
-        'name' => $name,
-        'parent_id' => $parent_id
-    ];
-    $format = ['%s', '%d'];
-
-    $result = $wpdb->insert($table_name, $data, $format);
-
-    if ($result === false) {
-        return wp_send_json_error('Gagal menyimpan kategori ke database.', 500);
-    }
-
-    return wp_send_json_success(['message' => 'Kategori berhasil dibuat.', 'id' => $wpdb->insert_id]);
 }
 
-/**
- * Menghapus Kategori
- * Endpoint: DELETE /umroh/v1/categories/(id)
- */
-function umroh_api_delete_category(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_categories';
-    $category_id = absint($request['id']);
-    
-    if (empty($category_id)) {
-        return wp_send_json_error('ID kategori tidak valid.', 400);
+if (!function_exists('umh_delete_item')) {
+    function umh_delete_item(WP_REST_Request $request, $table_slug) {
+        global $wpdb;
+        $id = (int) $request['id'];
+        $table_name = $wpdb->prefix . $table_slug;
+        $wpdb->delete($table_name, ['id' => $id]);
+        return new WP_REST_Response(['id' => $id, 'message' => 'Item deleted.'], 200);
     }
-
-    // 1. Cek Keterkaitan (Relational Protection)
-    $table_packages = $wpdb->prefix . 'umroh_packages';
-    $is_used = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_packages WHERE category_id = %d", $category_id));
-
-    if ($is_used > 0) {
-        return wp_send_json_error('Tidak dapat menghapus. Kategori ini digunakan oleh ' . $is_used . ' paket.', 409);
-    }
-    
-    // 2. Cek apakah kategori ini memiliki sub-kategori (anak)
-    $has_children = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE parent_id = %d", $category_id));
-
-    if ($has_children > 0) {
-        return wp_send_json_error('Tidak dapat menghapus. Kategori ini memiliki ' . $has_children . ' sub-kategori.', 409);
-    }
-
-    // 3. Hapus Data
-    $result = $wpdb->delete($table_name, ['id' => $category_id], ['%d']);
-
-    if ($result === false) {
-        return wp_send_json_error('Gagal menghapus kategori dari database.', 500);
-    }
-
-    return wp_send_json_success(['message' => 'Kategori berhasil dihapus.']);
 }

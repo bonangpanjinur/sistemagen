@@ -1,90 +1,117 @@
 <?php
 // File: includes/api/api-stats.php
-// API untuk data Dashboard/Overview
+// Mengelola endpoint untuk statistik dashboard.
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly
+}
 
-/**
- * Mengambil data statistik untuk dashboard.
- * Endpoint: GET /umroh/v1/dashboard/stats
- */
-function umroh_get_dashboard_stats(WP_REST_Request $request) {
+add_action('rest_api_init', 'umh_register_stats_routes');
+
+function umh_register_stats_routes() {
+    $namespace = 'umh/v1'; // Namespace baru yang konsisten
+
+    // Endpoint untuk statistik total
+    register_rest_route($namespace, '/stats/totals', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_get_total_stats',
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+
+    // Endpoint untuk statistik per paket
+    register_rest_route($namespace, '/stats/packages', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_get_package_stats',
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+
+    // Endpoint untuk statistik keuangan (grafik)
+    register_rest_route($namespace, '/stats/finance-chart', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_get_finance_chart_stats',
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+}
+
+// Callback: Get Total Stats
+function umh_get_total_stats(WP_REST_Request $request) {
     global $wpdb;
     
-    // Tentukan prefix tabel
-    $prefix = $wpdb->prefix . 'umroh_';
-    
-    // 1. Omset Bulan Ini (dari tabel finance)
-    $omset_month = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT SUM(amount) FROM {$prefix}finance 
-             WHERE type = 'Pemasukan' AND MONTH(date) = MONTH(CURDATE()) AND YEAR(date) = YEAR(CURDATE())",
-            null
-        )
-    );
+    // Menggunakan tabel UMH yang baru
+    $jamaah_table = $wpdb->prefix . 'umh_jamaah';
+    $packages_table = $wpdb->prefix . 'umh_packages';
+    $finance_table = $wpdb->prefix . 'umh_finance';
 
-    // 2. Jemaah Baru Bulan Ini (dari tabel manifest)
-    $new_pilgrims_month = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(id) FROM {$prefix}manifest 
-             WHERE MONTH(created_at) = MONTH(CURDATE()) AND YEAR(created_at) = YEAR(CURDATE())",
-            null
-        )
-    );
+    // Query menggunakan tabel yang benar
+    $total_jamaah = $wpdb->get_var("SELECT COUNT(*) FROM $jamaah_table");
+    $total_packages = $wpdb->get_var("SELECT COUNT(*) FROM $packages_table");
+    $total_revenue = $wpdb->get_var("SELECT SUM(amount) FROM $finance_table WHERE transaction_type = 'income'");
+    $total_expense = $wpdb->get_var("SELECT SUM(amount) FROM $finance_table WHERE transaction_type = 'expense'");
 
-    // 3. Total Kasbon Aktif (dari tabel finance)
-    $total_kasbon = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT SUM(amount) FROM {$prefix}finance 
-             WHERE type = 'Kasbon' AND status = 'Pending'",
-            null
-        )
-    );
-
-    // 4. Tugas Belum Selesai (dari tabel tasks)
-    $pending_tasks = $wpdb->get_var(
-        $wpdb->prepare(
-            "SELECT COUNT(id) FROM {$prefix}tasks WHERE status = 'Pending'",
-            null
-        )
-    );
-    
-    // 5. Leads (dari tabel leads)
-    $leads_hot = $wpdb->get_var("SELECT COUNT(id) FROM {$prefix}leads WHERE status = 'Hot'");
-    $leads_warm = $wpdb->get_var("SELECT COUNT(id) FROM {$prefix}leads WHERE status = 'Warm'");
-    $leads_cold = $wpdb->get_var("SELECT COUNT(id) FROM {$prefix}leads WHERE status = 'Cold'");
-
-    // 6. Omset 12 Bulan (dari tabel finance)
-    $omset_12_months = $wpdb->get_results(
-        "SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(amount) as omset
-         FROM {$prefix}finance
-         WHERE type = 'Pemasukan' AND date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
-         GROUP BY DATE_FORMAT(date, '%Y-%m')
-         ORDER BY month ASC",
-        ARRAY_A
-    );
-    
-    // Format ulang data bulan (misal: "2023-11" -> "Nov")
-    $omset_formatted = [];
-    foreach ($omset_12_months as $month_data) {
-        $date_obj = DateTime::createFromFormat('!Y-m', $month_data['month']);
-        $omset_formatted[] = [
-            'month' => $date_obj->format('M'), // 'Nov', 'Dec', 'Jan'
-            'omset' => (int)$month_data['omset']
-        ];
-    }
-
-    // Siapkan data untuk dikirim
     $stats = [
-        'omset_month'         => (int)$omset_month,
-        'new_pilgrims_month'  => (int)$new_pilgrims_month,
-        'total_kasbon'        => (int)$total_kasbon,
-        'pending_tasks'       => (int)$pending_tasks,
-        'leads_hot'           => (int)$leads_hot,
-        'leads_warm'          => (int)$leads_warm,
-        'leads_cold'          => (int)$leads_cold,
-        'omset_12_months'     => $omset_formatted
+        'total_jamaah' => (int) $total_jamaah,
+        'total_packages' => (int) $total_packages,
+        'total_revenue' => (float) $total_revenue,
+        'total_expense' => (float) $total_expense,
+        'net_profit' => (float) ($total_revenue - $total_expense),
     ];
 
     return new WP_REST_Response($stats, 200);
+}
+
+// Callback: Get Package Stats
+function umh_get_package_stats(WP_REST_Request $request) {
+    global $wpdb;
+    
+    // Menggunakan tabel UMH yang baru
+    $jamaah_table = $wpdb->prefix . 'umh_jamaah';
+    $packages_table = $wpdb->prefix . 'umh_packages';
+    
+    // Query menggunakan tabel yang benar
+    $query = "
+        SELECT p.package_name, COUNT(j.id) as jamaah_count
+        FROM $packages_table p
+        LEFT JOIN $jamaah_table j ON p.id = j.package_id
+        GROUP BY p.id
+    ";
+    
+    $results = $wpdb->get_results($query, ARRAY_A);
+    
+    if ($results === false) {
+        return new WP_Error('db_error', __('Database error.', 'umh'), ['status' => 500]);
+    }
+
+    return new WP_REST_Response($results, 200);
+}
+
+// Callback: Get Finance Chart Stats
+function umh_get_finance_chart_stats(WP_REST_Request $request) {
+    global $wpdb;
+    $finance_table = $wpdb->prefix . 'umh_finance';
+    
+    // Query untuk mengambil data per bulan (contoh)
+    $query = "
+        SELECT 
+            DATE_FORMAT(transaction_date, '%Y-%m') as month,
+            SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END) as income,
+            SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END) as expense
+        FROM $finance_table
+        GROUP BY month
+        ORDER BY month ASC
+        LIMIT 12
+    ";
+    
+    $results = $wpdb->get_results($query, ARRAY_A);
+    
+    if ($results === false) {
+        return new WP_Error('db_error', __('Database error.', 'umh'), ['status' => 500]);
+    }
+
+    return new WP_REST_Response($results, 200);
 }

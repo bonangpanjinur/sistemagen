@@ -1,66 +1,73 @@
 <?php
 // File: includes/api/api-export.php
-// API untuk export data ke CSV
+// Mengelola endpoint untuk ekspor data (misal: CSV).
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly
+}
 
-/**
- * Export data manifest ke CSV.
- * Endpoint: GET /umroh/v1/export/manifest
- */
-function umroh_export_manifest(WP_REST_Request $request) {
+add_action('rest_api_init', 'umh_register_export_routes');
+
+function umh_register_export_routes() {
+    $namespace = 'umh/v1'; // Namespace baru yang konsisten
+
+    // Endpoint untuk ekspor data jemaah
+    register_rest_route($namespace, '/export/jamaah', [
+        [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => 'umh_export_jamaah_csv',
+            'permission_callback' => 'umh_check_api_permission', // Keamanan ditambahkan
+        ],
+    ]);
+}
+
+// Callback: Export Jamaah as CSV
+function umh_export_jamaah_csv(WP_REST_Request $request) {
     global $wpdb;
+    
+    // Menggunakan tabel UMH yang baru
+    $jamaah_table = $wpdb->prefix . 'umh_jamaah';
+    $packages_table = $wpdb->prefix . 'umh_packages';
+    
+    $package_id = $request->get_param('package_id');
 
-    $table_manifest = $wpdb->prefix . 'umroh_manifest';
-    $table_packages = $wpdb->prefix . 'uhp_packages';
+    $query = "
+        SELECT j.*, p.package_name 
+        FROM $jamaah_table j 
+        LEFT JOIN $packages_table p ON j.package_id = p.id
+        WHERE 1=1
+    ";
 
-    // Ambil data jemaah dengan nama paket
-    $data = $wpdb->get_results(
-        "SELECT 
-            m.full_name, 
-            m.passport_number, 
-            m.passport_expiry, 
-            m.payment_status, 
-            m.visa_status, 
-            m.equipment_status,
-            m.status as jemaah_status,
-            p.title as package_name,
-            m.final_price
-         FROM $table_manifest m
-         LEFT JOIN $table_packages p ON m.package_id = p.id
-         ORDER BY m.full_name ASC",
-        ARRAY_A // Ambil sebagai associative array
-    );
-
-    if (empty($data)) {
-        return new WP_Error('no_data', 'Tidak ada data manifest untuk diexport', ['status' => 404]);
-    }
-
-    // Buat header CSV
-    $csv_output = "";
-    $headers = [
-        'Nama Lengkap', 
-        'No Paspor', 
-        'Expiry Paspor', 
-        'Status Bayar', 
-        'Status Visa', 
-        'Status Koper',
-        'Status Jemaah',
-        'Nama Paket',
-        'Harga Paket (Rp)'
-    ];
-    $csv_output .= implode(',', $headers) . "\n";
-
-    // Buat baris data CSV
-    foreach ($data as $row) {
-        // Pastikan data bersih untuk CSV (kutip jika ada koma)
-        foreach ($row as $key => $value) {
-            $row[$key] = '"' . str_replace('"', '""', $value) . '"';
-        }
-        $csv_output .= implode(',', $row) . "\n";
+    if (!empty($package_id)) {
+        $query .= $wpdb->prepare(" AND j.package_id = %d", $package_id);
     }
     
-    // Kembalikan sebagai JSON yang berisi string CSV
-    // Frontend akan menangani konversi ke file
-    return new WP_REST_Response(['csv_data' => $csv_output], 200);
+    $data = $wpdb->get_results($query, ARRAY_A);
+
+    if ($data === false) {
+        return new WP_Error('db_error', __('Database error.', 'umh'), ['status' => 500]);
+    }
+
+    if (empty($data)) {
+        return new WP_Error('not_found', __('No data to export.', 'umh'), ['status' => 404]);
+    }
+
+    // Generate CSV
+    $filename = 'export_jamaah_' . date('Y-m-d') . '.csv';
+    
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    
+    $output = fopen('php://output', 'w');
+    
+    // Header
+    fputcsv($output, array_keys($data[0]));
+    
+    // Data
+    foreach ($data as $row) {
+        fputcsv($output, $row);
+    }
+    
+    fclose($output);
+    exit;
 }

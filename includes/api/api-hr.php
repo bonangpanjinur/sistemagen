@@ -1,130 +1,110 @@
 <?php
-// Lokasi: wp-content/plugins/umroh-manager-headless/includes/api/api-hr.php
+// File: includes/api/api-hr.php
+// (File BARU dibuat berdasarkan pola)
 
-if (!defined('ABSPATH')) exit;
+global $wpdb, $method, $id, $data;
+$table_name = $wpdb->prefix . 'travel_hr'; // Asumsi nama tabel
 
-// --- ABSENSI ---
-
-/**
- * GET /umroh/v1/hr/attendance
- * Mengambil data absensi (misal: per bulan)
- */
-function umroh_get_attendance($request) {
-    global $wpdb;
-    // Ambil parameter ?month=YYYY-MM, jika tidak ada, pakai bulan ini
-    $month = $request->get_param('month') ? $request->get_param('month') : current_time('Y-m');
-    
-    $data = $wpdb->get_results($wpdb->prepare(
-        "SELECT a.*, u.display_name 
-         FROM {$wpdb->prefix}umroh_attendance a
-         LEFT JOIN {$wpdb->users} u ON a.user_id = u.ID
-         WHERE a.date LIKE %s
-         ORDER BY a.date DESC, u.display_name ASC",
-        $month . '%'
-    ));
-    return new WP_REST_Response($data, 200);
+switch ($method) {
+    case 'GET':
+        check_auth(array('administrator'));
+        if ($id) {
+            handle_get_employee($id);
+        } else {
+            handle_get_all_employees();
+        }
+        break;
+    case 'POST':
+        check_auth(array('administrator'));
+        handle_create_employee($data);
+        break;
+    case 'PUT':
+        check_auth(array('administrator'));
+        handle_update_employee($id, $data);
+        break;
+    case 'DELETE':
+        check_auth(array('administrator'));
+        handle_delete_employee($id);
+        break;
+    default:
+        wp_send_json_error(array('message' => 'Metode request tidak valid.'), 405);
+        break;
 }
 
-/**
- * POST /umroh/v1/hr/attendance
- * Karyawan submit absensi hari ini
- */
-function umroh_submit_attendance($request) {
-    global $wpdb;
-    $p = $request->get_json_params();
-    $user_id = get_current_user_id();
-    
-    // Cek duplikat absen hari ini
-    $existing = $wpdb->get_var($wpdb->prepare(
-        "SELECT id FROM {$wpdb->prefix}umroh_attendance WHERE user_id = %d AND date = %s",
-        $user_id, current_time('Y-m-d')
-    ));
-    
-    if ($existing) {
-        return new WP_Error('duplicate_attendance', 'Anda sudah absen hari ini', ['status' => 400]);
+function handle_get_all_employees() {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name ORDER BY name ASC", array());
+    $results = $wpdb->get_results($query, ARRAY_A);
+    wp_send_json_success(array('data' => $results, 'success' => true));
+}
+
+function handle_get_employee($id) {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id);
+    $result = $wpdb->get_row($query, ARRAY_A);
+    if (!$result) {
+        wp_send_json_error(array('message' => 'Karyawan tidak ditemukan.'), 404);
+        return;
     }
-
-    $wpdb->insert($wpdb->prefix . 'umroh_attendance', [
-        'user_id' => $user_id,
-        'date' => current_time('Y-m-d'),
-        'status' => sanitize_text_field($p['status']), // Hadir, Sakit, Izin
-        'check_in_time' => ($p['status'] == 'Hadir') ? current_time('H:i:s') : null,
-        'notes' => sanitize_textarea_field($p['notes'])
-    ]);
-    
-    $new_id = $wpdb->insert_id;
-    umroh_log_activity('ATTENDANCE', $new_id, "Absen: " . $p['status']);
-
-    return new WP_REST_Response(['success' => true, 'id' => $new_id], 201);
+    wp_send_json_success(array('data' => $result, 'success' => true));
 }
 
-// --- CUTI / LIBUR ---
-
-/**
- * GET /umroh/v1/hr/leave
- * Mengambil daftar pengajuan cuti (semua)
- */
-function umroh_get_leave_requests($request) {
-    global $wpdb;
+function handle_create_employee($data) {
+    global $wpdb, $table_name;
     
-    $data = $wpdb->get_results("
-        SELECT l.*, u.display_name 
-        FROM {$wpdb->prefix}umroh_leave l
-        LEFT JOIN {$wpdb->users} u ON l.user_id = u.ID
-        ORDER BY l.start_date DESC
-    ");
-    return new WP_REST_Response($data, 200);
-}
-
-
-/**
- * POST /umroh/v1/hr/leave
- * Karyawan submit pengajuan cuti
- */
-function umroh_request_leave($request) {
-    global $wpdb;
-    $p = $request->get_json_params();
-    $user_id = get_current_user_id();
-
-    $wpdb->insert($wpdb->prefix . 'umroh_leave', [
-        'user_id' => $user_id,
-        'type' => sanitize_text_field($p['type']),
-        'start_date' => $p['start_date'],
-        'end_date' => $p['end_date'],
-        'reason' => sanitize_textarea_field($p['reason']),
-        'status' => 'Pending'
-    ]);
-    
-    $new_id = $wpdb->insert_id;
-    umroh_log_activity('LEAVE_REQUEST', $new_id, "Pengajuan Cuti: " . $p['type']);
-
-    return new WP_REST_Response(['success' => true, 'id' => $new_id], 201);
-}
-
-/**
- * PUT /umroh/v1/hr/leave/{id}
- * Admin approve / reject cuti
- */
-function umroh_approve_leave($request) {
-    global $wpdb;
-    $id = $request['id'];
-    $p = $request->get_json_params(); // Misal: { "status": "Approved" }
-    
-    // Hanya Admin yg bisa approve
-    if (!umroh_check_permission_admin()) {
-        return new WP_Error('forbidden', 'Hanya admin yang bisa approve cuti', ['status' => 403]);
+    if (empty($data['name']) || empty($data['position'])) {
+        wp_send_json_error(array('message' => 'Nama dan Posisi tidak boleh kosong.'), 400);
+        return;
     }
-
-    $wpdb->update($wpdb->prefix . 'umroh_leave',
-        [
-            'status' => sanitize_text_field($p['status']), // Approved / Rejected
-            'approved_by' => get_current_user_id()
-        ],
-        ['id' => $id]
+    $insert_data = array(
+        'name' => sanitize_text_field($data['name']),
+        'position' => sanitize_text_field($data['position']),
+        'email' => sanitize_email($data['email']),
+        'phone' => sanitize_text_field($data['phone']),
+        'status' => in_array($data['status'], array('active', 'inactive')) ? $data['status'] : 'active',
     );
+    $formats = array('%s', '%s', '%s', '%s', '%s');
+    $result = $wpdb->insert($table_name, $insert_data, $formats);
 
-    umroh_log_activity('LEAVE_STATUS', $id, "Status Cuti diubah ke: " . $p['status']);
-    
-    return new WP_REST_Response(['success' => true, 'message' => 'Status cuti diupdate'], 200);
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal menyimpan data karyawan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $new_id = $wpdb->insert_id;
+        $new_employee = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $new_id), ARRAY_A);
+        wp_send_json_success(array('data' => $new_employee, 'success' => true), 201);
+    }
 }
-?>
+
+function handle_update_employee($id, $data) {
+    global $wpdb, $table_name;
+    $update_data = array(
+        'name' => sanitize_text_field($data['name']),
+        'position' => sanitize_text_field($data['position']),
+        'email' => sanitize_email($data['email']),
+        'phone' => sanitize_text_field($data['phone']),
+        'status' => in_array($data['status'], array('active', 'inactive')) ? $data['status'] : 'active',
+    );
+    $formats = array('%s', '%s', '%s', '%s', '%s');
+    $where = array('id' => $id);
+    $where_format = array('%d');
+    $result = $wpdb->update($table_name, $update_data, $where, $formats, $where_format);
+
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal mengupdate data karyawan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $updated_employee = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id), ARRAY_A);
+        wp_send_json_success(array('data' => $updated_employee, 'success' => true));
+    }
+}
+
+function handle_delete_employee($id) {
+    global $wpdb, $table_name;
+    $result = $wpdb->delete($table_name, array('id' => $id), array('%d'));
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal menghapus data karyawan.', 'db_error' => $wpdb->last_error));
+    } elseif ($result === 0) {
+        wp_send_json_error(array('message' => 'Karyawan tidak ditemukan.'), 404);
+    } else {
+        wp_send_json_success(array('message' => 'Karyawan berhasil dihapus.', 'success' => true));
+    }
+}

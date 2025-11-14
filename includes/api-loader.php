@@ -1,211 +1,81 @@
 <?php
-// File: includes/api-loader.php
-// Bertanggung jawab untuk mendaftarkan semua endpoint REST API kustom.
-
 if (!defined('ABSPATH')) {
-    exit;
+    exit; // Exit if accessed directly
 }
 
 /**
- * ===================================================================
- * Fungsi Cek Izin Kustom
- * ===================================================================
- * Ini adalah fungsi keamanan yang akan dipanggil oleh setiap endpoint API.
- * Menentukan apakah pengguna yang saat ini login diizinkan untuk melakukan 
- * operasi berdasarkan setting kustom Super Admin di tabel umroh_user_permissions.
- * * @param string $permission_key Kunci izin yang dibutuhkan (misal: 'manage_packages').
- * @return bool True jika diizinkan, False jika tidak.
+ * Fungsi utama untuk menangani request API
+ *
+ * @param WP_REST_Request $request Objek request dari WP REST API
+ * @param string $endpoint Nama endpoint yang diminta (misal: 'jamaah', 'packages')
+ * @return WP_REST_Response|WP_Error
  */
-function umroh_manager_check_custom_permission($permission_key) {
-    // 1. Super Admin/Administrator SELALU diizinkan
-    if (current_user_can('manage_options')) {
-        return true;
+function handle_api_endpoint($request, $endpoint)
+{
+    $file_path = plugin_dir_path(__DIR__) . 'api/api-' . $endpoint . '.php';
+
+    if (!file_exists($file_path)) {
+        return new WP_Error('invalid_endpoint', 'File endpoint API tidak ditemukan.', array('status' => 404));
     }
 
-    $user_id = get_current_user_id();
-    if (empty($user_id)) {
-        return false; // Pengguna belum login
-    }
-    
-    global $wpdb;
-    $table_permissions = $wpdb->prefix . 'umroh_user_permissions';
-    
-    // 2. Cek apakah ada hak akses kustom yang disetel untuk pengguna ini
-    $has_access = $wpdb->get_var($wpdb->prepare(
-        "SELECT has_access FROM $table_permissions WHERE user_id = %d AND permission_key = %s", 
-        $user_id, 
-        $permission_key
-    ));
-    
-    // 3. Jika ada setting kustom (0 atau 1), kembalikan nilai tersebut
-    if ($has_access !== null) {
-        return (bool)$has_access;
-    }
+    require_once $file_path;
 
-    // 4. Jika tidak ada setting kustom, gunakan default (User non-Admin tidak diizinkan)
-    return false;
-}
+    $method = $request->get_method();
+    $function_name = '';
 
-/**
- * Mendaftarkan semua endpoint REST API kustom
- */
-function umroh_manager_register_rest_routes() {
-    $namespace = 'umroh/v1';
-    
-    // Memuat semua file API
-    $api_files = [
-        'api-users.php',
-        'api-categories.php',
-        'api-hotels.php',
-        'api-flights.php',
-        'api-packages.php',
-        'api-departures.php',
-        'api-jamaah.php',
-    ];
-
-    foreach ($api_files as $file) {
-        $path = UMROH_MANAGER_PATH . "includes/api/$file";
-        if (file_exists($path)) {
-            require_once $path;
+    // PERBAIKAN: Menambahkan penanganan untuk method 'OPTIONS'
+    // Ini adalah preflight request yang dikirim browser sebelum POST/GET
+    // Kita harus merespons dengan sukses (204 No Content) agar request aslinya bisa lanjut.
+    if ($method === 'OPTIONS') {
+        // Cukup kembalikan response sukses kosong (HTTP 204 No Content)
+        return new WP_REST_Response(null, 204);
+    } 
+    else if ($method === 'POST') {
+        // Menentukan fungsi yang akan dipanggil berdasarkan parameter 'action'
+        // Contoh: 'create_jamaah', 'update_package', dll.
+        $action = $request->get_param('action');
+        if (!empty($action)) {
+            // Nama fungsi: post_create_jamaah, post_update_jamaah
+            $function_name = 'post_' . $action; 
+        } else {
+            // Fallback jika tidak ada action (mungkin tidak terpakai)
+            $function_name = 'post_' . $endpoint; // e.g., post_jamaah
         }
+    } 
+    else if ($method === 'GET') {
+        // Menentukan fungsi GET berdasarkan parameter
+        $id = $request->get_param('id');
+        if (!empty($id)) {
+            $function_name = 'get_' . $endpoint . '_by_id'; // e.g., get_jamaah_by_id
+        } else {
+            $function_name = 'get_all_' . $endpoint; // e.g., get_all_jamaah
+        }
+    } 
+    else {
+        // PERBAIKAN: Ini adalah blok yang sebelumnya menangkap 'OPTIONS'
+        // Sekarang ini hanya akan menangkap method lain yang tidak didukung (PUT, DELETE, dll.)
+        return new WP_Error('invalid_method', 'Metode request tidak valid.', array('status' => 405));
     }
 
-    // =================================================================
-    // 1. ENDPOINT USERS (Hak Akses) - Hanya untuk Super Admin
-    // =================================================================
-    register_rest_route($namespace, '/users', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_users_with_permissions',
-        'permission_callback' => function() { return current_user_can('manage_options'); },
-    ));
-    register_rest_route($namespace, '/users/(?P<id>\d+)/permissions', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_save_user_permissions',
-        'permission_callback' => function() { return current_user_can('manage_options'); },
-        'args' => array(
-            'id' => array('validate_callback' => 'is_numeric'),
-        ),
-    ));
+    // Cek apakah fungsi yang ditentukan ada di file yang di-include
+    if (function_exists($function_name)) {
+        try {
+            // Panggil fungsi yang sesuai
+            $response = call_user_func($function_name, $request);
+            
+            // Pastikan response adalah WP_REST_Response
+            if (is_wp_error($response)) {
+                return $response;
+            }
+            // Kirim sebagai JSON sukses
+            return new WP_REST_Response($response, 200);
 
-
-    // =================================================================
-    // 2. ENDPOINT MASTER DATA (Categories, Hotels, Flights)
-    // =================================================================
-
-    // CATEGORIES
-    register_rest_route($namespace, '/categories', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_categories',
-        'permission_callback' => function() { return is_user_logged_in(); },
-    ));
-    register_rest_route($namespace, '/categories', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_category',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_categories'); },
-    ));
-    register_rest_route($namespace, '/categories/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_category',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_categories'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
-    
-    // HOTELS
-    register_rest_route($namespace, '/hotels', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_hotels',
-        'permission_callback' => function() { return is_user_logged_in(); },
-    ));
-    register_rest_route($namespace, '/hotels', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_hotel',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_hotels'); },
-    ));
-    register_rest_route($namespace, '/hotels/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_hotel',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_hotels'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
-
-    // FLIGHTS
-    register_rest_route($namespace, '/flights', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_flights',
-        'permission_callback' => function() { return is_user_logged_in(); },
-    ));
-    register_rest_route($namespace, '/flights', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_flight',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_flights'); },
-    ));
-    register_rest_route($namespace, '/flights/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_flight',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_flights'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
-
-    // =================================================================
-    // 3. ENDPOINT PACKAGE & DEPARTURE
-    // =================================================================
-
-    // PACKAGES
-    register_rest_route($namespace, '/packages', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_packages',
-        'permission_callback' => function() { return is_user_logged_in(); },
-    ));
-    register_rest_route($namespace, '/packages', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_package',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_packages'); },
-    ));
-    register_rest_route($namespace, '/packages/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_package',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_packages'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
-
-    // DEPARTURES
-    register_rest_route($namespace, '/departures', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_departures',
-        'permission_callback' => function() { return is_user_logged_in(); },
-    ));
-    register_rest_route($namespace, '/departures', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_departure',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_departures'); },
-    ));
-    register_rest_route($namespace, '/departures/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_departure',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_departures'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
-
-    // =================================================================
-    // 4. ENDPOINT JAMAAH
-    // =================================================================
-
-    // JAMAAH
-    register_rest_route($namespace, '/jamaah', array(
-        'methods' => 'GET',
-        'callback' => 'umroh_api_get_jamaah',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('view_jamaah'); },
-    ));
-    register_rest_route($namespace, '/jamaah', array(
-        'methods' => 'POST',
-        'callback' => 'umroh_api_create_jamaah',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_jamaah'); },
-    ));
-    register_rest_route($namespace, '/jamaah/(?P<id>\d+)', array(
-        'methods' => 'DELETE',
-        'callback' => 'umroh_api_delete_jamaah',
-        'permission_callback' => function() { return umroh_manager_check_custom_permission('manage_jamaah'); },
-        'args' => array('id' => array('validate_callback' => 'is_numeric')),
-    ));
+        } catch (Exception $e) {
+            // Tangani error internal
+            return new WP_Error('internal_error', $e->getMessage(), array('status' => 500));
+        }
+    } else {
+        // Fungsi tidak ditemukan
+        return new WP_Error('invalid_action', 'Aksi API tidak valid atau fungsi tidak ditemukan: ' . $function_name, array('status' => 404));
+    }
 }
-add_action('rest_api_init', 'umroh_manager_register_rest_routes');

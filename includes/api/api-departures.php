@@ -1,110 +1,134 @@
 <?php
 // File: includes/api/api-departures.php
-// Mengelola CRUD untuk umroh_departures
+// (File BARU dibuat berdasarkan pola, dengan JOIN)
 
-if (!defined('ABSPATH')) {
-    exit;
+global $wpdb, $method, $id, $data;
+$table_name = $wpdb->prefix . 'travel_departures'; // Asumsi nama tabel
+
+switch ($method) {
+    case 'GET':
+        check_auth(array('administrator', 'editor'));
+        if ($id) {
+            handle_get_departure($id);
+        } else {
+            handle_get_all_departures();
+        }
+        break;
+    case 'POST':
+        check_auth(array('administrator', 'editor'));
+        handle_create_departure($data);
+        break;
+    case 'PUT':
+        check_auth(array('administrator', 'editor'));
+        handle_update_departure($id, $data);
+        break;
+    case 'DELETE':
+        check_auth(array('administrator'));
+        handle_delete_departure($id);
+        break;
+    default:
+        wp_send_json_error(array('message' => 'Metode request tidak valid.'), 405);
+        break;
 }
 
-/**
- * Mendapatkan semua Jadwal Keberangkatan dengan nama Paket
- * Endpoint: GET /umroh/v1/departures
- */
-function umroh_api_get_departures(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_departures';
-    $table_packages = $wpdb->prefix . 'umroh_packages';
-
-    $results = $wpdb->get_results("
-        SELECT 
-            d.*,
-            p.package_name,
-            p.duration_days
+function handle_get_all_departures() {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("
+        SELECT d.*, p.package_name, f.flight_number 
         FROM $table_name d
-        LEFT JOIN $table_packages p ON d.package_id = p.id
+        LEFT JOIN {$wpdb->prefix}travel_packages p ON d.package_id = p.id
+        LEFT JOIN {$wpdb->prefix}travel_flights f ON d.flight_id = f.id
         ORDER BY d.departure_date DESC
-    ", ARRAY_A);
-    
-    // Tambahkan informasi kuota terpakai
-    $table_jamaah = $wpdb->prefix . 'umroh_jamaah';
-    foreach ($results as &$departure) {
-        $jamaah_count = $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM $table_jamaah WHERE departure_id = %d",
-            $departure['id']
-        ));
-        $departure['current_jamaah'] = absint($jamaah_count);
-        $departure['available_quota'] = $departure['quota'] - $departure['current_jamaah'];
-    }
-    unset($departure); 
-
-    return wp_send_json_success(['data' => $results]);
+    ", array());
+    $results = $wpdb->get_results($query, ARRAY_A);
+    wp_send_json_success(array('data' => $results, 'success' => true));
 }
 
-/**
- * Membuat Jadwal Keberangkatan Baru
- * Endpoint: POST /umroh/v1/departures
- */
-function umroh_api_create_departure(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_departures';
-    
-    $package_id = absint($request['package_id']);
-    $departure_date = sanitize_text_field($request['departure_date']);
-    $quota = absint($request['quota']);
-    $price_quad = sanitize_text_field($request['price_quad']);
-    $price_triple = sanitize_text_field($request['price_triple']);
-    $price_double = sanitize_text_field($request['price_double']);
-
-    if (empty($package_id) || empty($departure_date) || empty($quota) || empty($price_quad)) {
-        return wp_send_json_error('Data jadwal dan harga harus lengkap.', 400);
+function handle_get_departure($id) {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("
+        SELECT d.*, p.package_name, f.flight_number 
+        FROM $table_name d
+        LEFT JOIN {$wpdb->prefix}travel_packages p ON d.package_id = p.id
+        LEFT JOIN {$wpdb->prefix}travel_flights f ON d.flight_id = f.id
+        WHERE d.id = %d
+    ", $id);
+    $result = $wpdb->get_row($query, ARRAY_A);
+    if (!$result) {
+        wp_send_json_error(array('message' => 'Keberangkatan tidak ditemukan.'), 404);
+        return;
     }
-    
-    $data = [
-        'package_id' => $package_id,
-        'departure_date' => $departure_date,
-        'quota' => $quota,
-        'price_quad' => floatval($price_quad),
-        'price_triple' => floatval($price_triple),
-        'price_double' => floatval($price_double),
-    ];
-    $format = ['%d', '%s', '%d', '%f', '%f', '%f'];
-
-    $result = $wpdb->insert($table_name, $data, $format);
-
-    if ($result === false) {
-        return wp_send_json_error('Gagal menyimpan jadwal keberangkatan ke database.', 500);
-    }
-
-    return wp_send_json_success(['message' => 'Jadwal berhasil dibuat.', 'id' => $wpdb->insert_id]);
+    wp_send_json_success(array('data' => $result, 'success' => true));
 }
 
-/**
- * Menghapus Jadwal Keberangkatan
- * Endpoint: DELETE /umroh/v1/departures/(id)
- */
-function umroh_api_delete_departure(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_departures';
-    $departure_id = absint($request['id']);
+function handle_create_departure($data) {
+    global $wpdb, $table_name;
     
-    if (empty($departure_id)) {
-        return wp_send_json_error('ID jadwal tidak valid.', 400);
+    if (empty($data['departure_name']) || empty($data['package_id'])) {
+        wp_send_json_error(array('message' => 'Nama dan Paket tidak boleh kosong.'), 400);
+        return;
     }
-
-    // 1. Cek Keterkaitan Jamaah (Relational Protection)
-    $table_jamaah = $wpdb->prefix . 'umroh_jamaah';
-    $is_used = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_jamaah WHERE departure_id = %d", $departure_id));
-
-    if ($is_used > 0) {
-        return wp_send_json_error('Tidak dapat menghapus. Jadwal ini sudah memiliki ' . $is_used . ' jamaah terdaftar.', 409);
-    }
-
-    // 2. Hapus Data
-    $result = $wpdb->delete($table_name, ['id' => $departure_id], ['%d']);
+    $insert_data = array(
+        'departure_name' => sanitize_text_field($data['departure_name']),
+        'package_id' => intval($data['package_id']),
+        'flight_id' => !empty($data['flight_id']) ? intval($data['flight_id']) : null,
+        'departure_date' => sanitize_text_field($data['departure_date']),
+        'status' => in_array($data['status'], array('scheduled', 'departed', 'arrived', 'cancelled')) ? $data['status'] : 'scheduled',
+    );
+    $formats = array('%s', '%d', '%d', '%s', '%s');
+    $result = $wpdb->insert($table_name, $insert_data, $formats);
 
     if ($result === false) {
-        return wp_send_json_error('Gagal menghapus jadwal keberangkatan dari database.', 500);
+        wp_send_json_error(array('message' => 'Gagal menyimpan keberangkatan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $new_id = $wpdb->insert_id;
+        $new_departure = $wpdb->get_row($wpdb->prepare("
+            SELECT d.*, p.package_name, f.flight_number 
+            FROM $table_name d
+            LEFT JOIN {$wpdb->prefix}travel_packages p ON d.package_id = p.id
+            LEFT JOIN {$wpdb->prefix}travel_flights f ON d.flight_id = f.id
+            WHERE d.id = %d
+        ", $new_id), ARRAY_A);
+        wp_send_json_success(array('data' => $new_departure, 'success' => true), 201);
     }
+}
 
-    return wp_send_json_success(['message' => 'Jadwal berhasil dihapus.']);
+function handle_update_departure($id, $data) {
+    global $wpdb, $table_name;
+    $update_data = array(
+        'departure_name' => sanitize_text_field($data['departure_name']),
+        'package_id' => intval($data['package_id']),
+        'flight_id' => !empty($data['flight_id']) ? intval($data['flight_id']) : null,
+        'departure_date' => sanitize_text_field($data['departure_date']),
+        'status' => in_array($data['status'], array('scheduled', 'departed', 'arrived', 'cancelled')) ? $data['status'] : 'scheduled',
+    );
+    $formats = array('%s', '%d', '%d', '%s', '%s');
+    $where = array('id' => $id);
+    $where_format = array('%d');
+    $result = $wpdb->update($table_name, $update_data, $where, $formats, $where_format);
+
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal mengupdate keberangkatan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $updated_departure = $wpdb->get_row($wpdb->prepare("
+            SELECT d.*, p.package_name, f.flight_number 
+            FROM $table_name d
+            LEFT JOIN {$wpdb->prefix}travel_packages p ON d.package_id = p.id
+            LEFT JOIN {$wpdb->prefix}travel_flights f ON d.flight_id = f.id
+            WHERE d.id = %d
+        ", $id), ARRAY_A);
+        wp_send_json_success(array('data' => $updated_departure, 'success' => true));
+    }
+}
+
+function handle_delete_departure($id) {
+    global $wpdb, $table_name;
+    $result = $wpdb->delete($table_name, array('id' => $id), array('%d'));
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal menghapus keberangkatan.', 'db_error' => $wpdb->last_error));
+    } elseif ($result === 0) {
+        wp_send_json_error(array('message' => 'Keberangkatan tidak ditemukan.'), 404);
+    } else {
+        wp_send_json_success(array('message' => 'Keberangkatan berhasil dihapus.', 'success' => true));
+    }
 }

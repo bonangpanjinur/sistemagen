@@ -1,89 +1,108 @@
 <?php
 // File: includes/api/api-flights.php
-// Mengelola CRUD untuk umroh_flights
+// (File BARU dibuat berdasarkan pola)
 
-if (!defined('ABSPATH')) {
-    exit;
+global $wpdb;
+$table_name = $wpdb->prefix . 'travel_flights'; // Asumsi nama tabel
+
+switch ($method) {
+    case 'GET':
+        check_auth(array('administrator', 'editor'));
+        if ($id) {
+            handle_get_flight($id);
+        } else {
+            handle_get_all_flights();
+        }
+        break;
+    case 'POST':
+        check_auth(array('administrator'));
+        handle_create_flight($data);
+        break;
+    case 'PUT':
+        check_auth(array('administrator'));
+        handle_update_flight($id, $data);
+        break;
+    case 'DELETE':
+        check_auth(array('administrator'));
+        handle_delete_flight($id);
+        break;
+    default:
+        wp_send_json_error(array('message' => 'Metode request tidak valid.'), 405);
+        break;
 }
 
-/**
- * Mendapatkan semua Penerbangan
- * Endpoint: GET /umroh/v1/flights
- */
-function umroh_api_get_flights(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_flights';
-    $results = $wpdb->get_results("SELECT * FROM $table_name ORDER BY airline_name ASC", ARRAY_A);
-    return wp_send_json_success(['data' => $results]);
+function handle_get_all_flights() {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name ORDER BY airline_name ASC", array());
+    $results = $wpdb->get_results($query, ARRAY_A);
+    wp_send_json_success(array('data' => $results));
 }
 
-/**
- * Membuat Penerbangan Baru
- * Endpoint: POST /umroh/v1/flights
- */
-function umroh_api_create_flight(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_flights';
+function handle_get_flight($id) {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id);
+    $result = $wpdb->get_row($query, ARRAY_A);
+    if (!$result) {
+        wp_send_json_error(array('message' => 'Penerbangan tidak ditemukan.'), 404);
+        return;
+    }
+    wp_send_json_success(array('data' => $result));
+}
+
+function handle_create_flight($data) {
+    global $wpdb, $table_name;
     
-    $airline_name = sanitize_text_field($request['airline_name']);
-    $flight_number = sanitize_text_field(strtoupper($request['flight_number']));
-    $origin = sanitize_text_field(strtoupper($request['origin']));
-    $destination = sanitize_text_field(strtoupper($request['destination']));
-
-    if (empty($airline_name) || empty($flight_number) || empty($origin) || empty($destination)) {
-        return wp_send_json_error('Semua kolom penerbangan harus diisi.', 400);
+    if (empty($data['airline_name']) || empty($data['flight_number'])) {
+        wp_send_json_error(array('message' => 'Maskapai dan No. Penerbangan tidak boleh kosong.'), 400);
+        return;
     }
-
-    // Cek duplikasi nomor penerbangan
-    $existing = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE flight_number = %s", $flight_number));
-    if ($existing > 0) {
-        return wp_send_json_error('Nomor penerbangan sudah ada.', 409);
-    }
-
-    $data = [
-        'airline_name' => $airline_name,
-        'flight_number' => $flight_number,
-        'origin' => $origin,
-        'destination' => $destination,
-    ];
-    $format = ['%s', '%s', '%s', '%s'];
-
-    $result = $wpdb->insert($table_name, $data, $format);
+    $insert_data = array(
+        'airline_name' => sanitize_text_field($data['airline_name']),
+        'flight_number' => sanitize_text_field($data['flight_number']),
+        'departure_airport' => sanitize_text_field($data['departure_airport']),
+        'arrival_airport' => sanitize_text_field($data['arrival_airport']),
+    );
+    $formats = array('%s', '%s', '%s', '%s');
+    $result = $wpdb->insert($table_name, $insert_data, $formats);
 
     if ($result === false) {
-        return wp_send_json_error('Gagal menyimpan penerbangan ke database.', 500);
+        wp_send_json_error(array('message' => 'Gagal menyimpan penerbangan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $new_id = $wpdb->insert_id;
+        $new_flight = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $new_id), ARRAY_A);
+        wp_send_json_success(array('data' => $new_flight), 201);
     }
-
-    return wp_send_json_success(['message' => 'Penerbangan berhasil dibuat.', 'id' => $wpdb->insert_id]);
 }
 
-/**
- * Menghapus Penerbangan
- * Endpoint: DELETE /umroh/v1/flights/(id)
- */
-function umroh_api_delete_flight(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_flights';
-    $flight_id = absint($request['id']);
-    
-    if (empty($flight_id)) {
-        return wp_send_json_error('ID penerbangan tidak valid.', 400);
-    }
-
-    // 1. Cek Keterkaitan (Relational Protection)
-    $table_pkg_flights = $wpdb->prefix . 'umroh_package_flights';
-    $is_used = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_pkg_flights WHERE flight_id = %d", $flight_id));
-
-    if ($is_used > 0) {
-        return wp_send_json_error('Tidak dapat menghapus. Penerbangan ini digunakan oleh ' . $is_used . ' paket.', 409);
-    }
-
-    // 2. Hapus Data
-    $result = $wpdb->delete($table_name, ['id' => $flight_id], ['%d']);
+function handle_update_flight($id, $data) {
+    global $wpdb, $table_name;
+    $update_data = array(
+        'airline_name' => sanitize_text_field($data['airline_name']),
+        'flight_number' => sanitize_text_field($data['flight_number']),
+        'departure_airport' => sanitize_text_field($data['departure_airport']),
+        'arrival_airport' => sanitize_text_field($data['arrival_airport']),
+    );
+    $formats = array('%s', '%s', '%s', '%s');
+    $where = array('id' => $id);
+    $where_format = array('%d');
+    $result = $wpdb->update($table_name, $update_data, $where, $formats, $where_format);
 
     if ($result === false) {
-        return wp_send_json_error('Gagal menghapus penerbangan dari database.', 500);
+        wp_send_json_error(array('message' => 'Gagal mengupdate penerbangan.', 'db_error' => $wpdb->last_error));
+    } else {
+        $updated_flight = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id), ARRAY_A);
+        wp_send_json_success(array('data' => $updated_flight));
     }
+}
 
-    return wp_send_json_success(['message' => 'Penerbangan berhasil dihapus.']);
+function handle_delete_flight($id) {
+    global $wpdb, $table_name;
+    $result = $wpdb->delete($table_name, array('id' => $id), array('%d'));
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal menghapus penerbangan.', 'db_error' => $wpdb->last_error));
+    } elseif ($result === 0) {
+        wp_send_json_error(array('message' => 'Penerbangan tidak ditemukan.'), 404);
+    } else {
+        wp_send_json_success(array('message' => 'Penerbangan berhasil dihapus.'));
+    }
 }

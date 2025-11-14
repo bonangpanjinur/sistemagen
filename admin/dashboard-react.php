@@ -1,21 +1,43 @@
 <?php
-// Lokasi: wp-content/plugins/umroh-manager/admin/dashboard-react.php
-if (!defined('ABSPATH')) exit;
+// File: admin/dashboard-react.php
+// Ini adalah file "host" untuk aplikasi React Anda.
+// Pastikan file ini bisa diakses dari URL WordPress Admin Anda.
+
+// Ambil path ke file build React
+// (Sesuaikan 'build/index.js' dan 'build/index.asset.php' jika path Anda berbeda)
+$script_path = plugin_dir_url(__FILE__) . '../build/index.js';
+$script_asset_path = plugin_dir_path(__FILE__) . '../build/index.asset.php';
+
+// Pastikan file asset ada
+if (!file_exists($script_asset_path)) {
+    die('File asset build React tidak ditemukan. Jalankan "npm run build".');
+}
+
+// Load dependencies dari file asset (dibuat oleh @wordpress/scripts)
+$script_asset = require($script_asset_path);
+
+// Enqueue script React
+wp_enqueue_script(
+    'umroh-manager-react-app',
+    $script_path,
+    $script_asset['dependencies'],
+    $script_asset['version'],
+    true // Load di footer
+);
+
+// Ini adalah tempat aplikasi React akan di-render
+// Cukup satu div dengan id "root"
 ?>
 
 <div class="wrap">
     <!-- 
-      Ini adalah "kanvas" kosong. 
-      React (dari file JS yang di-enqueue) akan mengambil alih div ini.
+      Judul H2 dan paragraf ini akan terlihat sebentar
+      sebelum React dimuat.
+      Di 'Immersive Mode' (non-admin), .wrap akan 
+      di-setel ke margin: 0, jadi ini tidak akan mengganggu layout.
     -->
     <div id="root">
-        <div style="display: flex; align-items: center; justify-content: center; height: 80vh; flex-direction: column;">
-            <svg style="width: 50px; height: 50px; color: #4F46E5; animation: spin 1s linear infinite;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p style="margin-top: 15px; font-size: 1.1rem; font-family: sans-serif; color: #333;">Memuat Panel Kontrol...</p>
-        </div>
-        <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+        <!-- React akan menggantikan konten ini -->
+        <p style="padding: 20px; text-align: center;">Memuat aplikasi manajemen...</p>
     </div>
 </div>

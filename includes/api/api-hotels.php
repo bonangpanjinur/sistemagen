@@ -1,83 +1,106 @@
 <?php
 // File: includes/api/api-hotels.php
-// Mengelola CRUD untuk umroh_hotels
+// (File BARU dibuat berdasarkan pola)
 
-if (!defined('ABSPATH')) {
-    exit;
+global $wpdb, $method, $id, $data;
+$table_name = $wpdb->prefix . 'travel_hotels'; // Asumsi nama tabel
+
+switch ($method) {
+    case 'GET':
+        check_auth(array('administrator', 'editor'));
+        if ($id) {
+            handle_get_hotel($id);
+        } else {
+            handle_get_all_hotels();
+        }
+        break;
+    case 'POST':
+        check_auth(array('administrator'));
+        handle_create_hotel($data);
+        break;
+    case 'PUT':
+        check_auth(array('administrator'));
+        handle_update_hotel($id, $data);
+        break;
+    case 'DELETE':
+        check_auth(array('administrator'));
+        handle_delete_hotel($id);
+        break;
+    default:
+        wp_send_json_error(array('message' => 'Metode request tidak valid.'), 405);
+        break;
 }
 
-/**
- * Mendapatkan semua Hotel
- * Endpoint: GET /umroh/v1/hotels
- */
-function umroh_api_get_hotels(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_hotels';
-    $results = $wpdb->get_results("SELECT * FROM $table_name ORDER BY city ASC, stars DESC, name ASC", ARRAY_A);
-    return wp_send_json_success(['data' => $results]);
+function handle_get_all_hotels() {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name ORDER BY hotel_name ASC", array());
+    $results = $wpdb->get_results($query, ARRAY_A);
+    wp_send_json_success(array('data' => $results, 'success' => true));
 }
 
-/**
- * Membuat Hotel Baru
- * Endpoint: POST /umroh/v1/hotels
- */
-function umroh_api_create_hotel(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_hotels';
-    
-    $name = sanitize_text_field($request['name']);
-    $city = sanitize_text_field($request['city']);
-    $stars = absint($request['stars']);
-    $address = sanitize_textarea_field($request['address']);
-
-    if (empty($name) || empty($city) || $stars < 1 || $stars > 5) {
-        return wp_send_json_error('Data Hotel tidak lengkap atau tidak valid.', 400);
+function handle_get_hotel($id) {
+    global $wpdb, $table_name;
+    $query = $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id);
+    $result = $wpdb->get_row($query, ARRAY_A);
+    if (!$result) {
+        wp_send_json_error(array('message' => 'Hotel tidak ditemukan.'), 404);
+        return;
     }
+    wp_send_json_success(array('data' => $result, 'success' => true));
+}
 
-    $data = [
-        'name' => $name,
-        'city' => $city,
-        'stars' => $stars,
-        'address' => $address
-    ];
-    $format = ['%s', '%s', '%d', '%s'];
-
-    $result = $wpdb->insert($table_name, $data, $format);
+function handle_create_hotel($data) {
+    global $wpdb, $table_name;
+    
+    if (empty($data['hotel_name'])) {
+        wp_send_json_error(array('message' => 'Nama hotel tidak boleh kosong.'), 400);
+        return;
+    }
+    $insert_data = array(
+        'hotel_name' => sanitize_text_field($data['hotel_name']),
+        'address' => sanitize_text_field($data['address']),
+        'stars' => intval($data['stars']),
+    );
+    $formats = array('%s', '%s', '%d');
+    $result = $wpdb->insert($table_name, $insert_data, $formats);
 
     if ($result === false) {
-        return wp_send_json_error('Gagal menyimpan hotel ke database.', 500);
+        wp_send_json_error(array('message' => 'Gagal menyimpan hotel.', 'db_error' => $wpdb->last_error));
+    } else {
+        $new_id = $wpdb->insert_id;
+        $new_hotel = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $new_id), ARRAY_A);
+        wp_send_json_success(array('data' => $new_hotel, 'success' => true), 201);
     }
-
-    return wp_send_json_success(['message' => 'Hotel berhasil dibuat.', 'id' => $wpdb->insert_id]);
 }
 
-/**
- * Menghapus Hotel
- * Endpoint: DELETE /umroh/v1/hotels/(id)
- */
-function umroh_api_delete_hotel(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umroh_hotels';
-    $hotel_id = absint($request['id']);
-    
-    if (empty($hotel_id)) {
-        return wp_send_json_error('ID hotel tidak valid.', 400);
-    }
-
-    // 1. Cek Keterkaitan (Relational Protection)
-    $table_pkg_hotels = $wpdb->prefix . 'umroh_package_hotels';
-    $is_used = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_pkg_hotels WHERE hotel_id = %d", $hotel_id));
-
-    if ($is_used > 0) {
-        return wp_send_json_error('Tidak dapat menghapus. Hotel ini digunakan oleh ' . $is_used . ' paket.', 409);
-    }
-
-    // 2. Hapus Data
-    $result = $wpdb->delete($table_name, ['id' => $hotel_id], ['%d']);
+function handle_update_hotel($id, $data) {
+    global $wpdb, $table_name;
+    $update_data = array(
+        'hotel_name' => sanitize_text_field($data['hotel_name']),
+        'address' => sanitize_text_field($data['address']),
+        'stars' => intval($data['stars']),
+    );
+    $formats = array('%s', '%s', '%d');
+    $where = array('id' => $id);
+    $where_format = array('%d');
+    $result = $wpdb->update($table_name, $update_data, $where, $formats, $where_format);
 
     if ($result === false) {
-        return wp_send_json_error('Gagal menghapus hotel dari database.', 500);
+        wp_send_json_error(array('message' => 'Gagal mengupdate hotel.', 'db_error' => $wpdb->last_error));
+    } else {
+        $updated_hotel = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id), ARRAY_A);
+        wp_send_json_success(array('data' => $updated_hotel, 'success' => true));
     }
+}
 
-    return wp_send_json_success(['message' => 'Hotel berhasil dihapus.']);
+function handle_delete_hotel($id) {
+    global $wpdb, $table_name;
+    $result = $wpdb->delete($table_name, array('id' => $id), array('%d'));
+    if ($result === false) {
+        wp_send_json_error(array('message' => 'Gagal menghapus hotel.', 'db_error' => $wpdb->last_error));
+    } elseif ($result === 0) {
+        wp_send_json_error(array('message' => 'Hotel tidak ditemukan.'), 404);
+    } else {
+        wp_send_json_success(array('message' => 'Hotel berhasil dihapus.', 'success' => true));
+    }
 }

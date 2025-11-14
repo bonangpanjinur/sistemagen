@@ -1,42 +1,86 @@
 <?php
-// Lokasi: includes/utils.php
-if (!defined('ABSPATH')) exit;
+// File: includes/utils.php
 
-/**
- * PENTING: Pengecekan Hak Akses
- * Memeriksa apakah user yang sedang login adalah Administrator.
- */
-function umroh_check_permission_admin() {
-    // 'manage_options' adalah capability default untuk Administrator
-    return current_user_can('manage_options');
+if (!defined('ABSPATH')) {
+    exit; // Exit if accessed directly.
 }
 
-/**
- * PENTING: Pengecekan Hak Akses
- * Memeriksa apakah user adalah Staff (Editor) ATAU Administrator.
- */
-function umroh_check_permission_staff() {
-    // 'edit_posts' adalah capability default untuk Editor (Staff)
-    // Kita cek juga 'manage_options' agar Admin juga dianggap sebagai Staff
-    return current_user_can('edit_posts') || current_user_can('manage_options');
-}
-
-
-/**
- * Helper untuk mencatat Log Aktivitas
- */
-function umroh_log_activity($action, $item_id = 0, $details = '') {
+// Fungsi utilitas umum
+function umh_get_package_details($package_id) {
     global $wpdb;
+    $package_table = $wpdb->prefix . 'umh_packages';
+    $package = $wpdb->get_row($wpdb->prepare("SELECT * FROM $package_table WHERE package_id = %d", $package_id));
+    return $package;
+}
+
+function umh_log_activity($user_id, $action, $details) {
+    global $wpdb;
+    $log_table = $wpdb->prefix . 'umh_activity_logs';
     
-    if (is_array($details) || is_object($details)) {
-        $details = json_encode($details);
+    $wpdb->insert(
+        $log_table,
+        [
+            'user_id' => $user_id,
+            'action' => $action,
+            'details' => $details,
+            'log_time' => current_time('mysql', 1)
+        ],
+        ['%d', '%s', '%s', '%s']
+    );
+}
+
+// **PERBAIKAN BARU: (Poin 1, 2, 4) Pemeriksa Izin API Global**
+function umh_check_api_permission(WP_REST_Request $request) {
+    
+    // 1. Izinkan jika ini adalah Admin WP yang diautentikasi melalui cookie
+    // Ini penting untuk panggilan dari React saat auto-login (Poin 1 & 2)
+    // dan juga untuk endpoint /wp-login
+    if (is_super_admin() || current_user_can('manage_options')) {
+        // Verifikasi nonce untuk keamanan tambahan terhadap CSRF
+        $nonce = $request->get_header('X-WP-Nonce');
+        if (wp_verify_nonce($nonce, 'wp_rest')) {
+            return true;
+        }
+        // Jika tidak ada nonce (mungkin dari login kustom), lanjutkan ke pemeriksaan token
     }
 
-    $wpdb->insert($wpdb->prefix . 'umroh_audit_logs', [
-        'user_id' => get_current_user_id(),
-        'action' => $action,
-        'item_id' => $item_id,
-        'details' => $details,
-        'ip_address' => $_SERVER['REMOTE_ADDR']
-    ]);
+    // 2. Izinkan jika ada Token Bearer yang valid (Poin 4)
+    $auth_header = $request->get_header('Authorization');
+    
+    if (empty($auth_header)) {
+        return new WP_Error('rest_unauthorized', 'Header otorisasi tidak ditemukan.', ['status' => 401]);
+    }
+
+    // Harapkan format "Bearer <token>"
+    // Periksa apakah ada spasi sebelum meledak
+    if (strpos($auth_header, ' ') === false) {
+        return new WP_Error('rest_unauthorized', 'Format header otorisasi tidak valid.', ['status' => 401]);
+    }
+    
+    list($type, $token) = explode(' ', $auth_header, 2);
+    
+    if (strcasecmp($type, 'Bearer') !== 0 || empty($token)) {
+        return new WP_Error('rest_unauthorized', 'Skema otorisasi tidak valid atau token kosong.', ['status' => 401]);
+    }
+
+    // 3. Verifikasi token di database
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'umh_users';
+    
+    // Cari user berdasarkan auth_token
+    $user = $wpdb->get_row($wpdb->prepare("SELECT user_id, role FROM $table_name WHERE auth_token = %s", $token));
+
+    if (empty($user)) {
+        return new WP_Error('rest_invalid_token', 'Token tidak valid atau kedaluwarsa.', ['status' => 401]);
+    }
+
+    // (Opsional) Di sini Anda dapat menambahkan pemeriksaan role
+    // if ($user->role !== 'owner' && $user->role !== 'karyawan') {
+    //     return new WP_Error('rest_forbidden_role', 'Peran Anda tidak diizinkan.', ['status' => 403]);
+    // }
+
+    // Jika token valid, izinkan akses
+    return true;
 }
+
+?>

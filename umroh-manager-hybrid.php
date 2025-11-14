@@ -1,203 +1,113 @@
 <?php
 /**
- * Plugin Name:       Umroh Manager Hybrid (Backend + Admin UI)
- * Plugin URI:        https://www.jannahfirdaustravel.com/
- * Description:       Menyediakan REST API (Headless) DAN UI Admin untuk Super Admin.
- * Version:           1.6.0 (Full Refactor)
- * Requires at least: 5.2
- * Requires PHP:      7.2
- * Author:            Bonang Panji Nur
- * Author URI:        https://bonang.my.id/
- * License:           GPL v2 or later
- * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       umroh-manager
- * Domain Path:       /languages
+ * Plugin Name: Umroh Manager Hybrid
+ * Plugin URI:  https://example.com/
+ * Description: Manages Umroh packages, jamaah, finance, and HR with a hybrid WP-Admin and Headless API approach.
+ * Version:     1.2.0
+ * Author:      Your Name
+ * Author URI:  https://example.com/
+ * Text Domain: umh
+ * License:     GPL-2.0+
+ * License URI: http://www.gnu.org/licenses/gpl-2.0.txt
  */
 
-// Exit jika diakses langsung
 if (!defined('ABSPATH')) {
-    exit;
+    exit; // Exit if accessed directly
 }
 
-// Definisi konstanta plugin
-define('UMROH_MANAGER_VERSION', '1.6.0');
-define('UMROH_MANAGER_PLUGIN_DIR', plugin_dir_path(__FILE__));
-define('UMROH_MANAGER_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('UMH_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('UMH_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-/**
- * Class utama UmrohManagerHybrid
- */
-final class UmrohManagerHybrid {
+// 1. Inisialisasi Database
+require_once UMH_PLUGIN_DIR . 'includes/db-schema.php';
 
-    private static $_instance = null;
+// 2. Utilitas Inti & Keamanan
+require_once UMH_PLUGIN_DIR . 'includes/utils.php';
 
-    public static function instance() {
-        if (is_null(self::$_instance)) {
-            self::$_instance = new self();
-        }
-        return self::$_instance;
+// 3. Penanganan CORS (jika diperlukan untuk headless)
+// require_once UMH_PLUGIN_DIR . 'includes/cors.php'; // Uncomment jika domain frontend berbeda
+
+// 4. [BARU] Load Generic CRUD Controller
+require_once UMH_PLUGIN_DIR . 'includes/class-umh-crud-controller.php';
+
+// 5. Muat semua file API Endpoints
+$api_files = glob(UMH_PLUGIN_DIR . 'includes/api/*.php');
+foreach ($api_files as $file) {
+    if (basename($file) !== 'api-manifest.php') { // Jangan muat file yang sudah usang
+        require_once $file;
+    }
+}
+
+// 6. Halaman Admin (Dashboard & Pengaturan)
+require_once UMH_PLUGIN_DIR . 'admin/dashboard-react.php';
+require_once UMH_PLUGIN_DIR . 'admin/settings-page.php';
+
+// 7. Enqueue scripts untuk Admin Dashboard React
+function umh_admin_enqueue_scripts($hook) {
+    // Hanya muat di halaman dashboard kita
+    if ('toplevel_page_umroh-manager' !== $hook) {
+        return;
     }
 
-    public function __construct() {
-        $this->includes();
-        $this->init_hooks();
+    $asset_file = include(UMH_PLUGIN_DIR . 'build/index.asset.php');
+
+    wp_enqueue_script(
+        'umh-admin-react-app',
+        UMH_PLUGIN_URL . 'build/index.js',
+        $asset_file['dependencies'],
+        $asset_file['version'],
+        true
+    );
+
+    wp_enqueue_style(
+        'umh-admin-style',
+        UMH_PLUGIN_URL . 'assets/css/admin-style.css',
+        [],
+        filemtime(UMH_PLUGIN_DIR . 'assets/css/admin-style.css')
+    );
+
+    // Amankan API untuk WP Admin (Super Admin)
+    $current_user = wp_get_current_user();
+    if (umh_is_super_admin($current_user)) {
+        wp_localize_script('umh-admin-react-app', 'umhData', [
+            'api_url' => esc_url_raw(rest_url('umh/v1/')),
+            'api_nonce' => wp_create_nonce('wp_rest'),
+            'is_wp_admin' => true,
+            'current_user' => [
+                'display_name' => $current_user->display_name,
+                'email' => $current_user->user_email,
+                'role' => 'super_admin', // Beri role eksplisit
+            ],
+        ]);
     }
+}
+add_action('admin_enqueue_scripts', 'umh_admin_enqueue_scripts');
 
-    /**
-     * Memuat file-file yang diperlukan.
-     * Ini sekarang memuat SEMUA file API secara eksplisit.
-     */
-    private function includes() {
-        // Core Utilities
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/utils.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/db-schema.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/cors.php';
 
-        // Admin UI Files
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'admin/dashboard-react.php'; 
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'admin/settings-page.php';
-
-        // === API FILES (Aman & Modern) ===
-        // Auth & Users
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-users.php'; // Handle Login & User Management
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-jamaah.php';
-
-        // Modul Inti Bisnis (Baru di-refaktor)
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-packages.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-hotels.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-flights.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-finance.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-hr.php'; // (Karyawan)
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-tasks.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-departures.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-marketing.php';
+// 8. [BARU] Menyajikan Service Worker untuk PWA
+function umh_serve_service_worker() {
+    // Cek apakah request adalah untuk service-worker.js di root
+    if (isset($_SERVER['REQUEST_URI']) && $_SERVER['REQUEST_URI'] === '/service-worker.js') {
+        $sw_file = UMH_PLUGIN_DIR . 'pwa/service-worker.js';
         
-        // Modul Pendukung (Asumsi sudah modern)
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-categories.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-export.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-logs.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-manifest.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-print.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-stats.php';
-        require_once UMROH_MANAGER_PLUGIN_DIR . 'includes/api/api-uploads.php';
-
-        // CATATAN: Pastikan untuk MENGHAPUS file 'includes/api-loader.php' dan 'includes/api/api-auth.php'
+        if (file_exists($sw_file)) {
+            header('Content-Type: application/javascript');
+            header('Service-Worker-Allowed: /');
+            readfile($sw_file);
+            exit();
+        }
     }
-
-    /**
-     * Inisialisasi hooks WordPress.
-     */
-    private function init_hooks() {
-        // Hook aktivasi
-        register_activation_hook(__FILE__, array($this, 'activate'));
-        register_deactivation_hook(__FILE__, array($this, 'deactivate'));
-
-        // Hooks Admin UI
-        add_action('admin_menu', array($this, 'admin_menu'));
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+    
+    // Juga sajikan manifest.json
+    if (isset($_SERVER['REQUEST_URI']) && $_SERVER['REQUEST_URI'] === '/manifest.json') {
+        $manifest_file = UMH_PLUGIN_DIR . 'pwa/manifest.json';
         
-        // Hooks Backend API
-        $umh_cors = new UMH_CORS();
-        add_action('rest_api_init', array($umh_cors, 'add_cors_headers'));
-
-        // Init Halaman Pengaturan
-        $umh_settings_page = new UMH_Settings_Page();
-        add_action('admin_init', array($umh_settings_page, 'register_settings'));
-    }
-
-    public function activate() {
-        umroh_manager_create_tables();
-        // Set default options
-        if (get_option('umh_settings') === false) {
-            add_option('umh_settings', ['allowed_origins' => home_url()]);
-        }
-    }
-
-    public function deactivate() {
-        // Kosongkan
-    }
-
-    /**
-     * Tambahkan menu di admin dashboard.
-     */
-    public function admin_menu() {
-        add_menu_page(
-            'Umroh Manager',
-            'Umroh Manager',
-            'manage_options', 
-            'umroh-manager-dashboard',
-            'umroh_manager_render_dashboard_react',
-            'dashicons-airplane',
-            6
-        );
-
-        add_submenu_page(
-            'umroh-manager-dashboard',
-            'Pengaturan CORS & API',
-            'Pengaturan',
-            'manage_options',
-            'umh-settings',
-            'umh_render_settings_page'
-        );
-    }
-
-    /**
-     * Enqueue scripts dan styles untuk admin.
-     */
-    public function enqueue_admin_scripts($hook) {
-        // Halaman Dashboard React
-        if ($hook === 'toplevel_page_umroh-manager-dashboard') {
-            
-            $asset_file_path = UMROH_MANAGER_PLUGIN_DIR . 'build/index.asset.php';
-            if (!file_exists($asset_file_path)) {
-                wp_die('File asset build/index.asset.php tidak ditemukan. Jalankan npm run build.');
-                return;
-            }
-            
-            $asset_file = include($asset_file_path);
-
-            wp_enqueue_script(
-                'umroh-manager-react-app',
-                UMROH_MANAGER_PLUGIN_URL . 'build/index.js',
-                $asset_file['dependencies'],
-                $asset_file['version'],
-                true
-            );
-
-            wp_enqueue_style(
-                'umroh-manager-admin-style',
-                UMROH_MANAGER_PLUGIN_URL . 'assets/css/admin-style.css',
-                array(),
-                UMROH_MANAGER_VERSION
-            );
-
-            wp_localize_script('umroh-manager-react-app', 'umh_wp_data', array(
-                'api_url'      => esc_url_raw(rest_url('umh/v1/')), 
-                'api_nonce'    => wp_create_nonce('wp_rest'),
-                'is_wp_admin'  => true,
-                'home_url'     => home_url(),
-                'plugin_url'   => UMROH_MANAGER_PLUGIN_URL,
-            ));
-        }
-
-        // Halaman Pengaturan
-        if ($hook === 'umroh-manager_page_umh-settings') {
-             wp_enqueue_style(
-                'umroh-manager-settings-style',
-                UMROH_MANAGER_PLUGIN_URL . 'assets/css/admin-style.css',
-                array(),
-                UMROH_MANAGER_VERSION
-            );
+        if (file_exists($manifest_file)) {
+            header('Content-Type: application/json');
+            readfile($manifest_file);
+            exit();
         }
     }
 }
-
-/**
- * Inisialisasi plugin.
- */
-function umroh_manager_init() {
-    return UmrohManagerHybrid::instance();
-}
-
-// Mulai plugin
-umroh_manager_init();
+// Hook ke 'init' agar berjalan sebelum WordPress menangani URL
+add_action('init', 'umh_serve_service_worker');

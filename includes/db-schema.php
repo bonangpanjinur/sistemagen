@@ -2,8 +2,11 @@
 /**
  * File: includes/db-schema.php
  *
- * Menambahkan tabel baru (umh_roles, umh_payments) ke dalam file skema database
- * yang sudah ada.
+ * MODIFIKASI:
+ * 1. Menghapus price_quad, price_triple, price_double dari `umh_packages`.
+ * 2. Menambahkan tabel baru `umh_package_prices` untuk harga dinamis.
+ * 3. Memastikan tabel `umh_flight_bookings` dan `umh_hotel_bookings` 
+ * dapat digunakan untuk paket (sudah ada kolom package_id).
  */
 
 if (!defined('ABSPATH')) {
@@ -25,16 +28,14 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 2. Tabel Paket Umroh/Haji
+    // 2. Tabel Paket Umroh/Haji (DIMODIFIKASI)
     $table_name = $wpdb->prefix . 'umh_packages';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         name VARCHAR(255) NOT NULL,
         category_id BIGINT(20),
         description TEXT,
-        price_quad DECIMAL(15, 2),
-        price_triple DECIMAL(15, 2),
-        price_double DECIMAL(15, 2),
+        -- price_quad, price_triple, price_double DIHAPUS
         departure_date DATE,
         duration_days INT,
         status VARCHAR(20) DEFAULT 'draft',
@@ -61,9 +62,9 @@ function umh_create_db_schema() {
         ktp_number VARCHAR(50),
         ktp_scan VARCHAR(255),
         passport_scan VARCHAR(255),
-        room_type VARCHAR(20),
+        room_type VARCHAR(20), -- Ini untuk jemaah (pilihan final)
         status VARCHAR(50) DEFAULT 'pending',
-        total_price DECIMAL(15, 2),
+        total_price DECIMAL(15, 2), -- Harga final jemaah
         amount_paid DECIMAL(15, 2) DEFAULT 0.00,
         payment_status VARCHAR(20) DEFAULT 'Belum Lunas',
         notes TEXT,
@@ -123,13 +124,13 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 7. Tabel Booking Pesawat (Many-to-Many: Jemaah/Paket ke Pesawat)
+    // 7. Tabel Booking Pesawat (Bisa untuk Jemaah atau Paket)
     $table_name = $wpdb->prefix . 'umh_flight_bookings';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         flight_id BIGINT(20) NOT NULL,
-        jamaah_id BIGINT(20),
-        package_id BIGINT(20),
+        jamaah_id BIGINT(20), -- Bisa null jika ini booking paket
+        package_id BIGINT(20), -- Bisa null jika ini booking per jemaah
         seat_number VARCHAR(10),
         booking_code VARCHAR(50),
         status VARCHAR(20) DEFAULT 'confirmed',
@@ -140,13 +141,13 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 8. Tabel Booking Hotel (Many-to-Many: Jemaah/Paket ke Hotel)
+    // 8. Tabel Booking Hotel (Bisa untuk Jemaah atau Paket)
     $table_name = $wpdb->prefix . 'umh_hotel_bookings';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         hotel_id BIGINT(20) NOT NULL,
-        jamaah_id BIGINT(20),
-        package_id BIGINT(20),
+        jamaah_id BIGINT(20), -- Bisa null jika ini booking paket
+        package_id BIGINT(20), -- Bisa null jika ini booking per jemaah
         room_number VARCHAR(20),
         check_in_date DATE,
         check_out_date DATE,
@@ -182,13 +183,20 @@ function umh_create_db_schema() {
     $table_name = $wpdb->prefix . 'umh_users';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        wp_user_id BIGINT(20) UNSIGNED NOT NULL,
+        wp_user_id BIGINT(20) UNSIGNED, -- Dibuat nullable
         full_name VARCHAR(255),
+        email VARCHAR(100) NOT NULL UNIQUE, -- Email harus ada dan unik
+        password_hash VARCHAR(255), -- Untuk login non-WP
         role VARCHAR(50) NOT NULL, -- 'admin_staff', 'finance_staff', 'ops_staff', 'hr_staff', 'agent'
         phone VARCHAR(20),
         status VARCHAR(20) DEFAULT 'active', -- 'active', 'inactive'
+        auth_token VARCHAR(100), -- Untuk API
+        token_expires DATETIME, -- Untuk API
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
         PRIMARY KEY (id),
-        UNIQUE KEY wp_user_id (wp_user_id)
+        KEY wp_user_id (wp_user_id),
+        KEY email (email)
     ) $charset_collate;";
     dbDelta($sql);
 
@@ -224,8 +232,6 @@ function umh_create_db_schema() {
     dbDelta($sql);
     
     // 13. Tabel Dokumen (untuk upload KTP, Paspor, dll - Opsi lebih scalable)
-    // Walaupun kolom ktp_scan/passport_scan ada di tabel jamaah,
-    // tabel ini bisa dipakai untuk dokumen lain (visa, dll)
     $table_name = $wpdb->prefix . 'umh_documents';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -296,11 +302,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // ==========================================================
-    // == FILE BARU DITAMBAHKAN DARI RENCANA AKSI ==
-    // ==========================================================
-
-    // 18. Tabel Role Karyawan (BARU)
+    // 18. Tabel Role Karyawan
     $table_name = $wpdb->prefix . 'umh_roles';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -310,7 +312,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 19. Tabel Pembayaran Jemaah (DINAMIS) (BARU)
+    // 19. Tabel Pembayaran Jemaah (DINAMIS)
     $table_name = $wpdb->prefix . 'umh_payments';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -327,9 +329,25 @@ function umh_create_db_schema() {
         KEY jamaah_id (jamaah_id)
     ) $charset_collate;";
     dbDelta($sql);
+
+    // ==========================================================
+    // == TABEL BARU UNTUK HARGA DINAMIS ==
+    // ==========================================================
+    
+    // 20. Tabel Harga Paket (BARU)
+    $table_name = $wpdb->prefix . 'umh_package_prices';
+    $sql = "CREATE TABLE $table_name (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        package_id BIGINT(20) NOT NULL,
+        room_type VARCHAR(100) NOT NULL, -- e.g., 'Quad', 'Triple', 'Suite'
+        price DECIMAL(15, 2) NOT NULL,
+        PRIMARY KEY (id),
+        KEY package_id (package_id)
+    ) $charset_collate;";
+    dbDelta($sql);
     
     // ==========================================================
-    // == AKHIR DARI FILE BARU ==
+    // == AKHIR DARI TABEL BARU ==
     // ==========================================================
 
 

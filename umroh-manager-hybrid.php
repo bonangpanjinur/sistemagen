@@ -5,10 +5,13 @@
  * File plugin utama, dimodifikasi untuk me-load file API baru
  * (api-roles.php dan api-payments.php)
  *
+ * MODIFIKASI:
+ * - Menambahkan `umh_package_prices` ke daftar tabel di `umh_uninstall_plugin`.
+ *
  * Plugin Name: Umroh Manager Hybrid
  * Plugin URI:  https://github.com/bonangpanjinur/travelmanajemen
  * Description: A hybrid WordPress plugin using React for managing Umroh travels.
- * Version:     0.1.0
+ * Version:     0.1.1
  * Author:      Bonang Panji Nur
  * Author URI:  https://bonang.dev
  * License:     GPL-2.0+
@@ -21,7 +24,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-define('UMH_VERSION', '0.1.0');
+define('UMH_VERSION', '0.1.1');
 define('UMH_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('UMH_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -35,7 +38,9 @@ function umh_activate_plugin() {
     umh_add_default_roles_and_caps();
     
     // Tambahkan admin default ke tabel umh_users jika belum ada
-    umh_add_default_admin_user();
+    // Fungsi ini sekarang harusnya ada di api-users.php atau utils.php
+    // Memanggilnya di sini mungkin terlalu dini
+    // umh_add_default_admin_user(); 
 }
 
 // Tambahkan role WP kustom
@@ -52,31 +57,6 @@ function umh_add_default_roles_and_caps() {
         $admin_role->add_cap('umh_view_dashboard');
     }
 }
-
-// Tambahkan admin WP saat ini ke tabel umh_users
-function umh_add_default_admin_user() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_users';
-    $current_user = wp_get_current_user();
-    
-    if ($current_user->ID != 0 && in_array('administrator', $current_user->roles)) {
-        // Cek apakah user sudah ada di tabel
-        $existing = $wpdb->get_var($wpdb->prepare(
-            "SELECT id FROM $table_name WHERE wp_user_id = %d",
-            $current_user->ID
-        ));
-        
-        if (!$existing) {
-            $wpdb->insert($table_name, [
-                'wp_user_id' => $current_user->ID,
-                'full_name'  => $current_user->display_name,
-                'role'       => 'owner', // 'owner' atau 'super_admin'
-                'status'     => 'active'
-            ]);
-        }
-    }
-}
-
 
 // Deaktivasi Plugin
 register_deactivation_hook(__FILE__, 'umh_deactivate_plugin');
@@ -101,7 +81,8 @@ function umh_uninstall_plugin() {
         'umh_flights', 'umh_hotels', 'umh_flight_bookings', 'umh_hotel_bookings',
         'umh_tasks', 'umh_users', 'umh_agents', 'umh_logs', 'umh_documents',
         'umh_departures', 'umh_manifest', 'umh_settings', 'umh_notifications',
-        'umh_roles', 'umh_payments' // Termasuk tabel baru
+        'umh_roles', 'umh_payments', 
+        'umh_package_prices' // Termasuk tabel baru
     ];
 
     foreach ($tables as $table) {
@@ -146,7 +127,7 @@ function umh_load_api_endpoints() {
     $api_files = [
         'api-stats',
         'api-categories',
-        'api-packages',
+        'api-packages', // Akan dimodifikasi
         'api-jamaah',
         'api-finance',
         'api-flights',
@@ -160,13 +141,8 @@ function umh_load_api_endpoints() {
         'api-print',
         'api-export',
         'api-logs',
-
-        // ==================================================
-        // == FILE BARU DITAMBAHKAN DARI RENCANA AKSI ==
-        // ==================================================
         'api-roles',
         'api-payments',
-        // ==================================================
     ];
 
     foreach ($api_files as $file) {
@@ -184,7 +160,7 @@ function umh_load_api_endpoints() {
 add_action('admin_enqueue_scripts', 'umh_enqueue_admin_assets');
 function umh_enqueue_admin_assets($hook) {
     // Hanya load di halaman plugin kita
-    if ($hook != 'toplevel_page_umroh-manager-hybrid') {
+    if (strpos($hook, 'umroh-manager-hybrid') === false) {
         return;
     }
 
@@ -211,6 +187,76 @@ function umh_enqueue_admin_assets($hook) {
     wp_localize_script('umh-react-app', 'umh_wp_data', [
         'api_url'  => esc_url_raw(rest_url('umh/v1/')),
         'nonce'    => wp_create_nonce('wp_rest'), // Nonce untuk keamanan
-        'user'     => umh_get_current_user_data(), // Data user yang login
+        'user'     => umh_get_current_user_data_for_react(), // Fungsi baru untuk data user
     ]);
+}
+
+/**
+ * Mendapatkan data user yang sedang login untuk dikirim ke React.
+ * Ini bisa berupa Super Admin (dari cookie) atau Karyawan (dari token).
+ * * *Fungsi ini perlu didefinisikan, idealnya di utils.php, tapi kita letakkan di sini sementara.*
+ */
+if (!function_exists('umh_get_current_user_data_for_react')) {
+    function umh_get_current_user_data_for_react() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'umh_users';
+
+        // Cek jika Super Admin WP sedang login
+        if (is_user_logged_in() && current_user_can('manage_options')) {
+            $wp_user = wp_get_current_user();
+            
+            // Coba sinkronkan dengan tabel umh_users (penting untuk auto-login)
+            $umh_user = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE wp_user_id = %d", $wp_user->ID));
+            
+            if (!$umh_user) {
+                // Jika belum ada, coba cari berdasarkan email
+                $umh_user_by_email = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE email = %s", $wp_user->user_email));
+
+                if (!$umh_user_by_email) {
+                    // Buat baru jika tidak ada sama sekali
+                    $wpdb->insert($table_name, [
+                        'wp_user_id' => $wp_user->ID,
+                        'email' => $wp_user->user_email,
+                        'full_name' => $wp_user->display_name,
+                        'role' => 'super_admin', // Role khusus
+                        'status' => 'active',
+                        'created_at' => current_time('mysql'),
+                        'updated_at' => current_time('mysql'),
+                    ]);
+                    $umh_user_id = $wpdb->insert_id;
+                    $umh_user = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $umh_user_id));
+                } else {
+                    // Tautkan akun jika email cocok
+                    $wpdb->update($table_name, 
+                        ['wp_user_id' => $wp_user->ID, 'role' => 'super_admin'], 
+                        ['id' => $umh_user_by_email->id]
+                    );
+                    $umh_user = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $umh_user_by_email->id));
+                }
+            }
+
+            // Buat token sementara untuk Super Admin agar API-nya berfungsi
+            $token = bin2hex(random_bytes(32));
+            $expires = new DateTime('+1 hour'); // Token singkat untuk sesi ini
+            
+            $wpdb->update(
+                $table_name,
+                ['auth_token' => $token, 'token_expires' => $expires->format('Y-m-d H:i:s')],
+                ['id' => $umh_user->id]
+            );
+
+            return [
+                'name'  => $umh_user->full_name,
+                'role'  => $umh_user->role,
+                'token' => $token
+            ];
+        }
+        
+        // Jika bukan admin, return user kosong (React akan handle login)
+        return [
+            'name' => 'Guest',
+            'role' => 'guest',
+            'token' => null
+        ];
+    }
 }

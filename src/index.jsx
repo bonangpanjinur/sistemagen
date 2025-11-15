@@ -1,16 +1,16 @@
 /**
  * File: src/index.jsx
  *
- * File frontend React utama. Dimodifikasi secara besar-besaran untuk:
- * 1. Menambahkan komponen baru: CategoriesComponent, FlightsComponent, HotelsComponent, RolesComponent.
- * 2. Memperbarui Navigasi (MainNav) untuk menampilkan menu baru.
- * 3. Memperbarui App router untuk menangani view baru.
- * 4. Memperbarui UsersComponent untuk menggunakan role dinamis.
- * 5. Memperbarui JamaahComponent untuk:
- * - Menambahkan fitur upload KTP & Paspor.
- * - Menghapus field payment_status lama.
- * - Menampilkan daftar pembayaran dinamis dari API.
- * - Menambahkan modal baru (PaymentModal) untuk mengelola pembayaran.
+ * MODIFIKASI BESAR:
+ * 1. `PackagesComponent`:
+ * - `fetchPackageDependencies` sekarang juga mengambil `flights` dan `hotels`.
+ * - `defaultState` diubah untuk harga dinamis (`prices: []`) dan relasi (`flight_ids: []`, `hotel_bookings: []`).
+ * - Form Modal dirombak total untuk mendukung input dinamis harga, pesawat, dan hotel.
+ * - State baru (`priceFields`, `hotelFields`) ditambahkan untuk mengelola form dinamis.
+ * - `handleEdit` disesuaikan untuk mengisi form dinamis dari data API yang baru.
+ * - `handleSubmit` disesuaikan untuk mengirim data relasi yang baru.
+ * 2. `JamaahComponent`:
+ * - `fetchJamaahDependencies`: Mengubah cara menampilkan harga paket di dropdown.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -174,7 +174,6 @@ const Alert = ({ message, type = 'error' }) => {
 
 // --- API Client Sederhana (Tidak Berubah) ---
 
-// Mengambil data dari global object `umh_wp_data`
 const wpData = window.umh_wp_data || {
     api_url: '/wp-json/umh/v1/', // Fallback
     nonce: '',
@@ -182,50 +181,34 @@ const wpData = window.umh_wp_data || {
 };
 
 const api = {
-    // Ambil token dari data user
     getToken: () => wpData.user ? wpData.user.token : null,
-
-    // Fungsi fetch utama
     request: async (endpoint, method = 'GET', body = null) => {
         const headers = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${api.getToken()}`
         };
-
-        // Jika kita menggunakan WP-Nonce (opsional tapi bagus untuk keamanan)
-        // headers['X-WP-Nonce'] = wpData.nonce;
-
         const config = {
             method: method,
             headers: headers,
         };
-
         if (body) {
             config.body = JSON.stringify(body);
         }
-
         try {
             const response = await fetch(wpData.api_url + endpoint, config);
-            
-            if (response.status === 204) { // No Content (untuk DELETE)
+            if (response.status === 204) {
                 return { success: true };
             }
-
             const data = await response.json();
-
             if (!response.ok) {
-                // Tangani error dari API
                 throw new Error(data.message || `Error ${response.status}: ${response.statusText}`);
             }
-
             return data;
-
         } catch (error) {
             console.error(`API Error (${method} ${endpoint}):`, error);
-            throw error; // Lemparkan error agar bisa ditangkap oleh komponen
+            throw error;
         }
     },
-
     get: (endpoint) => api.request(endpoint, 'GET'),
     post: (endpoint, body) => api.request(endpoint, 'POST', body),
     put: (endpoint, body) => api.request(endpoint, 'PUT', body),
@@ -233,14 +216,6 @@ const api = {
 };
 
 // --- Hook Kustom untuk CRUD ---
-
-/**
- * Hook kustom generik untuk operasi CRUD.
- * Mengelola state untuk list, loading, error, modal, dan form.
- * @param {string} apiName - Nama endpoint API (e.g., 'packages', 'jamaah')
- * @param {object} defaultFormState - Objek state awal untuk form
- * @param {function} [onDependenciesFetched] - (Opsional) Fungsi untuk fetch data lain (e.g., fetch paket untuk form jemaah)
- */
 const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
     const [list, setList] = useState([]);
     const [dependencies, setDependencies] = useState({});
@@ -252,13 +227,11 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
     const [formState, setFormState] = useState(defaultFormState);
     const [successMessage, setSuccessMessage] = useState(null);
 
-    // Fungsi untuk menampilkan pesan sukses sementara
     const showSuccess = (message) => {
         setSuccessMessage(message);
         setTimeout(() => setSuccessMessage(null), 3000);
     };
 
-    // Fungsi untuk fetch dependencies (e.g., list paket, list user)
     const fetchDependencies = useCallback(async () => {
         if (onDependenciesFetched) {
             try {
@@ -270,12 +243,11 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         }
     }, [onDependenciesFetched]);
 
-    // Fungsi untuk fetch data utama (list)
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            await fetchDependencies(); // Selalu fetch dependencies dulu
+            await fetchDependencies();
             const data = await api.get(apiName);
             setList(data);
         } catch (err) {
@@ -285,12 +257,10 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         }
     }, [apiName, fetchDependencies]);
 
-    // Fetch data saat komponen dimuat
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
-    // Handler untuk perubahan input form
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
         setFormState(prev => ({
@@ -299,7 +269,6 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         }));
     };
 
-    // Membuka modal untuk item baru
     const handleAddNew = () => {
         setIsEditing(false);
         setCurrentItem(null);
@@ -307,43 +276,37 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         setModalOpen(true);
     };
 
-    // Membuka modal untuk mengedit item
     const handleEdit = (item) => {
         setIsEditing(true);
         setCurrentItem(item);
-        setFormState(item); // Isi form dengan data item
+        setFormState(item);
         setModalOpen(true);
     };
 
-    // Menutup modal
     const handleCloseModal = () => {
         setModalOpen(false);
-        setError(null); // Bersihkan error modal
+        setError(null);
     };
 
-    // Menyimpan data (Create atau Update)
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError(null);
         try {
             let result;
             if (isEditing) {
-                // Update
                 result = await api.put(`${apiName}/${currentItem.id}`, formState);
                 showSuccess("Data berhasil diperbarui.");
             } else {
-                // Create
                 result = await api.post(apiName, formState);
                 showSuccess("Data berhasil ditambahkan.");
             }
-            fetchData(); // Refresh list
+            fetchData();
             handleCloseModal();
         } catch (err) {
             setError(`Gagal menyimpan: ${err.message}`);
         }
     };
 
-    // Menghapus item
     const handleDelete = async (id) => {
         if (!window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
             return;
@@ -352,7 +315,7 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         try {
             await api.del(`${apiName}/${id}`);
             showSuccess("Data berhasil dihapus.");
-            fetchData(); // Refresh list
+            fetchData();
         } catch (err) {
             setError(`Gagal menghapus: ${err.message}`);
         }
@@ -374,10 +337,10 @@ const useCRUD = (apiName, defaultFormState, onDependenciesFetched) => {
         handleCloseModal,
         handleSubmit,
         handleDelete,
-        fetchData, // expose fetchData untuk refresh manual
-        setError, // expose setError untuk error kustom (spt upload)
-        setFormState, // expose setFormState
-        fetchDependencies, // expose fetchDependencies
+        fetchData,
+        setError,
+        setFormState,
+        fetchDependencies,
     };
 };
 
@@ -446,7 +409,7 @@ const DashboardComponent = () => {
         const fetchStats = async () => {
             try {
                 setLoading(true);
-                const data = await api.get('stats');
+                const data = await api.get('stats/totals'); // Menggunakan endpoint baru
                 setStats(data);
             } catch (err) {
                 setError(err.message);
@@ -457,16 +420,22 @@ const DashboardComponent = () => {
         fetchStats();
     }, []);
 
+
     if (loading) return <Spinner />;
     if (error) return <Alert message={`Gagal memuat statistik: ${error}`} />;
-    if (!stats) return <p>Data statistik tidak ditemukan.</p>;
+    
+    // Perbaikan: Gunakan data dari /stats/totals
+    const { total_jamaah, total_packages, total_revenue } = stats || {};
+    
+    // Cek stats/jamaah (dari kode lama)
+    const total_jamaah_lunas = stats?.total_jamaah_lunas || 0; // Asumsi ini ada di /stats/totals
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="Total Jemaah" value={stats.total_jamaah || 0} />
-            <StatCard title="Total Paket" value={stats.total_packages || 0} />
-            <StatCard title="Total Pemasukan" value={formatCurrency(stats.total_income || 0)} />
-            <StatCard title="Jemaah Lunas" value={stats.total_jamaah_lunas || 0} />
+            <StatCard title="Total Jemaah" value={total_jamaah || 0} />
+            <StatCard title="Total Paket" value={total_packages || 0} />
+            <StatCard title="Total Pemasukan" value={formatCurrency(total_revenue || 0)} />
+            <StatCard title="Jemaah Lunas" value={total_jamaah_lunas} />
         </div>
     );
 };
@@ -478,23 +447,28 @@ const StatCard = ({ title, value }) => (
     </div>
 );
 
-// 2. Manajemen Paket
+// 2. Manajemen Paket (MODIFIKASI BESAR)
 const PackagesComponent = () => {
     const defaultState = {
         name: '',
         category_id: '',
         description: '',
-        price_quad: 0,
-        price_triple: 0,
-        price_double: 0,
         departure_date: '',
         duration_days: 0,
         status: 'draft',
+        prices: [{ room_type: 'Quad', price: 0 }], // Harga dinamis
+        flight_ids: [], // Link pesawat
+        hotel_bookings: [], // Link hotel
     };
 
+    // MODIFIKASI: Fetch flights dan hotels juga
     const fetchPackageDependencies = useCallback(async () => {
-        const categories = await api.get('categories');
-        return { categories };
+        const [categories, flights, hotels] = await Promise.all([
+            api.get('categories'),
+            api.get('flights'),
+            api.get('hotels'),
+        ]);
+        return { categories, flights, hotels };
     }, []);
 
     const {
@@ -506,14 +480,72 @@ const PackagesComponent = () => {
         isModalOpen,
         isEditing,
         formState,
+        setFormState, // Ambil setFormState
         handleChange,
         handleAddNew,
-        handleEdit,
+        // handleEdit, // Kita akan override
         handleCloseModal,
         handleSubmit,
         handleDelete
     } = useCRUD('packages', defaultState, fetchPackageDependencies);
 
+    // --- State untuk Form Dinamis ---
+    
+    // Untuk harga
+    const handlePriceChange = (index, field, value) => {
+        const newPrices = [...formState.prices];
+        newPrices[index][field] = value;
+        setFormState(prev => ({ ...prev, prices: newPrices }));
+    };
+    const addPriceField = () => {
+        setFormState(prev => ({
+            ...prev,
+            prices: [...prev.prices, { room_type: '', price: 0 }]
+        }));
+    };
+    const removePriceField = (index) => {
+        const newPrices = formState.prices.filter((_, i) => i !== index);
+        setFormState(prev => ({ ...prev, prices: newPrices }));
+    };
+
+    // Untuk flights
+    const handleFlightChange = (e) => {
+        const selectedIds = Array.from(e.target.selectedOptions, option => parseInt(option.value));
+        setFormState(prev => ({ ...prev, flight_ids: selectedIds }));
+    };
+
+    // Untuk hotels
+    const handleHotelBookingChange = (index, field, value) => {
+        const newBookings = [...formState.hotel_bookings];
+        newBookings[index][field] = value;
+        setFormState(prev => ({ ...prev, hotel_bookings: newBookings }));
+    };
+    const addHotelField = () => {
+        setFormState(prev => ({
+            ...prev,
+            hotel_bookings: [...prev.hotel_bookings, { hotel_id: '', check_in_date: '', check_out_date: '' }]
+        }));
+    };
+    const removeHotelField = (index) => {
+        const newBookings = formState.hotel_bookings.filter((_, i) => i !== index);
+        setFormState(prev => ({ ...prev, hotel_bookings: newBookings }));
+    };
+    
+    // --- Override handleEdit ---
+    const handleEdit = (item) => {
+        setIsEditing(true);
+        setCurrentItem(item);
+        // Pastikan data relasi adalah array, BUKAN null/undefined
+        setFormState({
+            ...item,
+            prices: item.prices || [],
+            flight_ids: item.flight_ids || [],
+            hotel_bookings: item.hotel_bookings || [],
+        });
+        setModalOpen(true);
+    };
+
+    // MODIFIKASI: Kolom harga
     const columns = [
         { key: 'name', label: 'Nama Paket' },
         { 
@@ -522,9 +554,14 @@ const PackagesComponent = () => {
             render: (item) => dependencies.categories?.find(c => c.id == item.category_id)?.name || 'N/A'
         },
         { 
-            key: 'price_double', 
-            label: 'Harga (Double)',
-            render: (item) => formatCurrency(item.price_double)
+            key: 'price', 
+            label: 'Harga',
+            render: (item) => {
+                if (!item.prices || item.prices.length === 0) return 'Rp 0';
+                // Cari harga terendah
+                const minPrice = Math.min(...item.prices.map(p => p.price));
+                return `Mulai dari ${formatCurrency(minPrice)}`;
+            }
         },
         { 
             key: 'departure_date', 
@@ -554,6 +591,7 @@ const PackagesComponent = () => {
                 />
             )}
 
+            {/* MODIFIKASI BESAR: Modal Form */}
             <Modal
                 show={isModalOpen}
                 onClose={handleCloseModal}
@@ -566,6 +604,7 @@ const PackagesComponent = () => {
                 }
             >
                 <form id="package-form" onSubmit={handleSubmit}>
+                    {/* --- Bagian Info Dasar --- */}
                     <FormInput label="Nama Paket" name="name" value={formState.name} onChange={handleChange} required />
                     <FormSelect label="Kategori" name="category_id" value={formState.category_id} onChange={handleChange} required>
                         <option value="">Pilih Kategori</option>
@@ -574,11 +613,6 @@ const PackagesComponent = () => {
                         ))}
                     </FormSelect>
                     <FormTextarea label="Deskripsi" name="description" value={formState.description} onChange={handleChange} />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <FormInput label="Harga Double" name="price_double" type="number" value={formState.price_double} onChange={handleChange} />
-                        <FormInput label="Harga Triple" name="price_triple" type="number" value={formState.price_triple} onChange={handleChange} />
-                        <FormInput label="Harga Quad" name="price_quad" type="number" value={formState.price_quad} onChange={handleChange} />
-                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormInput label="Tanggal Keberangkatan" name="departure_date" type="date" value={formatDateForInput(formState.departure_date)} onChange={handleChange} required />
                         <FormInput label="Durasi (hari)" name="duration_days" type="number" value={formState.duration_days} onChange={handleChange} required />
@@ -588,11 +622,93 @@ const PackagesComponent = () => {
                         <option value="published">Published</option>
                         <option value="archived">Archived</option>
                     </FormSelect>
+                    
+                    {/* --- Bagian Harga Dinamis (BARU) --- */}
+                    <div className="p-4 border border-gray-200 rounded-md mt-6">
+                        <h4 className="font-semibold text-gray-700 mb-3">Harga Dinamis</h4>
+                        {formState.prices.map((priceItem, index) => (
+                            <div key={index} className="flex items-center gap-2 mb-2">
+                                <input
+                                    type="text"
+                                    placeholder="Tipe Kamar (e.g., Quad)"
+                                    value={priceItem.room_type}
+                                    onChange={(e) => handlePriceChange(index, 'room_type', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                />
+                                <input
+                                    type="number"
+                                    placeholder="Harga"
+                                    value={priceItem.price}
+                                    onChange={(e) => handlePriceChange(index, 'price', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                />
+                                <Button type="button" variant="danger" onClick={() => removePriceField(index)}>X</Button>
+                            </div>
+                        ))}
+                        <Button type="button" variant="outline" onClick={addPriceField}>+ Tambah Harga</Button>
+                    </div>
+
+                    {/* --- Bagian Link Pesawat (BARU) --- */}
+                    <div className="p-4 border border-gray-200 rounded-md mt-6">
+                        <h4 className="font-semibold text-gray-700 mb-1">Link Pesawat</h4>
+                        <p className="text-sm text-gray-500 mb-3">Tahan Ctrl/Cmd untuk memilih lebih dari satu.</p>
+                        <select
+                            multiple
+                            name="flight_ids"
+                            value={formState.flight_ids}
+                            onChange={handleFlightChange}
+                            className="w-full h-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                        >
+                            {dependencies.flights?.map(flight => (
+                                <option key={flight.id} value={flight.id}>
+                                    {flight.airline} ({flight.flight_number}) - {flight.departure_airport_code} ke {flight.arrival_airport_code}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* --- Bagian Link Hotel (BARU) --- */}
+                    <div className="p-4 border border-gray-200 rounded-md mt-6">
+                        <h4 className="font-semibold text-gray-700 mb-3">Link Hotel</h4>
+                        {formState.hotel_bookings.map((booking, index) => (
+                            <div key={index} className="grid grid-cols-3 gap-2 mb-2 p-2 border rounded">
+                                <select
+                                    value={booking.hotel_id}
+                                    onChange={(e) => handleHotelBookingChange(index, 'hotel_id', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white"
+                                >
+                                    <option value="">Pilih Hotel</option>
+                                    {dependencies.hotels?.map(hotel => (
+                                        <option key={hotel.id} value={hotel.id}>{hotel.name} ({hotel.city})</option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="date"
+                                    placeholder="Check-in"
+                                    value={formatDateForInput(booking.check_in_date)}
+                                    onChange={(e) => handleHotelBookingChange(index, 'check_in_date', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                />
+                                <div className="flex">
+                                    <input
+                                        type="date"
+                                        placeholder="Check-out"
+                                        value={formatDateForInput(booking.check_out_date)}
+                                        onChange={(e) => handleHotelBookingChange(index, 'check_out_date', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                                    />
+                                    <Button type="button" variant="danger" onClick={() => removeHotelField(index)} className="ml-2">X</Button>
+                                </div>
+                            </div>
+                        ))}
+                        <Button type="button" variant="outline" onClick={addHotelField}>+ Tambah Hotel</Button>
+                    </div>
                 </form>
             </Modal>
         </div>
     );
 };
+
 
 // 3. Manajemen Jemaah
 const JamaahComponent = () => {
@@ -630,70 +746,51 @@ const JamaahComponent = () => {
         formState,
         handleChange,
         handleAddNew,
-        handleEdit,
+        // handleEdit, // Kita akan override
         handleCloseModal,
         handleSubmit,
         handleDelete,
-        fetchData, // Ambil fetchData untuk refresh
-        setError, // Ambil setError
-        setFormState, // Ambil setFormState
+        fetchData,
+        setError,
+        setFormState,
     } = useCRUD('jamaah', defaultState, fetchJamaahDependencies);
 
-    // === STATE BARU untuk Fitur Jemaah ===
     const [ktpFile, setKtpFile] = useState(null);
     const [passportFile, setPassportFile] = useState(null);
-    
-    // State untuk pembayaran
     const [payments, setPayments] = useState([]);
     const [isPaymentModalOpen, setPaymentModalOpen] = useState(false);
-    const [currentPayment, setCurrentPayment] = useState(null); // null untuk baru, objek untuk edit
+    const [currentPayment, setCurrentPayment] = useState(null);
     const [isPaymentLoading, setPaymentLoading] = useState(false);
     const [paymentError, setPaymentError] = useState(null);
 
-    // === FUNGSI BARU: Upload KTP/Paspor (sesuai Analisis) ===
     const handleFileUpload = async (file, uploadType, jamaahId) => {
         if (!file) return;
-        
-        // Buat FormData untuk kirim file
         const formData = new FormData();
         formData.append('file', file);
         formData.append('jamaah_id', jamaahId);
-        formData.append('upload_type', uploadType); // 'ktp_scan' atau 'passport_scan'
+        formData.append('upload_type', uploadType);
 
         try {
             const token = api.getToken();
             const response = await fetch(`${wpData.api_url}uploads`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    // JANGAN set 'Content-Type', biarkan browser menanganinya
-                },
+                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
-
             if (!response.ok) {
                 const errData = await response.json();
                 throw new Error(errData.message || 'Upload gagal');
             }
-
             const result = await response.json();
-            
-            // Update form state dengan URL file baru
             setFormState(prev => ({ ...prev, [uploadType]: result.file_url }));
-            
-            // Refresh data list utama untuk menampilkan URL baru di tabel (jika ada)
             fetchData();
-            
-            // Reset file input
             if (uploadType === 'ktp_scan') setKtpFile(null);
             if (uploadType === 'passport_scan') setPassportFile(null);
-
         } catch (err) {
             setError(`Upload ${uploadType} gagal: ${err.message}`);
         }
     };
 
-    // === FUNGSI BARU: Fetch Pembayaran Saat Modal Edit Dibuka ===
     const fetchPayments = async (jamaahId) => {
         if (!jamaahId) return;
         setPaymentLoading(true);
@@ -708,24 +805,23 @@ const JamaahComponent = () => {
         }
     };
 
-    // Modifikasi handleEdit untuk memuat pembayaran
     const handleEditWithPayments = (item) => {
+        // Panggil handleEdit dari hook
         handleEdit(item);
-        fetchPayments(item.id); // Panggil fetch payments saat modal edit dibuka
+        // Panggil fetch payments
+        fetchPayments(item.id);
     };
 
-    // Menutup modal utama
     const handleCloseMainModal = () => {
         handleCloseModal();
-        setPayments([]); // Kosongkan list pembayaran saat modal ditutup
+        setPayments([]);
         setPaymentError(null);
         setKtpFile(null);
         setPassportFile(null);
     };
 
-    // === FUNGSI BARU: CRUD Pembayaran ===
     const handleOpenPaymentModal = (payment = null) => {
-        setCurrentPayment(payment); // null = baru, object = edit
+        setCurrentPayment(payment);
         setPaymentModalOpen(true);
     };
 
@@ -740,30 +836,18 @@ const JamaahComponent = () => {
         setPaymentError(null);
         try {
             let savedPayment;
-            const paymentPayload = {
-                ...paymentData,
-                jamaah_id: currentItem.id, // Pastikan jamaah_id ada
-            };
-
+            const paymentPayload = { ...paymentData, jamaah_id: currentItem.id };
             if (currentPayment) {
-                // Update
                 savedPayment = await api.put(`payments/${currentPayment.id}`, paymentPayload);
             } else {
-                // Create
                 savedPayment = await api.post('payments', paymentPayload);
             }
-
-            // Jika ada file bukti, upload
             if (proofFile) {
                 await handleProofUpload(savedPayment.id, proofFile);
             }
-            
-            // Refresh list pembayaran & data jemaah
             await fetchPayments(currentItem.id);
-            await fetchData(); // Refresh data jemaah (untuk update amount_paid)
-            
+            await fetchData();
             handleClosePaymentModal();
-
         } catch (err) {
             setPaymentError(`Gagal menyimpan pembayaran: ${err.message}`);
         } finally {
@@ -774,14 +858,12 @@ const JamaahComponent = () => {
     const handleProofUpload = async (paymentId, file) => {
         const formData = new FormData();
         formData.append('file', file);
-
         const token = api.getToken();
         const response = await fetch(`${wpData.api_url}payments/${paymentId}/upload_proof`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
-
         if (!response.ok) {
             const errData = await response.json();
             throw new Error(errData.message || 'Upload bukti gagal');
@@ -794,9 +876,8 @@ const JamaahComponent = () => {
         setPaymentError(null);
         try {
             await api.del(`payments/${paymentId}`);
-            // Refresh list pembayaran & data jemaah
             await fetchPayments(currentItem.id);
-            await fetchData(); // Refresh data jemaah (untuk update amount_paid)
+            await fetchData();
         } catch (err) {
             setPaymentError(`Gagal menghapus pembayaran: ${err.message}`);
         } finally {
@@ -804,8 +885,6 @@ const JamaahComponent = () => {
         }
     };
 
-
-    // Definisi Kolom Tabel Jemaah
     const columns = [
         { key: 'full_name', label: 'Nama Jemaah' },
         { 
@@ -836,6 +915,13 @@ const JamaahComponent = () => {
         { key: 'status', label: 'Status Jemaah' },
     ];
 
+    // MODIFIKASI: Tampilkan harga paket di dropdown
+    const getPackagePriceInfo = (pkg) => {
+        if (!pkg.prices || pkg.prices.length === 0) return "(Harga belum diatur)";
+        const minPrice = Math.min(...pkg.prices.map(p => p.price));
+        return `(Mulai dari ${formatCurrency(minPrice)})`;
+    };
+
     return (
         <div>
             <div className="flex justify-between items-center mb-6">
@@ -850,15 +936,14 @@ const JamaahComponent = () => {
                 <CrudTable
                     columns={columns}
                     data={jamaahList}
-                    onEdit={handleEditWithPayments} // Gunakan fungsi baru
+                    onEdit={handleEditWithPayments}
                     onDelete={handleDelete}
                 />
             )}
 
-            {/* Modal Utama: Tambah/Edit Jemaah */}
             <Modal
                 show={isModalOpen}
-                onClose={handleCloseMainModal} // Gunakan fungsi baru
+                onClose={handleCloseMainModal}
                 title={isEditing ? "Edit Jemaah" : "Tambah Jemaah Baru"}
                 footer={
                     <>
@@ -867,15 +952,15 @@ const JamaahComponent = () => {
                     </>
                 }
             >
-                {/* Tampilkan error spesifik modal */}
                 <Alert message={error} type="error" />
-
                 <form id="jamaah-form" onSubmit={handleSubmit} className="space-y-4">
                     <FormInput label="Nama Lengkap" name="full_name" value={formState.full_name} onChange={handleChange} required />
                     <FormSelect label="Paket" name="package_id" value={formState.package_id} onChange={handleChange} required>
                         <option value="">Pilih Paket</option>
                         {dependencies.packages?.map(pkg => (
-                            <option key={pkg.id} value={pkg.id}>{pkg.name} ({formatCurrency(pkg.price_double)})</option>
+                            <option key={pkg.id} value={pkg.id}>
+                                {pkg.name} {getPackagePriceInfo(pkg)}
+                            </option>
                         ))}
                     </FormSelect>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -912,10 +997,8 @@ const JamaahComponent = () => {
                     </FormSelect>
                     <FormTextarea label="Catatan" name="notes" value={formState.notes} onChange={handleChange} />
 
-                    {/* --- BAGIAN FITUR BARU --- */}
                     {isEditing && (
                         <>
-                            {/* 1. Upload Dokumen */}
                             <div className="p-4 border border-gray-200 rounded-md mt-6">
                                 <h4 className="font-semibold text-gray-700 mb-3">Upload Dokumen</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -954,7 +1037,6 @@ const JamaahComponent = () => {
                                 </div>
                             </div>
 
-                            {/* 2. Manajemen Pembayaran Dinamis */}
                             <div className="p-4 border border-gray-200 rounded-md mt-6">
                                 <div className="flex justify-between items-center mb-3">
                                     <h4 className="font-semibold text-gray-700">Riwayat Pembayaran</h4>
@@ -962,9 +1044,7 @@ const JamaahComponent = () => {
                                         Tambah Pembayaran
                                     </Button>
                                 </div>
-                                
                                 <Alert message={paymentError} type="error" />
-                                
                                 {isPaymentLoading && !payments.length ? <Spinner /> : (
                                     <div className="max-h-60 overflow-y-auto">
                                         <table className="min-w-full divide-y divide-gray-200">
@@ -1008,7 +1088,6 @@ const JamaahComponent = () => {
                 </form>
             </Modal>
 
-            {/* Modal Sekunder: Tambah/Edit Pembayaran */}
             {isPaymentModalOpen && (
                 <PaymentModal
                     show={isPaymentModalOpen}
@@ -1023,7 +1102,6 @@ const JamaahComponent = () => {
     );
 };
 
-// --- Komponen BARU: Modal Pembayaran ---
 const PaymentModal = ({ show, onClose, payment, onSave, isLoading, error }) => {
     const [form, setForm] = useState({
         payment_date: formatDateForInput(new Date()),
@@ -1037,7 +1115,6 @@ const PaymentModal = ({ show, onClose, payment, onSave, isLoading, error }) => {
 
     useEffect(() => {
         if (payment) {
-            // Edit mode
             setForm({
                 payment_date: formatDateForInput(payment.payment_date),
                 amount: payment.amount,
@@ -1047,7 +1124,6 @@ const PaymentModal = ({ show, onClose, payment, onSave, isLoading, error }) => {
                 proof_url: payment.proof_url || '',
             });
         } else {
-            // Add mode
             setForm({
                 payment_date: formatDateForInput(new Date()),
                 amount: 0,
@@ -1057,7 +1133,7 @@ const PaymentModal = ({ show, onClose, payment, onSave, isLoading, error }) => {
                 proof_url: '',
             });
         }
-        setProofFile(null); // Selalu reset file
+        setProofFile(null);
     }, [payment, show]);
 
     const handleChange = (e) => {
@@ -1169,7 +1245,6 @@ const FinanceComponent = () => {
         },
     ];
 
-    // Hitung Saldo
     const balance = useMemo(() => {
         return transactions.reduce((acc, trx) => {
             if (trx.type === 'income') return acc + parseFloat(trx.amount);
@@ -1356,24 +1431,22 @@ const TasksComponent = () => {
 // 6. Manajemen Pengguna (Staff)
 const UsersComponent = () => {
     const defaultState = {
-        wp_user_id: '',
         email: '',
         full_name: '',
         role: 'agent',
         phone: '',
         status: 'active',
-        password: '', // Hanya untuk user baru
+        password: '',
     };
 
-    // --- MODIFIKASI: Fetch dependencies untuk ROLES ---
     const fetchUserDependencies = useCallback(async () => {
-        const roles = await api.get('roles'); // Panggil API roles baru
+        const roles = await api.get('roles');
         return { roles };
     }, []);
 
     const {
         list: userList,
-        dependencies, // dependencies.roles akan tersedia di sini
+        dependencies,
         isLoading,
         error,
         successMessage,
@@ -1386,15 +1459,14 @@ const UsersComponent = () => {
         handleCloseModal,
         handleSubmit,
         handleDelete
-    } = useCRUD('users', defaultState, fetchUserDependencies); // Tambahkan fetchUserDependencies
+    } = useCRUD('users', defaultState, fetchUserDependencies);
 
     const columns = [
         { key: 'full_name', label: 'Nama Lengkap' },
-        { key: 'email', label: 'Email (WP Login)' },
+        { key: 'email', label: 'Email (Login)' }, // Judul diubah
         { 
             key: 'role', 
             label: 'Role',
-            // --- MODIFIKASI: Tampilkan role_name dari dependencies ---
             render: (item) => dependencies.roles?.find(r => r.role_key === item.role)?.role_name || item.role
         },
         { key: 'phone', label: 'Telepon' },
@@ -1434,7 +1506,7 @@ const UsersComponent = () => {
                 <form id="user-form" onSubmit={handleSubmit}>
                     <FormInput label="Nama Lengkap" name="full_name" value={formState.full_name} onChange={handleChange} required />
                     <FormInput 
-                        label="Email (Login WP)" 
+                        label="Email (Untuk Login)" 
                         name="email" 
                         type="email" 
                         value={formState.email} 
@@ -1442,12 +1514,13 @@ const UsersComponent = () => {
                         required 
                         disabled={isEditing} // Email tidak bisa diubah
                     />
-                    {!isEditing && (
+                    {isEditing ? (
+                        <FormInput label="Password" name="password" type="password" value={formState.password} onChange={handleChange} placeholder="Kosongkan jika tidak ingin mengubah" />
+                    ) : (
                         <FormInput label="Password" name="password" type="password" value={formState.password} onChange={handleChange} required />
                     )}
                     <FormInput label="Telepon" name="phone" value={formState.phone} onChange={handleChange} />
                     
-                    {/* --- MODIFIKASI: Gunakan Select Dinamis untuk Role --- */}
                     <FormSelect label="Role" name="role" value={formState.role} onChange={handleChange} required>
                         <option value="">Pilih Role</option>
                         {dependencies.roles?.map(role => (
@@ -1465,9 +1538,7 @@ const UsersComponent = () => {
     );
 };
 
-// --- 4 KOMPONEN BARU (Kategori, Pesawat, Hotel, Roles) ---
-
-// 7. Manajemen Kategori (BARU)
+// 7. Manajemen Kategori
 const CategoriesComponent = () => {
     const defaultState = { name: '', description: '' };
     const {
@@ -1509,7 +1580,7 @@ const CategoriesComponent = () => {
     );
 };
 
-// 8. Manajemen Pesawat (BARU)
+// 8. Manajemen Pesawat
 const FlightsComponent = () => {
     const defaultState = {
         airline: '',
@@ -1578,7 +1649,7 @@ const FlightsComponent = () => {
     );
 };
 
-// 9. Manajemen Hotel (BARU)
+// 9. Manajemen Hotel
 const HotelsComponent = () => {
     const defaultState = {
         name: '',
@@ -1639,7 +1710,7 @@ const HotelsComponent = () => {
     );
 };
 
-// 10. Manajemen Role (BARU)
+// 10. Manajemen Role
 const RolesComponent = () => {
     const defaultState = { role_key: '', role_name: '' };
     const {
@@ -1695,7 +1766,6 @@ const AppHeader = ({ user, onLogout }) => (
                 </div>
                 <div className="text-sm text-gray-600">
                     Selamat datang, <span className="font-medium text-gray-800">{user.name || 'Pengguna'}</span>
-                    {/* <button onClick={onLogout} className="ml-4 text-blue-600 hover:underline">Logout</button> */}
                 </div>
             </div>
         </div>
@@ -1705,19 +1775,18 @@ const AppHeader = ({ user, onLogout }) => (
 // Navigasi Utama
 const MainNav = ({ currentView, setView }) => {
     
-    // --- MODIFIKASI: Tambahkan menu baru ---
     const navItems = [
         { key: 'dashboard', label: 'Dashboard' },
         { key: 'packages', label: 'Paket' },
-        { key: 'categories', label: 'Kategori Paket' }, // BARU
+        { key: 'categories', label: 'Kategori Paket' },
         { key: 'jamaah', label: 'Jemaah (Manifest)' },
         { key: 'finance', label: 'Keuangan' },
         { key: 'tasks', label: 'Tugas' },
-        { key: 'data_master', label: 'Data Master', subItems: [ // Grup BARU
+        { key: 'data_master', label: 'Data Master', subItems: [
             { key: 'flights', label: 'Data Pesawat' },
             { key: 'hotels', label: 'Data Hotel' },
         ]},
-        { key: 'hr', label: 'HRD', subItems: [ // Grup BARU
+        { key: 'hr', label: 'HRD', subItems: [
             { key: 'users', label: 'Staff' },
             { key: 'roles', label: 'Roles' },
         ]},
@@ -1798,7 +1867,6 @@ const App = () => {
     const [currentView, setCurrentView] = useState('dashboard');
     const [user, setUser] = useState(wpData.user);
 
-    // --- MODIFIKASI: Router untuk render komponen ---
     const renderView = () => {
         switch (currentView) {
             case 'dashboard':
@@ -1813,7 +1881,6 @@ const App = () => {
                 return <TasksComponent />;
             case 'users':
                 return <UsersComponent />;
-            // --- Rute BARU ---
             case 'categories':
                 return <CategoriesComponent />;
             case 'flights':
@@ -1826,6 +1893,55 @@ const App = () => {
                 return <DashboardComponent />;
         }
     };
+
+    // Auto-login untuk Super Admin
+    useEffect(() => {
+        const autoLoginAdmin = async () => {
+            // Jika token sudah ada (dari auto-login sebelumnya), jangan lakukan lagi
+            if (wpData.user && wpData.user.token) {
+                 // Cek validitas token
+                try {
+                    await api.get('users/me');
+                    setUser(wpData.user);
+                } catch (e) {
+                    // Token mungkin kadaluarsa, coba login ulang
+                    console.warn("Token kadaluarsa, mencoba auto-login...");
+                    try {
+                         const data = await api.post('auth/wp-login', {});
+                         wpData.user.token = data.token; // Update token global
+                         setUser(data.user);
+                    } catch (loginError) {
+                         console.error("Auto-login gagal:", loginError);
+                         setUser({ name: 'Error', role: 'guest', token: null });
+                    }
+                }
+                return;
+            }
+
+            // Jika tidak ada token TAPI user adalah admin (berdasarkan cookie WP)
+            // Coba lakukan auto-login untuk mendapatkan token
+            if (wpData.user && wpData.user.role === 'super_admin' && !wpData.user.token) {
+                try {
+                    console.log("Mencoba auto-login Super Admin...");
+                    const data = await api.post('auth/wp-login', {}); // Endpoint ini aman
+                    wpData.user.token = data.token; // Simpan token untuk sesi ini
+                    setUser(data.user);
+                } catch (e) {
+                    console.error("Gagal auto-login Super Admin:", e);
+                    // Tampilkan error login di UI
+                }
+            }
+        };
+
+        // TODO: Ganti ini dengan logic login headless jika diperlukan
+        if (wpData.user.role === 'super_admin') {
+            autoLoginAdmin();
+        } else {
+             // Jika bukan super-admin, tampilkan form login (logic ini belum ada)
+             // Untuk saat ini, kita anggap sudah login
+        }
+    }, []);
+
 
     return (
         <div className="min-h-screen bg-gray-100">
@@ -1845,8 +1961,11 @@ const App = () => {
 
 // Render aplikasi React ke DOM
 document.addEventListener('DOMContentLoaded', () => {
-    const appRoot = document.getElementById('umh-react-app');
+    // MODIFIKASI: Target ID yang benar
+    const appRoot = document.getElementById('umh-react-app-root');
     if (appRoot) {
         render(<App />, appRoot);
+    } else {
+        console.error("Target div 'umh-react-app-root' not found.");
     }
 });

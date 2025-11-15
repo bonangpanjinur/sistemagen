@@ -1,68 +1,12 @@
 import React, { useState, useEffect } from 'react';
-// import api from '../utils/api'; // Dihapus
+import api from '../utils/api.js'; // Import API yang sebenarnya
 import { Users, Package, DollarSign, CheckSquare, BarChart2 } from 'lucide-react';
-// import Spinner from '../components/Spinner'; // Dihapus
-
-// --- STUB UNTUK API ---
-// Objek API tiruan untuk menggantikan file ../utils/api
-const api = {
-    get: (endpoint) => {
-        console.log(`[STUB API] GET: ${endpoint}`);
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                if (endpoint === 'stats') {
-                    // Kembalikan data statistik tiruan
-                    resolve({
-                        data: {
-                            total_jamaah: 120,
-                            total_packages: 15,
-                            total_revenue: 'Rp 1.2M',
-                            tasks_completed: 8,
-                            total_tasks: 10
-                        }
-                    });
-                } else {
-                    resolve({ data: {} });
-                }
-            }, 500); // Tunda 0.5 detik
-        });
-    }
-};
-
-// --- STUB UNTUK SPINNER ---
-// Komponen Spinner tiruan untuk menggantikan file ../components/Spinner
-const Spinner = ({ size = 24, text = "Memuat..." }) => (
-    <div className="flex flex-col justify-center items-center p-8">
-        <svg
-            className="animate-spin text-blue-600"
-            style={{ height: `${size}px`, width: `${size}px` }}
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-        >
-            <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-            ></circle>
-            <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-        </svg>
-        {text && <span className="mt-3 text-gray-600">{text}</span>}
-    </div>
-);
-
+import Spinner from '../components/Spinner.jsx'; // Import Spinner yang sebenarnya
 
 // Komponen Kartu Statistik
-const StatCard = ({ title, value, icon, color }) => (
+const StatCard = ({ title, value, icon, colorClass }) => (
     <div className="bg-white p-6 rounded-lg shadow-md flex items-center space-x-4">
-        <div className={`p-3 rounded-full ${color} bg-opacity-20`}>
+        <div className={`p-3 rounded-full ${colorClass} bg-opacity-20`}>
             {icon}
         </div>
         <div>
@@ -81,10 +25,11 @@ const Dashboard = () => {
         const fetchStats = async () => {
             try {
                 setLoading(true);
-                const response = await api.get('stats');
+                // Menggunakan endpoint yang benar dari api-stats.php
+                const response = await api.get('stats/totals'); 
                 setStats(response.data);
             } catch (error) {
-                console.error("Failed to fetch stats:", error);
+                console.error("Gagal mengambil statistik:", error);
             } finally {
                 setLoading(false);
             }
@@ -95,6 +40,15 @@ const Dashboard = () => {
     if (loading || !stats) {
         return <Spinner size={32} text="Memuat statistik..." />;
     }
+    
+    // Helper untuk format mata uang
+    const formatCurrency = (amount) => {
+         return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0,
+        }).format(amount || 0);
+    }
 
     return (
         <div className="space-y-6">
@@ -102,27 +56,27 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard 
                     title="Total Jamaah" 
-                    value={stats.total_jamaah} 
+                    value={stats.total_jamaah || 0} 
                     icon={<Users size={24} className="text-blue-600" />}
-                    color="text-blue-600 bg-blue-100"
+                    colorClass="text-blue-600 bg-blue-100"
                 />
                 <StatCard 
                     title="Total Paket" 
-                    value={stats.total_packages} 
+                    value={stats.total_packages || 0} 
                     icon={<Package size={24} className="text-green-600" />}
-                    color="text-green-600 bg-green-100"
+                    colorClass="text-green-600 bg-green-100"
                 />
                 <StatCard 
                     title="Total Pemasukan" 
-                    value={stats.total_revenue} 
+                    value={formatCurrency(stats.total_revenue)} 
                     icon={<DollarSign size={24} className="text-yellow-600" />}
-                    color="text-yellow-600 bg-yellow-100"
+                    colorClass="text-yellow-600 bg-yellow-100"
                 />
                 <StatCard 
-                    title="Tugas Selesai" 
-                    value={`${stats.tasks_completed} / ${stats.total_tasks}`}
-                    icon={<CheckSquare size={24} className="text-purple-600" />}
-                    color="text-purple-600 bg-purple-100"
+                    title="Total Pengeluaran" // Mengganti tugas dengan data keuangan
+                    value={formatCurrency(stats.total_expense)}
+                    icon={<DollarSign size={24} className="text-red-600" />}
+                    colorClass="text-red-600 bg-red-100"
                 />
             </div>
             
@@ -138,7 +92,7 @@ const Dashboard = () => {
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
                         <DollarSign size={20} className="mr-2 text-green-600" />
                         Status Pembayaran
                     </h3>

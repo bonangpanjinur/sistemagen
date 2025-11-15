@@ -1,29 +1,5 @@
-// Lokasi File: bonangpanjinur/travelmanajemen/travelmanajemen-f41c18137ac73c115e031d3f61ac18797af42e9f/src/contexts/
-// Nama File: DataContext.jsx
-
-import React, { createContext, useState, useEffect, useContext } from 'react';
-
-// --- STUB UNTUK API ---
-// Membuat objek api tiruan (stub) untuk menggantikan file ../utils/api yang hilang
-// Ini akan mengembalikan data kosong agar aplikasi bisa berjalan tanpa error.
-const api = {
-    get: (resource, config) => {
-        console.log(`[STUB API] GET: ${resource}`, config);
-        // Mensimulasikan penundaan jaringan
-        return new Promise(resolve => {
-            setTimeout(() => {
-                resolve({
-                    data: {
-                        items: [], // Selalu kembalikan array kosong
-                        total: 0
-                    }
-                });
-            }, 500); // Tunda 0.5 detik
-        });
-    }
-    // Anda bisa menambahkan method .post, .put, .delete di sini jika diperlukan
-};
-// --- AKHIR DARI STUB API ---
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import api from '../utils/api.js'; // Import API yang sebenarnya
 
 // 1. Buat Context
 const DataContext = createContext(null);
@@ -31,47 +7,55 @@ const DataContext = createContext(null);
 // 2. Buat Provider Component
 export const DataProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
-    const [categories, setCategories] = useState([]);
-    const [users, setUsers] = useState([]);
-    const [packages, setPackages] = useState([]);
-    // Tambahkan state lain sesuai kebutuhan...
+    const [dataCache, setDataCache] = useState({});
+
+    // Fungsi untuk mengambil data (dengan caching)
+    const fetchData = useCallback(async (resource, forceRefresh = false) => {
+        if (!forceRefresh && dataCache[resource]) {
+            return dataCache[resource];
+        }
+
+        try {
+            const response = await api.get(resource, { params: { per_page: -1 } }); // Ambil semua data
+            const items = response.data.items || [];
+            setDataCache(prev => ({ ...prev, [resource]: items }));
+            return items;
+        } catch (error) {
+            console.error(`Gagal mengambil data untuk ${resource}:`, error);
+            return []; // Kembalikan array kosong jika gagal
+        }
+    }, [dataCache]);
 
     // Fungsi untuk memuat data awal
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
         setLoading(true);
-        try {
-            // Gunakan Promise.all untuk mengambil data secara paralel
-            const [categoriesRes, usersRes, packagesRes] = await Promise.all([
-                api.get('categories'),
-                api.get('users'),
-                api.get('packages')
-            ]);
-            
-            setCategories(categoriesRes.data.items);
-            setUsers(usersRes.data.items);
-            setPackages(packagesRes.data.items);
-
-        } catch (error) {
-            console.error("Gagal mengambil data awal:", error);
-        } finally {
-            // Setelah semua selesai, matikan loading
-            setLoading(false);
-        }
+        await Promise.all([
+            fetchData('categories'),
+            fetchData('users'),
+            fetchData('packages'),
+            fetchData('jamaah'),
+            fetchData('flights'),
+            fetchData('hotels')
+        ]);
+        setLoading(false);
     };
 
-    // Muat data saat komponen pertama kali di-mount
+    // Muat data awal saat komponen pertama kali di-mount
     useEffect(() => {
-        fetchData();
-    }, []);
+        fetchInitialData();
+    }, []); // Hanya sekali
 
-    // Nilai yang akan dibagikan ke komponen anak
+    // Fungsi untuk me-refresh data tertentu
+    const refreshData = async (resource) => {
+        await fetchData(resource, true); // Paksa refresh
+    };
+
+    // Nilai yang akan dibagikan
     const value = {
         loading,
-        categories,
-        users,
-        packages,
-        // Tambahkan fungsi untuk memuat ulang data jika perlu
-        refetch: fetchData 
+        ...dataCache, // Sebarkan semua data yang di-cache (categories, users, etc.)
+        fetchData,   // Bagikan fungsi fetch jika komponen perlu data on-demand
+        refreshData // Bagikan fungsi refresh
     };
 
     return (

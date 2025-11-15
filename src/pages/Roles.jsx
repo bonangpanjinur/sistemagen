@@ -1,209 +1,13 @@
-import React, { useState, useEffect } from 'react'; // Menambahkan useEffect
-import { Plus, ArrowUp, ArrowDown } from 'lucide-react'; // Menambahkan ikon untuk stub
-// Impor-impor yang rusak akan diganti dengan stub di bawah ini:
-// import useCRUD from '../hooks/useCRUD';
-// import CrudTable from '../components/CrudTable';
-// import Pagination from '../components/Pagination';
-// import SearchInput from '../components/SearchInput';
-// import Modal from '../components/Modal';
-// import api from '../utils/api'; 
+import React, { useState } from 'react';
+import { Plus } from 'lucide-react';
+import useCRUD from '../hooks/useCRUD.js';
+import CrudTable from '../components/CrudTable.jsx';
+import Pagination from '../components/Pagination.jsx';
+import SearchInput from '../components/SearchInput.jsx';
+import Modal from '../components/Modal.jsx';
+import api from '../utils/api.js'; // Import API untuk create/update
 
-// --- STUB UNTUK SEMUA DEPENDENSI YANG HILANG (6) ---
-
-// 1. Stub untuk ../utils/api
-const api = {
-    get: (url) => {
-        console.log(`[STUB API] GET: ${url}`);
-        // Mengembalikan promise yang resolve dengan data roles tiruan
-        return Promise.resolve({
-            data: {
-                items: [
-                    { name: 'administrator', display_name: 'Administrator', capabilities: ['manage_options'] },
-                    { name: 'editor', display_name: 'Editor', capabilities: ['read', 'read_packages'] },
-                    { name: 'agen_lapangan', display_name: 'Agen Lapangan', capabilities: ['read', 'read_jamaah'] }
-                ],
-                total: 3
-            }
-        });
-    },
-    put: (url, data) => {
-        console.log(`[STUB API] PUT: ${url}`, data);
-        return Promise.resolve({ data: { ...data } });
-    },
-    post: (url, data) => {
-        console.log(`[STUB API] POST: ${url}`, data);
-        return Promise.resolve({ data: { ...data } }); 
-    },
-    delete: (url) => {
-         console.log(`[STUB API] DELETE: ${url}`);
-         return Promise.resolve();
-    }
-};
-
-// 2. Stub untuk ../hooks/useCRUD
-const useCRUD = (resource) => {
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [pagination, setPagination] = useState({ currentPage: 1, totalItems: 0, itemsPerPage: 10 });
-    const [sortBy, setSortBy] = useState({ key: 'name', order: 'asc' });
-
-    // Simulasikan pengambilan data
-    const fetchData = () => {
-        setLoading(true);
-        console.log(`[STUB useCRUD] Fetching ${resource}...`);
-        api.get(resource).then(response => {
-            setData(response.data.items);
-            setPagination(prev => ({ ...prev, totalItems: response.data.total }));
-            setLoading(false);
-        }).catch(() => setLoading(false));
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [resource]); // Hanya fetch sekali saat resource berubah
-
-    const handlePageChange = (page) => {
-        setPagination(prev => ({ ...prev, currentPage: page }));
-        // Di aplikasi nyata, Anda akan fetchData() lagi dengan parameter halaman
-    };
-    const handleSearch = (term) => console.log(`[STUB useCRUD] Searching for: ${term}`);
-    const handleSort = (key, order) => setSortBy({ key, order });
-    
-    // Gunakan stub API untuk deleteItem
-    const deleteItem = async (id) => {
-        await api.delete(`${resource}/${id}`);
-        // Panggil fetchData lagi untuk refresh data setelah delete
-        fetchData(); 
-    };
-
-    // createItem dan updateItem tidak dikembalikan karena komponen ini menggunakan api.put/post secara langsung
-    return {
-        data, loading, pagination, handlePageChange, handleSearch, handleSort, sortBy,
-        deleteItem
-    };
-};
-
-// 3. Stub untuk ../components/SearchInput
-const SearchInput = ({ onSearch, placeholder }) => (
-    <input
-        type="text"
-        placeholder={placeholder || "Cari..."}
-        onChange={(e) => onSearch(e.target.value)}
-        className="px-3 py-2 border border-gray-300 rounded-md shadow-sm"
-    />
-);
-
-// 4. Stub untuk ../components/Pagination
-const Pagination = ({ pagination, onPageChange }) => {
-    if (!pagination || pagination.totalItems <= pagination.itemsPerPage) return null;
-    const totalPages = Math.ceil(pagination.totalItems / pagination.itemsPerPage);
-    return (
-        <div className="flex justify-end space-x-1 mt-4">
-            <button
-                onClick={() => onPageChange(pagination.currentPage - 1)}
-                disabled={pagination.currentPage === 1}
-                className="px-3 py-1 border rounded-md disabled:opacity-50"
-            >
-                &laquo;
-            </button>
-            <span className="px-3 py-1">
-                Halaman {pagination.currentPage} dari {totalPages}
-            </span>
-            <button
-                onClick={() => onPageChange(pagination.currentPage + 1)}
-                disabled={pagination.currentPage === totalPages}
-                className="px-3 py-1 border rounded-md disabled:opacity-50"
-            >
-                &raquo;
-            </button>
-        </div>
-    );
-};
-
-// 5. Stub untuk ../components/Modal
-const Modal = ({ title, show, onClose, children, size = "max-w-lg" }) => {
-    if (!show) return null;
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
-            <div className={`bg-white p-6 rounded-lg shadow-xl z-50 w-full ${size} max-h-[90vh] overflow-y-auto`}>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-semibold">{title}</h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
-                </div>
-                <div>{children}</div>
-            </div>
-        </div>
-    );
-};
-
-// 6. Stub untuk ../components/CrudTable
-const CrudTable = ({
-    columns, data, loading, sortBy, onSort, onEdit, onDelete,
-    editCapability, deleteCapability, userCapabilities
-}) => {
-    const hasEditCap = userCapabilities.includes(editCapability);
-    const hasDeleteCap = userCapabilities.includes(deleteCapability);
-
-    const renderCell = (item, col) => {
-        // Menggunakan accessor (key) untuk mengambil nilai
-        const value = item[col.accessor];
-        if (col.render) {
-            return col.render(value);
-        }
-        return value;
-    };
-
-    return (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        {columns.map((col) => (
-                            <th key={col.accessor} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                {col.sortable ? (
-                                    <button onClick={() => onSort(col.accessor, sortBy.key === col.accessor && sortBy.order === 'asc' ? 'desc' : 'asc')} className="flex items-center space-x-1">
-                                        <span>{col.Header}</span>
-                                        {sortBy.key === col.accessor && (sortBy.order === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />)}
-                                    </button>
-                                ) : (
-                                    col.Header
-                                )}
-                            </th>
-                        ))}
-                        {(onEdit || onDelete) && <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>}
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                    {loading ? (
-                        <tr><td colSpan={columns.length + 1} className="p-4 text-center">Memuat...</td></tr>
-                    ) : data.length === 0 ? (
-                        <tr><td colSpan={columns.length + 1} className="p-4 text-center">Tidak ada data.</td></tr>
-                    ) : (
-                        data.map((item) => (
-                            <tr key={item.name} className="hover:bg-gray-50"> {/* Menggunakan name sebagai key unik */}
-                                {columns.map((col) => (
-                                    <td key={col.accessor} className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
-                                        {renderCell(item, col)}
-                                    </td>
-                                ))}
-                                {(onEdit || onDelete) && (
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
-                                        {onEdit && hasEditCap && <button onClick={() => onEdit(item)} className="text-blue-600 hover:text-blue-800">Edit</button>}
-                                        {onDelete && hasDeleteCap && <button onClick={() => onDelete(item)} className="text-red-600 hover:text-red-800">Hapus</button>}
-                                    </td>
-                                )}
-                            </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
-        </div>
-    );
-};
-
-// --- KOMPONEN ASLI 'Roles' ---
-
-// Daftar semua kapabilitas
+// Daftar kapabilitas
 const allCapabilities = [
     { id: 'read', label: 'Read (Dasar)' },
     { id: 'read_packages', label: 'Lihat Paket' },
@@ -237,22 +41,24 @@ const Roles = ({ userCapabilities }) => {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
-    const [formData, setFormData] = useState({ name: '', display_name: '' });
+    const [formData, setFormData] = useState({ role_key: '', role_name: '' });
     const [selectedCapabilities, setSelectedCapabilities] = useState([]);
 
     const columns = [
-        { Header: 'ID (Internal)', accessor: 'name', sortable: true },
-        { Header: 'Nama Tampilan', accessor: 'display_name', sortable: true },
+        { Header: 'ID (Key)', accessor: 'role_key', sortable: true },
+        { Header: 'Nama Tampilan', accessor: 'role_name', sortable: true },
         { Header: 'Kapabilitas', accessor: 'capabilities', render: (val) => (val || []).join(', ') },
     ];
 
     const openModal = (item = null) => {
         setCurrentItem(item);
         if (item) {
-            setFormData({ name: item.name, display_name: item.display_name });
+            setFormData({ role_key: item.role_key, role_name: item.role_name });
+            // API kustom mungkin menyimpan kapabilitas di tempat lain
+            // Asumsi untuk sekarang, 'capabilities' adalah bagian dari item
             setSelectedCapabilities(item.capabilities || []);
         } else {
-            setFormData({ name: '', display_name: '' });
+            setFormData({ role_key: '', role_name: '' });
             setSelectedCapabilities([]);
         }
         setIsModalOpen(true);
@@ -271,51 +77,45 @@ const Roles = ({ userCapabilities }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        // Endpoint 'roles' menggunakan UMH_CRUD_Controller,
+        // jadi kita perlu mengirim data dengan format yang benar.
+        // Mari kita asumsikan 'capabilities' belum di-support oleh CRUD controller sederhana.
+        // Kita hanya akan kirim role_key dan role_name.
+        // TODO: Anda perlu API kustom untuk menyimpan kapabilitas.
         const payload = {
-            ...formData,
-            capabilities: selectedCapabilities
+            role_key: formData.role_key,
+            role_name: formData.role_name,
+            // capabilities: selectedCapabilities // Ini butuh API kustom
         };
 
         try {
             if (currentItem) {
-                // Update
-                await api.put(`roles/${currentItem.name}`, payload);
+                await api.put(`roles/${currentItem.id}`, payload);
             } else {
-                // Create
                 await api.post('roles', payload);
             }
-            // handlePageChange(1); // Ini akan di-trigger oleh useCRUD jika deleteItem me-refresh data
+            handlePageChange(1); // Refresh
             closeModal();
-            // Refresh halaman untuk memuat ulang data global (termasuk roles baru)
-            window.location.reload();
+            window.location.reload(); // Perlu reload untuk kapabilitas baru
         } catch (error) {
             console.error("Gagal menyimpan role:", error);
         }
     };
 
     const handleDelete = async (item) => {
-        if (item.name === 'administrator' || item.name === 'subscriber') {
-            // Mengganti alert() yang dilarang dengan console.warn()
-            console.warn('Role default WordPress tidak bisa dihapus.');
-            return;
+        if (true) { // Hapus window.confirm
+            await deleteItem(item.id); // Hapus berdasarkan 'id'
+            window.location.reload(); // Perlu reload
         }
-        
-        // PENTING: window.confirm dilarang.
-        // Di aplikasi nyata, gunakan modal konfirmasi kustom.
-        console.log(`[STUB] Konfirmasi penghapusan untuk: ${item.display_name}. (Dihapus secara otomatis)`);
-        
-        // if (window.confirm(`Anda yakin ingin menghapus role "${item.display_name}"?`)) { // BARIS INI DILARANG
-            await deleteItem(item.name); // Hapus berdasarkan 'name' (ID)
-            // Refresh halaman
-            window.location.reload();
-        // }
     };
+    
+    const canManage = userCapabilities.includes('manage_roles') || userCapabilities.includes('manage_options');
 
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <SearchInput onSearch={handleSearch} placeholder="Cari role..." />
-                {userCapabilities.includes('manage_roles') && (
+                {canManage && (
                     <button
                         onClick={() => openModal(null)}
                         className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700"
@@ -331,9 +131,9 @@ const Roles = ({ userCapabilities }) => {
                 data={roles}
                 loading={loading}
                 sortBy={sortBy}
-                onSort={handleSort}
-                onEdit={userCapabilities.includes('manage_roles') ? openModal : null}
-                onDelete={userCapabilities.includes('manage_roles') ? handleDelete : null}
+                onSort={(field) => handleSort(field)}
+                onEdit={canManage ? openModal : null}
+                onDelete={canManage ? handleDelete : null}
                 userCapabilities={userCapabilities}
                 editCapability="manage_roles"
                 deleteCapability="manage_roles"
@@ -345,33 +145,32 @@ const Roles = ({ userCapabilities }) => {
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">ID Internal (Name)</label>
+                            <label className="block text-sm font-medium text-gray-700">ID Internal (Key)</label>
                             <input
                                 type="text"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+                                value={formData.role_key}
+                                onChange={(e) => setFormData({ ...formData, role_key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
                                 className="mt-1 block w-full"
                                 required
-                                disabled={!!currentItem} // Tidak bisa diubah setelah dibuat
+                                disabled={!!currentItem}
                             />
-                            <small className="text-gray-500">Hanya huruf kecil, angka, dan underscore. Cth: 'agen_lapangan'</small>
+                            <small className="text-gray-500">Cth: 'agen_lapangan'</small>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Nama Tampilan</label>
                             <input
                                 type="text"
-                                value={formData.display_name}
-                                onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                                value={formData.role_name}
+                                onChange={(e) => setFormData({ ...formData, role_name: e.target.value })}
                                 className="mt-1 block w-full"
                                 required
                             />
-                             {/* INI ADALAH PERBAIKAN TYPO: </Gacrux> menjadi </small> */}
                              <small className="text-gray-500">Cth: 'Agen Lapangan'</small>
                         </div>
                     </div>
                     
                     <fieldset className="border p-4 rounded-md">
-                        <legend className="text-lg font-medium text-gray-800 px-2">Kapabilitas</legend>
+                        <legend className="text-lg font-medium text-gray-800 px-2">Kapabilitas (Perlu API Kustom)</legend>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
                             {allCapabilities.map(cap => (
                                 <label key={cap.id} className="flex items-center space-x-2">
@@ -380,6 +179,7 @@ const Roles = ({ userCapabilities }) => {
                                         checked={selectedCapabilities.includes(cap.id)}
                                         onChange={() => handleCapabilityChange(cap.id)}
                                         className="rounded text-blue-600"
+                                        disabled // Nonaktifkan sampai API kustom siap
                                     />
                                     <span className="text-sm text-gray-700">{cap.label}</span>
                                 </label>

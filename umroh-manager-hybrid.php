@@ -52,14 +52,54 @@ require_once UMH_PLUGIN_DIR . 'includes/api/api-logs.php';
 require_once UMH_PLUGIN_DIR . 'includes/api/api-print.php';
 require_once UMH_PLUGIN_DIR . 'includes/api/api-export.php';
 
+// === PERBAIKAN: Tambahkan Hook untuk Menu Admin ===
+add_action('admin_menu', 'umh_register_admin_menu');
+add_action('admin_init', 'umh_register_plugin_settings');
+
+/**
+ * Fungsi untuk mendaftarkan menu utama dan submenu.
+ */
+function umh_register_admin_menu() {
+    // Menu Utama (React Dashboard)
+    add_menu_page(
+        'Umroh Manager', // Judul Halaman
+        'Umroh Manager', // Judul Menu
+        'manage_options', // Kapabilitas (hanya admin)
+        'umroh-manager', // Slug menu (HARUS SAMA dengan $hook di enqueue)
+        'umroh_manager_render_dashboard_react', // Fungsi callback (dari dashboard-react.php)
+        'dashicons-airplane', // Ikon
+        20 // Posisi
+    );
+
+    // Submenu Pengaturan
+    add_submenu_page(
+        'umroh-manager', // Parent slug
+        'Pengaturan Plugin', // Judul Halaman
+        'Pengaturan', // Judul Menu
+        'manage_options', // Kapabilitas
+        'umh-settings', // Slug submenu
+        'umh_render_settings_page' // Fungsi callback (dari settings-page.php)
+    );
+}
+
+/**
+ * Fungsi untuk mendaftarkan grup pengaturan.
+ */
+function umh_register_plugin_settings() {
+    // Inisialisasi class dari settings-page.php untuk mendaftarkan field
+    $settings_page = new UMH_Settings_Page();
+    $settings_page->register_settings();
+}
+// === Akhir Perbaikan Menu ===
+
 
 // Activation hook
 register_activation_hook(__FILE__, 'umh_activate_plugin');
 function umh_activate_plugin() {
     umh_create_tables();
-    // Fungsi-fungsi ini sepertinya tidak ada, saya komentar dulu
-    // umh_create_default_roles();
-    // umh_register_default_user_roles();
+    // PERBAIKAN: Memanggil fungsi untuk mengisi data role default
+    umh_create_default_roles();
+    // umh_register_default_user_roles(); // (Ini masih dikomentari, sepertinya belum ada)
 }
 
 // Deactivation hook
@@ -70,6 +110,7 @@ function umh_deactivate_plugin() {
 
 // Enqueue admin scripts and styles
 function umh_enqueue_admin_scripts($hook) {
+    // Hanya load di halaman plugin kita
     if ('toplevel_page_umroh-manager' !== $hook) {
         return;
     }
@@ -144,14 +185,18 @@ function umh_enqueue_admin_scripts($hook) {
             }
             
             // Buat token sementara untuk sesi ini
-            $token_data = umh_generate_auth_token($umh_user_id, 'super_admin');
+            // PERBAIKAN: Pastikan fungsi umh_generate_auth_token ada (ada di api-users.php)
+            $token_data = [];
+            if (function_exists('umh_generate_auth_token')) {
+                $token_data = umh_generate_auth_token($umh_user_id, 'super_admin');
+            }
 
             return [
                 'id' => $umh_user_id,
                 'name' => $wp_user->display_name,
                 'email' => $wp_user->user_email,
                 'role' => 'super_admin',
-                'token' => $token_data['token'],
+                'token' => $token_data['token'] ?? null,
                 'capabilities' => ['manage_options'], // Super admin bisa melakukan segalanya
             ];
         }

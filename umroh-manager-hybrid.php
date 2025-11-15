@@ -10,10 +10,16 @@
  * - Menambahkan `add_menu_page` di `umh_init` (dari perbaikan sebelumnya).
  * - Menambahkan `wp_enqueue_style` untuk `build/index.css` di `umh_enqueue_admin_assets`.
  *
+ * PERBAIKAN (15/11/2025):
+ * - Menghapus `wp_enqueue_style` manual untuk `build/index.css`.
+ * - Biarkan `wp_enqueue_script` yang menangani pemuatan CSS-nya
+ * melalui file `index.asset.php` (best practice @wordpress/scripts).
+ * - Mengubah dependensi `umh-admin-style` menjadi `umh-react-app`.
+ *
  * Plugin Name: Umroh Manager Hybrid
  * Plugin URI:  https://github.com/bonangpanjinur/travelmanajemen
  * Description: A hybrid WordPress plugin using React for managing Umroh travels.
- * Version:     0.1.1
+ * Version:     0.1.2
  * Author:      Bonang Panji Nur
  * Author URI:  https://bonang.dev
  * License:     GPL-2.0+
@@ -26,7 +32,7 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-define('UMH_VERSION', '0.1.1');
+define('UMH_VERSION', '0.1.2');
 define('UMH_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('UMH_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -164,6 +170,8 @@ function umh_load_api_endpoints() {
         'api-logs',
         'api-roles',
         'api-payments',
+        'api-flight-bookings',
+        'api-hotel-bookings'
     ];
 
     foreach ($api_files as $file) {
@@ -181,13 +189,22 @@ function umh_load_api_endpoints() {
 add_action('admin_enqueue_scripts', 'umh_enqueue_admin_assets');
 function umh_enqueue_admin_assets($hook) {
     // Hanya load di halaman plugin kita
-    // === PERBAIKAN: Menggunakan hook yang benar ===
     if ($hook != 'toplevel_page_umroh-manager-hybrid') {
         return;
     }
 
     // Load React Build
-    $asset_file = include(UMH_PLUGIN_DIR . 'build/index.asset.php');
+    $asset_file_path = UMH_PLUGIN_DIR . 'build/index.asset.php';
+    if (!file_exists($asset_file_path)) {
+        // Tampilkan error jika file asset tidak ada (belum di-build)
+        wp_die(
+            __('File asset build/index.asset.php tidak ditemukan. Apakah Anda sudah menjalankan `npm run build`?', 'umroh-manager-hybrid'),
+            __('Build Error', 'umroh-manager-hybrid')
+        );
+        return;
+    }
+    
+    $asset_file = include($asset_file_path);
 
     wp_enqueue_script(
         'umh-react-app',
@@ -197,20 +214,27 @@ function umh_enqueue_admin_assets($hook) {
         true // Load di footer
     );
 
-    // === PERBAIKAN: TAMBAHKAN INI UNTUK MEMUAT CSS ===
+    // === PERBAIKAN: HAPUS `wp_enqueue_style` manual untuk 'build/index.css' ===
+    // Baris ini dihapus karena `wp_enqueue_script` akan otomatis
+    // me-load style yang terdaftar di `index.asset.php`
+    // (setelah Anda `npm run build` dengan import CSS di index.jsx).
+    /*
     wp_enqueue_style(
         'umh-react-app-styles', // Handle unik untuk style
         UMH_PLUGIN_URL . 'build/index.css', // Path ke file CSS hasil build
         [], // Dependencies
         $asset_file['version'] // Versi yang sama dengan JS
     );
-    // ===============================================
+    */
+    // =======================================================================
 
-    // Load CSS (ini adalah CSS admin-style.css lama, biarkan saja)
+    // Load CSS admin-style.css (untuk override)
+    // PERBAIKAN: Ubah dependensi ke 'umh-react-app' (script handle)
+    // Kita tetap memuat ini JIKA Anda ingin menambahkan override CSS manual
     wp_enqueue_style(
         'umh-admin-style',
         UMH_PLUGIN_URL . 'assets/css/admin-style.css',
-        ['umh-react-app-styles'], // Buat ini dependen pada style baru
+        ['umh-react-app'], // Dependen pada script utama
         UMH_VERSION
     );
 
@@ -277,6 +301,8 @@ if (!function_exists('umh_get_current_user_data_for_react')) {
             );
 
             return [
+                'id'    => $umh_user->id, // [PERBAIKAN] Kirim juga ID umh_user
+                'email' => $umh_user->email,
                 'name'  => $umh_user->full_name,
                 'role'  => $umh_user->role,
                 'token' => $token

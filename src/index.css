@@ -1,0 +1,21 @@
+/*
+ * File: src/index.css
+ * Ini adalah file BARU yang akan mengimpor Tailwind.
+ * Error sebelumnya terjadi karena file ini tidak ada.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* * Tambahkan sedikit style dasar untuk memastikan
+ * admin-bar WordPress tidak tertimpa oleh modal.
+ */
+body.admin-bar #umh-react-app {
+  padding-top: 32px;
+}
+
+/* Style dasar untuk modal agar di atas admin bar */
+.fixed.inset-0.z-50 {
+  z-index: 99999;
+}

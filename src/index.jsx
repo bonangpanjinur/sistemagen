@@ -1,3 +1,5 @@
+import './index.css'; // <-- BARIS INI DITAMBAHKAN
+
 /**
  * File: src/index.jsx
  *
@@ -114,7 +116,7 @@ const Modal = ({ show, onClose, title, children, footer }) => {
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600 transition-colors"
                     >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
                 
@@ -675,6 +677,7 @@ const PackagesComponent = () => {
     };
     
     // --- Override handleEdit (Tidak Berubah) ---
+    const { handleEdit: originalHandleEdit, setIsEditing, setCurrentItem, setModalOpen } = useCRUD();
     const handleEdit = (item) => {
         setIsEditing(true);
         setCurrentItem(item);
@@ -953,11 +956,12 @@ const JamaahComponent = () => {
     };
 
     // Override handleEdit dari useCRUD
+    const { handleEdit: originalHandleEditJamaah, setIsEditing: setIsEditingJamaah, setCurrentItem: setCurrentItemJamaah, setModalOpen: setModalOpenJamaah } = useCRUD();
     const handleEdit = (item) => {
-        setIsEditing(true);
-        setCurrentItem(item);
+        setIsEditingJamaah(true);
+        setCurrentItemJamaah(item);
         setFormState(item);
-        setModalOpen(true);
+        setModalOpenJamaah(true);
         // Panggil fetch payments
         fetchPayments(item.id);
     };

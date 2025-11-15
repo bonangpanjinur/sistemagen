@@ -7,6 +7,8 @@
  *
  * MODIFIKASI:
  * - Menambahkan `umh_package_prices` ke daftar tabel di `umh_uninstall_plugin`.
+ * - Menambahkan `add_menu_page` di `umh_init` (dari perbaikan sebelumnya).
+ * - Menambahkan `wp_enqueue_style` untuk `build/index.css` di `umh_enqueue_admin_assets`.
  *
  * Plugin Name: Umroh Manager Hybrid
  * Plugin URI:  https://github.com/bonangpanjinur/travelmanajemen
@@ -120,6 +122,25 @@ function umh_init() {
 
     // Load API Endpoints
     umh_load_api_endpoints();
+
+    // Mendaftarkan halaman menu admin (Perbaikan dari sebelumnya)
+    add_action('admin_menu', 'umh_register_admin_menu');
+}
+
+/**
+ * [FUNGSI BARU]
+ * Mendaftarkan halaman menu utama ke sidebar admin WordPress.
+ */
+function umh_register_admin_menu() {
+    add_menu_page(
+        __('Travel Manajemen', 'umroh-manager-hybrid'), // Judul Halaman
+        __('Travel Manajemen', 'umroh-manager-hybrid'), // Judul Menu
+        'manage_options', // Kapabilitas (bisa diganti nanti, misal: 'umh_view_dashboard')
+        'umroh-manager-hybrid', // Menu Slug (PENTING: harus sama dengan yang dicek di enqueue)
+        'umroh_manager_render_dashboard_react', // Fungsi callback untuk render
+        'dashicons-palmtree', // Ikon menu
+        25 // Posisi
+    );
 }
 
 // Fungsi untuk me-load semua file API
@@ -160,7 +181,8 @@ function umh_load_api_endpoints() {
 add_action('admin_enqueue_scripts', 'umh_enqueue_admin_assets');
 function umh_enqueue_admin_assets($hook) {
     // Hanya load di halaman plugin kita
-    if (strpos($hook, 'umroh-manager-hybrid') === false) {
+    // === PERBAIKAN: Menggunakan hook yang benar ===
+    if ($hook != 'toplevel_page_umroh-manager-hybrid') {
         return;
     }
 
@@ -175,11 +197,20 @@ function umh_enqueue_admin_assets($hook) {
         true // Load di footer
     );
 
-    // Load CSS
+    // === PERBAIKAN: TAMBAHKAN INI UNTUK MEMUAT CSS ===
+    wp_enqueue_style(
+        'umh-react-app-styles', // Handle unik untuk style
+        UMH_PLUGIN_URL . 'build/index.css', // Path ke file CSS hasil build
+        [], // Dependencies
+        $asset_file['version'] // Versi yang sama dengan JS
+    );
+    // ===============================================
+
+    // Load CSS (ini adalah CSS admin-style.css lama, biarkan saja)
     wp_enqueue_style(
         'umh-admin-style',
         UMH_PLUGIN_URL . 'assets/css/admin-style.css',
-        [],
+        ['umh-react-app-styles'], // Buat ini dependen pada style baru
         UMH_VERSION
     );
 

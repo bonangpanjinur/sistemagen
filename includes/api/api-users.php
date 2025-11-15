@@ -2,163 +2,260 @@
 /**
  * File: includes/api/api-users.php
  *
- * PENINGKATAN (Item 2):
- * - File ini ditulis ulang sepenuhnya (refaktor).
- * - Menggunakan UMH_CRUD_Controller yang standar.
- * - MENAMBAHKAN HOOKS (action) untuk sinkronisasi data dengan tabel wp_users
- * (membuat WP user baru, update WP user).
- * - Ini jauh lebih stabil daripada kode kustom sebelumnya.
+ * Mengelola endpoint untuk CRUD pengguna (staff) dan otentikasi.
+ *
+ * [PERBAIKAN 15/11/2025]: Memperbaiki fungsi umh_get_current_user_by_token
+ * agar tidak salah mengambil data 'super_admin'.
  */
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-// 1. Definisikan Skema Data User (sesuai db-schema.php)
-$users_schema = [
-    'wp_user_id' => ['type' => 'integer', 'required' => false, 'sanitize_callback' => 'absint'], // Akan diisi oleh hook
-    'full_name'  => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'role'       => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'phone'      => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-    'status'     => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'email'      => ['type' => 'string', 'format' => 'email', 'required' => true, 'sanitize_callback' => 'sanitize_email'], // Kustom untuk WP User
-    'password'   => ['type' => 'string', 'required' => false], // Kustom untuk WP User (hanya create)
-];
+add_action('rest_api_init', 'umh_register_users_routes');
 
-// 2. Definisikan Izin
-$users_permissions = [
-    'get_items'    => ['owner', 'admin_staff', 'hr_staff'],
-    'get_item'     => ['owner', 'admin_staff', 'hr_staff'],
-    'create_item'  => ['owner', 'hr_staff'],
-    'update_item'  => ['owner', 'hr_staff'],
-    'delete_item'  => ['owner'],
-];
+function umh_register_users_routes() {
+    $namespace = 'umh/v1';
+    $base = 'users';
 
-// 3. Tentukan Kolom yang Bisa Dicari
-$users_searchable_fields = ['full_name', 'email', 'phone', 'role'];
+    // Rute CRUD
+    $controller = new UMH_CRUD_Controller('umh_users', [
+        'schema' => [
+            'email' => ['type' => 'string', 'required' => true, 'format' => 'email'],
+            'full_name' => ['type' => 'string', 'required' => true],
+            'role' => ['type' => 'string', 'required' => true],
+            'phone' => ['type' => 'string'],
+            'status' => ['type' => 'string', 'default' => 'active'],
+            'password' => ['type' => 'string'], // Hanya untuk create/update
+        ],
+        'read_permission' => umh_check_api_permission(['owner', 'admin_staff', 'hr_staff']),
+        'write_permission' => umh_check_api_permission(['owner', 'admin_staff']),
+        'delete_permission' => umh_check_api_permission(['owner']),
+        'before_create' => 'umh_hash_password_before_create',
+        'before_update' => 'umh_hash_password_before_update',
+    ]);
+    $controller->register_routes($namespace, $base);
 
-// 4. Inisialisasi Controller
-new UMH_CRUD_Controller(
-    'users', 
-    'umh_users', 
-    $users_schema, 
-    $users_permissions,
-    $users_searchable_fields
-);
+    // Rute Otentikasi
+    register_rest_route($namespace, '/auth/login', [
+        'methods' => 'POST',
+        'callback' => 'umh_auth_login',
+        'permission_callback' => '__return_true', // Endpoint publik
+    ]);
 
+    register_rest_route($namespace, '/auth/wp-login', [
+        'methods' => 'POST',
+        'callback' => 'umh_auth_wp_admin_login',
+        'permission_callback' => 'is_user_logged_in', // Hanya untuk WP Admin
+    ]);
 
-// 5. HOOKS untuk Sinkronisasi WP User (Logika Kustom dari file asli)
+    // Rute /me
+    register_rest_route($namespace, '/' . $base . '/me', [
+        'methods' => 'GET',
+        'callback' => 'umh_get_current_user_by_token',
+        'permission_callback' => umh_check_api_permission(), // Cek token valid
+    ]);
+}
 
 /**
- * Hook SEBELUM item 'users' dibuat.
- * Fungsi ini akan membuat WP User baru (di tabel wp_users).
+ * Hash password sebelum insert ke DB
  */
-add_action('umh_crud_users_before_create', 'umh_sync_wp_user_on_create', 10, 2);
-function umh_sync_wp_user_on_create($request, &$prepared_data) {
+function umh_hash_password_before_create($data) {
+    if (isset($data['password'])) {
+        $data['password_hash'] = wp_hash_password($data['password']);
+        unset($data['password']); // Hapus password plaintext
+    }
+    $data['created_at'] = current_time('mysql');
+    $data['updated_at'] = current_time('mysql');
+    return $data;
+}
+
+/**
+ * Hash password jika diupdate
+ */
+function umh_hash_password_before_update($data) {
+    if (isset($data['password']) && !empty($data['password'])) {
+        $data['password_hash'] = wp_hash_password($data['password']);
+    }
+    unset($data['password']); // Hapus password plaintext (kosong atau tidak)
+    $data['updated_at'] = current_time('mysql');
+    return $data;
+}
+
+
+/**
+ * Callback untuk POST /auth/login (Headless Login)
+ */
+function umh_auth_login(WP_REST_Request $request) {
     global $wpdb;
+    $table_name = $wpdb->prefix . 'umh_users';
     
     $params = $request->get_json_params();
     $email = sanitize_email($params['email']);
     $password = $params['password'];
 
-    if (empty($email) || !is_email($email)) {
-        // Hentikan proses create dengan mengembalikan WP_Error
-        // (Fitur ini perlu ditambahkan di class-umh-crud-controller.php, 
-        // untuk sekarang kita asumsikan validasi frontend cukup)
-        // return new WP_Error('bad_request', 'Invalid email.', ['status' => 400]);
-        // Untuk amannya, kita cek lagi
-        if (empty($email)) throw new Exception('Email diperlukan untuk membuat WP User.');
+    if (empty($email) || empty($password)) {
+        return new WP_Error('credentials_required', 'Email dan password dibutuhkan.', ['status' => 400]);
     }
 
-    if (empty($password)) {
-        throw new Exception('Password diperlukan untuk membuat WP User baru.');
+    $user = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE email = %s", $email));
+
+    if (!$user) {
+        return new WP_Error('invalid_email', 'Email tidak ditemukan.', ['status' => 403]);
     }
+
+    if (!wp_check_password($password, $user->password_hash, $user->id)) {
+        return new WP_Error('invalid_password', 'Password salah.', ['status' => 403]);
+    }
+
+    if ($user->status !== 'active') {
+        return new WP_Error('user_inactive', 'Akun Anda tidak aktif.', ['status' => 403]);
+    }
+
+    // Buat token
+    $token_data = umh_generate_auth_token($user->id, $user->role);
+
+    return new WP_REST_Response([
+        'user' => [
+            'id' => $user->id,
+            'email' => $user->email,
+            'full_name' => $user->full_name,
+            'role' => $user->role,
+        ],
+        'token' => $token_data['token'],
+        'expires' => $token_data['expires'],
+    ], 200);
+}
+
+/**
+ * Callback untuk POST /auth/wp-login (Admin Login)
+ * Ini dipanggil oleh React jika user adalah WP Admin
+ */
+function umh_auth_wp_admin_login(WP_REST_Request $request) {
+    if (!current_user_can('manage_options')) {
+        return new WP_Error('not_admin', 'Hanya administrator yang bisa menggunakan endpoint ini.', ['status' => 403]);
+    }
+
+    // Panggil fungsi dari file utama (umroh-manager-hybrid.php)
+    $user_data_for_react = umh_get_current_user_data_for_react(); 
+
+    if (empty($user_data_for_react['token'])) {
+         return new WP_Error('admin_sync_failed', 'Gagal sinkronisasi data admin.', ['status' => 500]);
+    }
+
+    return new WP_REST_Response([
+        'user' => [
+            'id' => $user_data_for_react['id'], // Ini akan jadi umh_user id
+            'email' => $user_data_for_react['email'],
+            'full_name' => $user_data_for_react['name'],
+            'role' => $user_data_for_react['role'],
+        ],
+        'token' => $user_data_for_react['token'],
+        'expires' => (new DateTime('+1 hour'))->format('Y-m-d H:i:s'), // Cocokkan dengan file utama
+    ], 200);
+}
+
+/**
+ * [PERBAIKAN] Callback untuk GET /me (verifikasi token)
+ * Mengambil data user berdasarkan token yang valid.
+ */
+function umh_get_current_user_by_token(WP_REST_Request $request) {
+    // Fungsi umh_check_api_permission sudah memvalidasi token.
+    // Kita hanya perlu mengambil data user dari context yang disisipkan.
+    $context = umh_get_current_user_context($request);
+
+    if (is_wp_error($context)) {
+        return $context; // Token invalid, expired, dll.
+    }
+
+    // === BLOK YANG DIPERBAIKI (DIHAPUS) ===
+    // Blok 'super_admin' yang rusak sebelumnya dihapus.
+    // Logika di bawah ini sudah benar untuk SEMUA user (headless ATAU super_admin),
+    // karena $context['user_id'] berisi ID dari tabel umh_users
+    // yang sudah divalidasi dari token.
+    /*
+    if ($context['role'] === 'super_admin') {
+         $wp_user = wp_get_current_user(); // <-- INI SUMBER MASALAHNYA
+         return new WP_REST_Response([
+            'id' => $wp_user->ID, 
+            'email' => $wp_user->user_email,
+            'full_name' => $wp_user->display_name,
+            'role' => 'super_admin',
+         ], 200);
+    }
+    */
     
-    if (email_exists($email)) {
-        throw new Exception('Email ini sudah terdaftar di WordPress.');
+    // Ambil data lengkap dari umh_users
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'umh_users';
+    $user = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, email, full_name, role, phone, status FROM $table_name WHERE id = %d",
+        $context['user_id']
+    ), ARRAY_A);
+
+    if (!$user) {
+        return new WP_Error('user_not_found', 'Data user tidak ditemukan di tabel.', ['status' => 404]);
     }
 
-    // Buat WP User baru
-    $wp_user_id = wp_create_user($email, $password, $email);
-
-    if (is_wp_error($wp_user_id)) {
-        throw new Exception('Gagal membuat WP User: ' . $wp_user_id->get_error_message());
-    }
-
-    // Update data WP User (nama, role WP)
-    wp_update_user([
-        'ID'           => $wp_user_id,
-        'display_name' => $prepared_data['full_name'],
-        'first_name'   => $prepared_data['full_name'],
-        'role'         => 'umh_agent' // Beri role WP standar, role plugin ada di tabel umh_users
-    ]);
-
-    // !! PENTING: Masukkan wp_user_id ke data yang akan disimpan
-    $prepared_data['wp_user_id'] = $wp_user_id;
-    
-    // Hapus data kustom 'email' dan 'password' dari data yang disanitasi
-    // agar tidak error saat insert ke tabel umh_users (karena tidak ada kolomnya)
-    // 'email' akan kita tambahkan lagi jika diperlukan
-    unset($prepared_data['email']);
-    unset($prepared_data['password']);
+    return new WP_REST_Response($user, 200);
 }
 
 
 /**
- * Hook SEBELUM item 'users' di-update.
- * Fungsi ini akan meng-update data di tabel wp_users.
+ * Helper: Membuat token JWT atau token sederhana
  */
-add_action('umh_crud_users_before_update', 'umh_sync_wp_user_on_update', 10, 4);
-function umh_sync_wp_user_on_update($request, &$prepared_data, $id, $existing_item) {
-    
-    $wp_user_id = $existing_item->wp_user_id;
-    if (empty($wp_user_id)) {
-        return; // Tidak ada WP user tertaut, skip
-    }
+function umh_generate_auth_token($user_id, $role) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'umh_users';
 
-    $params = $request->get_json_params();
-    $update_data = [];
+    $token = bin2hex(random_bytes(32));
+    $expires = new DateTime('+7 days');
+    $expires_sql = $expires->format('Y-m-d H:i:s');
 
-    // Cek apakah 'full_name' diupdate
-    if (isset($prepared_data['full_name']) && $prepared_data['full_name'] !== $existing_item->full_name) {
-        $update_data['display_name'] = $prepared_data['full_name'];
-        $update_data['first_name'] = $prepared_data['full_name'];
-    }
+    $wpdb->update(
+        $table_name,
+        ['auth_token' => $token, 'token_expires' => $expires_sql],
+        ['id' => $user_id]
+    );
 
-    // Cek apakah 'email' diupdate (Email tidak boleh diubah, jadi kita skip)
-    // Jika email diizinkan diubah, logikanya lebih rumit
-    unset($prepared_data['email']);
-
-    // Cek apakah password diupdate
-    if (!empty($params['password'])) {
-        wp_set_password($params['password'], $wp_user_id);
-    }
-    unset($prepared_data['password']); // Hapus dari data insert
-
-    // Update data WP User jika ada perubahan
-    if (!empty($update_data)) {
-        $update_data['ID'] = $wp_user_id;
-        wp_update_user($update_data);
-    }
+    return [
+        'token' => $token,
+        'expires' => $expires_sql,
+    ];
 }
 
-
 /**
- * Hook SEBELUM item 'users' dihapus.
- * Fungsi ini akan menghapus WP User terkait.
+ * Helper: Verifikasi token
+ * Mengembalikan [ 'user_id' => ID, 'role' => ROLE ] jika valid
+ * Mengembalikan WP_Error jika tidak valid
  */
-add_action('umh_crud_users_before_delete', 'umh_sync_wp_user_on_delete', 10, 2);
-function umh_sync_wp_user_on_delete($id, $existing_item) {
-    
-    if (!function_exists('wp_delete_user')) {
-        require_once(ABSPATH . 'wp-admin/includes/user.php');
+function umh_verify_auth_token($token) {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'umh_users';
+
+    if (empty($token)) {
+        return new WP_Error('token_missing', 'Token otentikasi tidak ada.', ['status' => 401]);
     }
 
-    $wp_user_id = $existing_item->wp_user_id;
-    if (!empty($wp_user_id)) {
-        // Cek apakah user ini punya post/konten
-        // Jika ya, mungkin kita tidak ingin menghapusnya, atau re-assign
-        // Untuk saat ini, kita hapus
-        wp_delete_user($wp_user_id);
+    $user = $wpdb->get_row($wpdb->prepare(
+        "SELECT id, role, token_expires FROM $table_name WHERE auth_token = %s",
+        $token
+    ));
+
+    if (!$user) {
+        return new WP_Error('token_invalid', 'Token otentikasi tidak valid.', ['status' => 401]);
     }
+
+    // Cek kadaluarsa
+    $now = new DateTime();
+    $expires = new DateTime($user->token_expires);
+
+    if ($now > $expires) {
+        return new WP_Error('token_expired', 'Token otentikasi telah kadaluarsa.', ['status' => 401]);
+    }
+
+    return [
+        'user_id' => $user->id,
+        'role' => $user->role,
+    ];
 }

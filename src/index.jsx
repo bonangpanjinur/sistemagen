@@ -1,10 +1,16 @@
+/*
+ * Lokasi File: /src/index.jsx
+ * File: index.jsx
+ */
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom';
 
 // Import komponen layout utama
 import Sidebar from './components/Sidebar.jsx';
 import Header from './components/Header.jsx';
-import Spinner from './components/Spinner.jsx'; // Spinner yang benar
+import Spinner from './components/Spinner.jsx';
+import GlobalErrorAlert from './components/GlobalErrorAlert.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
 
 // Import semua halaman
 import Dashboard from './pages/Dashboard.jsx';
@@ -23,13 +29,15 @@ import Roles from './pages/Roles.jsx';
 import { DataProvider } from './contexts/DataContext.jsx';
 
 // Import CSS
-import './index.css';
+import './index.css'; // Ini adalah path relatif, seharusnya benar
 
 // Ambil data global dari WordPress
 const { currentUser } = window.umhData || { currentUser: { name: 'Guest', role: 'guest', capabilities: [] } };
 // Buat kapabilitas dari role jika tidak ada (untuk file stub)
 if (!currentUser.capabilities) {
-    currentUser.capabilities = window.umhData.roles[currentUser.role]?.capabilities || ['read'];
+    // PERBAIKAN: Ambil kapabilitas dari data roles yang di-bootstrap
+    const allRoles = window.umhData.roles || {};
+    currentUser.capabilities = allRoles[currentUser.role]?.capabilities || ['read'];
 }
 
 
@@ -99,6 +107,9 @@ const App = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 font-inter">
+            {/* PERBAIKAN BARU: Tambahkan komponen error global */}
+            <GlobalErrorAlert />
+            
             {/* Sidebar */}
             <Sidebar currentPath={route} userCapabilities={currentUser.capabilities} />
 

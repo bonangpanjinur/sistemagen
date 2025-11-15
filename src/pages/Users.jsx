@@ -1,12 +1,17 @@
+/*
+ * Lokasi File: /src/pages/Users.jsx
+ * File: Users.jsx
+ */
+
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
-import useCRUD from '../hooks/useCRUD.js';
-import CrudTable from '../components/CrudTable.jsx';
-import Pagination from '../components/Pagination.jsx';
-import SearchInput from '../components/SearchInput.jsx';
-import Modal from '../components/Modal.jsx';
-import api from '../utils/api.js'; // Import API
-import { useData } from '../contexts/DataContext.jsx';
+import useCRUD from '../hooks/useCRUD.js'; // PERBAIKAN: Tambah ekstensi .js
+import CrudTable from '../components/CrudTable.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+import Pagination from '../components/Pagination.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+import SearchInput from '../components/SearchInput.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+import Modal from '../components/Modal.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+import api from '../utils/api.js'; // PERBAIKAN: Tambah ekstensi .js
+import { useData } from '../contexts/DataContext.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
 
 const Users = ({ userCapabilities }) => {
     const {
@@ -28,6 +33,9 @@ const Users = ({ userCapabilities }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
+    
+    // PERBAIKAN BARU: State untuk modal konfirmasi hapus
+    const [itemToDelete, setItemToDelete] = useState(null);
     
     const getFormValue = (key) => formData[key] || '';
 
@@ -76,17 +84,26 @@ const Users = ({ userCapabilities }) => {
             closeModal();
         } catch (error) {
             console.error("Gagal menyimpan user:", error);
+            // Error sudah ditangani oleh interceptor global
         }
     };
 
-    const handleDelete = async (item) => {
-        if (true) { // Hapus window.confirm
-            try {
-                await deleteItem(item.id); 
-                await refreshData('users'); 
-            } catch (error) {
-                console.error("Gagal menghapus user:", error);
-            }
+    // PERBAIKAN BARU: Pisahkan logika untuk membuka modal konfirmasi
+    const handleDeleteClick = (item) => {
+        setItemToDelete(item);
+    };
+
+    // PERBAIKAN BARU: Fungsi ini dipanggil oleh modal konfirmasi
+    const confirmDelete = async () => {
+        if (!itemToDelete) return;
+        
+        try {
+            await deleteItem(itemToDelete.id); 
+            await refreshData('users'); 
+            setItemToDelete(null); // Tutup modal
+        } catch (error) {
+            console.error("Gagal menghapus user:", error);
+            setItemToDelete(null); // Tutup modal walaupun gagal
         }
     };
     
@@ -114,7 +131,7 @@ const Users = ({ userCapabilities }) => {
                 sortBy={sortBy}
                 onSort={(field) => handleSort(field)}
                 onEdit={canManage ? openModal : null}
-                onDelete={canManage ? handleDelete : null}
+                onDelete={canManage ? handleDeleteClick : null} // PERBAIKAN: Ganti ke handleDeleteClick
                 userCapabilities={userCapabilities}
                 editCapability="manage_users"
                 deleteCapability="manage_users"
@@ -122,6 +139,7 @@ const Users = ({ userCapabilities }) => {
 
             <Pagination pagination={pagination} onPageChange={handlePageChange} />
 
+            {/* Modal untuk Tambah/Edit Staff */}
             <Modal title={currentItem ? 'Edit Staff' : 'Tambah Staff'} show={isModalOpen} onClose={closeModal} size="max-w-3xl">
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -142,6 +160,8 @@ const Users = ({ userCapabilities }) => {
                             <select value={getFormValue('role')} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="mt-1 block w-full" required>
                                 <option value="">Pilih Role</option>
                                 {(allRoles || []).map(role => (
+                                    // PERBAIKAN: Gunakan allRoles dari useData()
+                                    // Asumsi allRoles adalah array of objects [{ role_key: '...', role_name: '...' }]
                                     <option key={role.role_key} value={role.role_key}>{role.role_name}</option>
                                 ))}
                             </select>
@@ -170,6 +190,35 @@ const Users = ({ userCapabilities }) => {
                         <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Simpan</button>
                     </div>
                 </form>
+            </Modal>
+            
+            {/* PERBAIKAN BARU: Modal untuk Konfirmasi Hapus */}
+            <Modal 
+                title="Konfirmasi Hapus" 
+                show={!!itemToDelete} 
+                onClose={() => setItemToDelete(null)}
+                size="max-w-md"
+            >
+                <div className="space-y-4">
+                    <p>Apakah Anda yakin ingin menghapus staff **{itemToDelete?.full_name}**?</p>
+                    <p className="text-sm text-red-600">Tindakan ini tidak dapat dibatalkan.</p>
+                    <div className="flex justify-end space-x-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setItemToDelete(null)} 
+                            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                        >
+                            Batal
+                        </button>
+                        <button 
+                            type="button" 
+                            onClick={confirmDelete} 
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        >
+                            Ya, Hapus
+                        </button>
+                    </div>
+                </div>
             </Modal>
         </div>
     );

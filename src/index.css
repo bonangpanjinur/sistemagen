@@ -1,21 +1,41 @@
-/*
- * File: src/index.css
- * Ini adalah file BARU yang akan mengimpor Tailwind.
- * Error sebelumnya terjadi karena file ini tidak ada.
- */
-
+/* Ini adalah konten dari file src/index.css Anda sebelumnya */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* * Tambahkan sedikit style dasar untuk memastikan
- * admin-bar WordPress tidak tertimpa oleh modal.
- */
-body.admin-bar #umh-react-app {
-  padding-top: 32px;
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #a1a1a1;
 }
 
-/* Style dasar untuk modal agar di atas admin bar */
-.fixed.inset-0.z-50 {
-  z-index: 99999;
+/* Style untuk input date */
+input[type="date"] {
+    position: relative;
+    color-scheme: light; /* Pastikan kalender muncul dalam mode terang */
+}
+
+/* Sembunyikan ikon kalender default di beberapa browser */
+input[type="date"]::-webkit-calendar-picker-indicator {
+    background: transparent;
+    bottom: 0;
+    color: transparent;
+    cursor: pointer;
+    height: auto;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: auto;
 }

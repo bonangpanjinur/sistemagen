@@ -1,262 +1,316 @@
 <?php
 /**
- * File: includes/api/api-payments.php
- *
- * File BARU untuk mengelola pembayaran jemaah secara dinamis.
- * File ini MENGGUNAKAN ENDPOINT KUSTOM (bukan UMH_CRUD_Controller)
- * karena perlu logika bisnis tambahan (update total di tabel jamaah).
+ * API endpoints for payments
  */
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-add_action('rest_api_init', 'umh_register_payment_api_routes');
-
-function umh_register_payment_api_routes() {
-    $namespace = 'umh/v1';
-    $base = 'payments';
-
-    // GET /payments ATAU /payments?jamaah_id=...
-    register_rest_route($namespace, '/' . $base, [
-        [
-            'methods'  => WP_REST_Server::READABLE,
-            'callback' => 'umh_get_payments',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-        // POST /payments
-        [
-            'methods'  => WP_REST_Server::CREATABLE,
-            'callback' => 'umh_create_payment',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-    ]);
-
-    // GET, PUT, DELETE /payments/{id}
-    register_rest_route($namespace, '/' . $base . '/(?P<id>[\d]+)', [
-        [
-            'methods'  => WP_REST_Server::READABLE,
-            'callback' => 'umh_get_payment',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-        [
-            'methods'  => WP_REST_Server::EDITABLE,
-            'callback' => 'umh_update_payment',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-        [
-            'methods'  => WP_REST_Server::DELETABLE,
-            'callback' => 'umh_delete_payment',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-    ]);
-
-    // POST /payments/{id}/upload_proof
-    register_rest_route($namespace, '/' . $base . '/(?P<id>[\d]+)/upload_proof', [
-        [
-            'methods'  => WP_REST_Server::CREATABLE,
-            'callback' => 'umh_handle_payment_proof_upload',
-            'permission_callback' => 'umh_check_api_permission_finance_staff',
-        ],
-    ]);
-}
-
-// Izin custom (atau bisa gunakan `umh_check_api_permission` dengan role 'finance_staff')
-function umh_check_api_permission_finance_staff() {
-    return umh_check_api_permission(['owner', 'admin_staff', 'finance_staff']);
-}
-
-// Helper Function: Menghitung ulang total pembayaran jemaah
-function umh_update_jamaah_balance($jamaah_id) {
-    global $wpdb;
-    $payments_table = $wpdb->prefix . 'umh_payments';
-    $jamaah_table = $wpdb->prefix . 'umh_jamaah';
-
-    // Hitung total pembayaran yang 'verified'
-    $total_paid = $wpdb->get_var($wpdb->prepare(
-        "SELECT SUM(amount) FROM $payments_table WHERE jamaah_id = %d AND status = 'verified'",
-        $jamaah_id
-    ));
-
-    if (is_null($total_paid)) {
-        $total_paid = 0;
-    }
-
-    // Update tabel umh_jamaah
-    $wpdb->update(
-        $jamaah_table,
-        ['amount_paid' => $total_paid],
-        ['id' => $jamaah_id],
-        ['%f'],
-        ['%d']
-    );
-
-    // Update payment_status
-    $jamaah = $wpdb->get_row($wpdb->prepare("SELECT total_price FROM $jamaah_table WHERE id = %d", $jamaah_id));
-    $total_price = (float) $jamaah->total_price;
+class UMH_Payments_API_Controller extends UMH_CRUD_Controller {
     
-    $payment_status = 'Belum Lunas';
-    if ($total_paid >= $total_price) {
-        $payment_status = 'Lunas';
-    } elseif ($total_paid > 0) {
-        $payment_status = 'Cicil';
+    public function __construct() {
+        global $wpdb;
+        $this->table_name = $wpdb->prefix . 'umh_payments';
+        $this->resource_name = 'payment';
+        $this->fields = [
+            'jamaah_id' => ['type' => 'int', 'required' => true],
+            'amount' => ['type' => 'float', 'required' => true],
+            'payment_date' => ['type' => 'date', 'required' => true],
+            'payment_method' => ['type' => 'string', 'required' => false, 'default' => 'cash'],
+            'status' => ['type' => 'string', 'required' => false, 'default' => 'pending'],
+            'notes' => ['type' => 'text', 'required' => false],
+            'created_at' => ['type' => 'datetime', 'readonly' => true],
+            'updated_at' => ['type' => 'datetime', 'readonly' => true],
+            'created_by' => ['type' => 'int', 'readonly' => true],
+        ];
     }
 
-    $wpdb->update(
-        $jamaah_table,
-        ['payment_status' => $payment_status],
-        ['id' => $jamaah_id],
-        ['%s'],
-        ['%d']
-    );
+    public function register_routes() {
+        register_rest_route('umh/v1', '/' . $this->resource_name . 's', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_items'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => 'umh_create_payment', // Custom callback for transaction
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+        ]);
 
-    return $total_paid;
-}
-
-// GET /payments?jamaah_id=...
-function umh_get_payments($request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
-    $jamaah_id = $request->get_param('jamaah_id');
-
-    if (!empty($jamaah_id)) {
-        $items = $wpdb->get_results($wpdb->prepare("SELECT * FROM $table_name WHERE jamaah_id = %d ORDER BY payment_date DESC", $jamaah_id));
-    } else {
-        $items = $wpdb->get_results("SELECT * FROM $table_name ORDER BY payment_date DESC");
+        register_rest_route('umh/v1', '/' . $this->resource_name . 's/(?P<id>\d+)', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_item'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => 'umh_update_payment', // Custom callback for transaction
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => 'umh_delete_payment', // Custom callback for transaction
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+        ]);
     }
 
-    return new WP_REST_Response($items, 200);
-}
-
-// GET /payments/{id}
-function umh_get_payment($request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
-    $id = (int) $request['id'];
-    $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-
-    if (!$item) {
-        return new WP_Error('not_found', 'Payment not found', ['status' => 404]);
+    // Override get_base_query to include jamaah name
+    protected function get_base_query() {
+        global $wpdb;
+        $payments_table = $this->table_name;
+        $jamaah_table = $wpdb->prefix . 'umh_jamaah';
+        
+        return "SELECT p.*, j.full_name as jamaah_name 
+                FROM {$payments_table} p
+                LEFT JOIN {$jamaah_table} j ON p.jamaah_id = j.id";
     }
 
-    return new WP_REST_Response($item, 200);
+    // Override get_item_by_id to include jamaah name
+    protected function get_item_by_id($id) {
+        global $wpdb;
+        $query = $this->get_base_query() . $wpdb->prepare(" WHERE p.id = %d", $id);
+        return $wpdb->get_row($query);
+    }
+    
+    // Override get_searchable_columns
+    protected function get_searchable_columns() {
+        return ['jamaah_name', 'payment_method', 'status', 'notes'];
+    }
+    
+    // Override prepare_item_for_db to add created_by
+    public function prepare_item_for_db($request, $is_update = false) {
+        $data = parent::prepare_item_for_db($request, $is_update);
+        if (is_wp_error($data)) {
+            return $data;
+        }
+        
+        if (!$is_update) {
+            $data['created_by'] = get_current_user_id();
+        }
+        return $data;
+    }
 }
 
-// POST /payments
+// Register routes
+add_action('rest_api_init', function () {
+    $controller = new UMH_Payments_API_Controller();
+    $controller->register_routes();
+});
+
+
+/**
+ * Custom CREATE payment function to include transaction
+ */
 function umh_create_payment($request) {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
-    $params = $request->get_json_params();
+    $controller = new UMH_Payments_API_Controller();
+    $data = $controller->prepare_item_for_db($request);
 
-    $jamaah_id = (int) $params['jamaah_id'];
-    if (empty($jamaah_id)) {
-        return new WP_Error('bad_request', 'Jamaah ID is required', ['status' => 400]);
+    if (is_wp_error($data)) {
+        return $data;
     }
 
-    $data = [
-        'jamaah_id'     => $jamaah_id,
-        'payment_date'  => sanitize_text_field($params['payment_date']),
-        'amount'        => (float) $params['amount'],
-        'payment_stage' => sanitize_text_field($params['payment_stage']),
-        'status'        => sanitize_text_field($params['status']) ?: 'pending',
-        'notes'         => sanitize_textarea_field($params['notes']),
-        'proof_url'     => esc_url_raw($params['proof_url']),
-        'created_at'    => current_time('mysql'),
-        'updated_at'    => current_time('mysql'),
-    ];
+    // Mulai Transaksi
+    $wpdb->query('START TRANSACTION');
 
-    $wpdb->insert($table_name, $data);
+    // 1. Insert Payment
+    $result = $wpdb->insert($controller->table_name, $data);
     $new_id = $wpdb->insert_id;
 
-    // Hitung ulang total
-    umh_update_jamaah_balance($data['jamaah_id']);
+    if ($result === false) {
+        $wpdb->query('ROLLBACK'); // Batalkan jika gagal
+        return new WP_Error('db_error', 'Gagal menyimpan payment.', ['status' => 500]);
+    }
 
-    $new_payment = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $new_id));
+    // 2. Update Saldo Jamaah
+    $balance_updated = umh_update_jamaah_balance($data['jamaah_id']);
+
+    if ($balance_updated === false) {
+        $wpdb->query('ROLLBACK'); // Batalkan jika gagal
+        return new WP_Error('db_error', 'Gagal mengupdate saldo jemaah.', ['status' => 500]);
+    }
+
+    // Sukses
+    $wpdb->query('COMMIT');
+
+    $new_payment = $controller->get_item_by_id($new_id);
     return new WP_REST_Response($new_payment, 201);
 }
 
-// PUT /payments/{id}
+/**
+ * Custom UPDATE payment function to include transaction
+ */
 function umh_update_payment($request) {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
     $id = (int) $request['id'];
-    $params = $request->get_json_params();
+    $controller = new UMH_Payments_API_Controller();
+    
+    // Ambil data lama untuk tahu jamaah_id lama
+    $old_payment = $wpdb->get_row($wpdb->prepare("SELECT jamaah_id FROM {$controller->table_name} WHERE id = %d", $id));
+    if (!$old_payment) {
+        return new WP_Error('not_found', 'Payment not found.', ['status' => 404]);
+    }
+    $old_jamaah_id = $old_payment->jamaah_id;
 
-    $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-    if (!$item) {
-        return new WP_Error('not_found', 'Payment not found', ['status' => 404]);
+    $data = $controller->prepare_item_for_db($request, true);
+    if (is_wp_error($data)) {
+        return $data;
+    }
+    
+    if (empty($data)) {
+         return new WP_Error('no_data', 'No data provided to update', ['status' => 400]);
     }
 
-    $data = [
-        'payment_date'  => sanitize_text_field($params['payment_date']),
-        'amount'        => (float) $params['amount'],
-        'payment_stage' => sanitize_text_field($params['payment_stage']),
-        'status'        => sanitize_text_field($params['status']),
-        'notes'         => sanitize_textarea_field($params['notes']),
-        'proof_url'     => esc_url_raw($params['proof_url']),
-        'updated_at'    => current_time('mysql'),
-    ];
+    // Mulai Transaksi
+    $wpdb->query('START TRANSACTION');
+    
+    // 1. Update Payment
+    $result = $wpdb->update($controller->table_name, $data, ['id' => $id]);
 
-    $wpdb->update($table_name, $data, ['id' => $id]);
+    if ($result === false) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('db_error', 'Gagal mengupdate payment.', ['status' => 500]);
+    }
 
-    // Hitung ulang total
-    umh_update_jamaah_balance($item->jamaah_id);
+    // 2. Update Saldo Jamaah Lama
+    $balance_updated = umh_update_jamaah_balance($old_jamaah_id);
+    if ($balance_updated === false) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('db_error', 'Gagal mengupdate saldo jemaah lama.', ['status' => 500]);
+    }
 
-    $updated_payment = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
+    // 3. Jika jamaah_id berubah, update juga saldo jamaah baru
+    $new_jamaah_id = isset($data['jamaah_id']) ? $data['jamaah_id'] : $old_jamaah_id;
+    if ($new_jamaah_id != $old_jamaah_id) {
+        $new_balance_updated = umh_update_jamaah_balance($new_jamaah_id);
+        if ($new_balance_updated === false) {
+            $wpdb->query('ROLLBACK');
+            return new WP_Error('db_error', 'Gagal mengupdate saldo jemaah baru.', ['status' => 500]);
+        }
+    }
+
+    // Sukses
+    $wpdb->query('COMMIT');
+
+    $updated_payment = $controller->get_item_by_id($id);
     return new WP_REST_Response($updated_payment, 200);
 }
 
-// DELETE /payments/{id}
+/**
+ * Custom DELETE payment function to include transaction
+ */
 function umh_delete_payment($request) {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
     $id = (int) $request['id'];
+    $controller = new UMH_Payments_API_Controller();
 
-    $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-    if (!$item) {
-        return new WP_Error('not_found', 'Payment not found', ['status' => 404]);
+    // Ambil data lama untuk tahu jamaah_id
+    $payment = $wpdb->get_row($wpdb->prepare("SELECT jamaah_id FROM {$controller->table_name} WHERE id = %d", $id));
+    if (!$payment) {
+        return new WP_Error('not_found', 'Payment not found.', ['status' => 404]);
+    }
+    $jamaah_id = $payment->jamaah_id;
+
+    // Mulai Transaksi
+    $wpdb->query('START TRANSACTION');
+
+    // 1. Delete Payment
+    $result = $wpdb->delete($controller->table_name, ['id' => $id]);
+
+    if ($result === false) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('db_error', 'Gagal menghapus payment.', ['status' => 500]);
+    }
+    
+    if ($result === 0) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('not_found', 'Payment not found.', ['status' => 404]);
     }
 
-    $wpdb->delete($table_name, ['id' => $id]);
+    // 2. Update Saldo Jamaah
+    $balance_updated = umh_update_jamaah_balance($jamaah_id);
+    if ($balance_updated === false) {
+        $wpdb->query('ROLLBACK');
+        return new WP_Error('db_error', 'Gagal mengupdate saldo jemaah.', ['status' => 500]);
+    }
 
-    // Hitung ulang total
-    umh_update_jamaah_balance($item->jamaah_id);
+    // Sukses
+    $wpdb->query('COMMIT');
 
-    return new WP_REST_Response(['deleted' => true, 'id' => $id], 200);
+    return new WP_REST_Response(true, 204); // No Content
 }
 
-// POST /payments/{id}/upload_proof
-function umh_handle_payment_proof_upload($request) {
+
+/**
+ * Recalculate and update jamaah balance
+ * Dipanggil SETELAH payment di insert/update/delete
+ * @return bool True on success, false on failure.
+ */
+function umh_update_jamaah_balance($jamaah_id) {
     global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_payments';
-    $id = (int) $request['id'];
-
-    $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-    if (!$item) {
-        return new WP_Error('not_found', 'Payment not found', ['status' => 404]);
+    
+    if (empty($jamaah_id)) {
+        return false;
     }
 
-    if (!function_exists('wp_handle_upload')) {
-        require_once(ABSPATH . 'wp-admin/includes/file.php');
+    $jamaah_table = $wpdb->prefix . 'umh_jamaah';
+    $packages_table = $wpdb->prefix . 'umh_packages';
+    $prices_table = $wpdb->prefix . 'umh_package_prices';
+    $payments_table = $wpdb->prefix . 'umh_payments';
+
+    // Hitung total tagihan (harga paket + harga kamar)
+    $total_price_query = $wpdb->prepare(
+        "SELECT p.base_price + COALESCE(pp.price, 0)
+         FROM {$jamaah_table} j
+         LEFT JOIN {$packages_table} p ON j.package_id = p.id
+         LEFT JOIN {$prices_table} pp ON j.room_type = pp.room_type AND pp.package_id = p.id
+         WHERE j.id = %d",
+        $jamaah_id
+    );
+    $total_price = (float) $wpdb->get_var($total_price_query);
+
+    // Hitung total bayar (hanya yang 'confirmed')
+    $total_paid = (float) $wpdb->get_var($wpdb->prepare(
+        "SELECT COALESCE(SUM(amount), 0) 
+         FROM {$payments_table} 
+         WHERE jamaah_id = %d AND status = 'confirmed'", 
+        $jamaah_id
+    ));
+    
+    $remaining_balance = $total_price - $total_paid;
+    
+    // Tentukan payment_status
+    $payment_status = 'belum_lunas';
+    if ($total_price <= 0) {
+        $payment_status = 'pending'; // Belum ada tagihan
+    } elseif ($remaining_balance <= 0) {
+        $payment_status = 'lunas';
     }
 
-    $uploaded_file = $_FILES['file'];
-    $upload_overrides = ['test_form' => false];
-    $move_file = wp_handle_upload($uploaded_file, $upload_overrides);
+    // Update tabel jamaah
+    $result = $wpdb->update(
+        $jamaah_table,
+        [
+            'total_price' => $total_price,
+            'total_paid' => $total_paid,
+            'remaining_balance' => $remaining_balance,
+            'payment_status' => $payment_status,
+        ],
+        ['id' => $jamaah_id],
+        [
+            '%f', // total_price
+            '%f', // total_paid
+            '%f', // remaining_balance
+            '%s', // payment_status
+        ],
+        ['%d'] // where id
+    );
 
-    if ($move_file && !isset($move_file['error'])) {
-        $file_url = $move_file['url'];
-
-        // Update URL di database
-        $wpdb->update(
-            $table_name,
-            ['proof_url' => $file_url, 'updated_at' => current_time('mysql')],
-            ['id' => $id]
-        );
-
-        $updated_item = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-        return new WP_REST_Response($updated_item, 200);
-    } else {
-        return new WP_Error('upload_error', $move_file['error'], ['status' => 500]);
-    }
+    // Mengembalikan status sukses/gagal untuk transaksi
+    return ($result !== false);
 }

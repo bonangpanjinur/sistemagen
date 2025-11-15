@@ -1,374 +1,249 @@
 <?php
 /**
- * File: includes/api/api-packages.php
- *
- * MODIFIKASI TOTAL:
- * - Menghapus UMH_CRUD_Controller.
- * - Membuat endpoint kustom untuk CRUD Paket.
- * - Endpoint GET sekarang me-load data relasi (harga, pesawat, hotel).
- * - Endpoint POST/PUT sekarang menyimpan data relasi ke tabel terkait.
- *
- * PERBAIKAN 15/11/2025:
- * - Mengubah umh_get_packages agar mendukung Paginasi dan Pencarian.
- * - Mengubah respon agar sesuai standar: { data: [...], total_items: X, ... }
+ * API endpoints for packages
  */
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
-add_action('rest_api_init', 'umh_register_custom_packages_routes');
-
-function umh_register_custom_packages_routes() {
-    $namespace = 'umh/v1';
-    $base = 'packages';
-
-    // Izin
-    $read_permissions = umh_check_api_permission(['owner', 'admin_staff', 'finance_staff', 'marketing_staff', 'hr_staff']);
-    $write_permissions = umh_check_api_permission(['owner', 'admin_staff']);
-    $delete_permissions = umh_check_api_permission(['owner']);
-
-    // Rute untuk koleksi (GET /packages, POST /packages)
-    register_rest_route($namespace, '/' . $base, [
-        [
-            'methods'             => WP_REST_Server::READABLE,
-            'callback'            => 'umh_get_packages',
-            'permission_callback' => $read_permissions,
-        ],
-        [
-            'methods'             => WP_REST_Server::CREATABLE,
-            'callback'            => 'umh_create_package',
-            'permission_callback' => $write_permissions,
-            'args'                => umh_get_package_schema(),
-        ],
-    ]);
-
-    // Rute untuk satu item (GET, PUT, DELETE /packages/123)
-    register_rest_route($namespace, '/' . $base . '/(?P<id>\d+)', [
-        [
-            'methods'             => WP_REST_Server::READABLE,
-            'callback'            => 'umh_get_package',
-            'permission_callback' => $read_permissions,
-        ],
-        [
-            'methods'             => WP_REST_Server::EDITABLE, // PUT/PATCH
-            'callback'            => 'umh_update_package',
-            'permission_callback' => $write_permissions,
-            'args'                => umh_get_package_schema(true),
-        ],
-        [
-            'methods'             => WP_REST_Server::DELETABLE,
-            'callback'            => 'umh_delete_package',
-            'permission_callback' => $delete_permissions,
-        ],
-    ]);
-}
-
-/**
- * Skema data paket untuk validasi
- */
-function umh_get_package_schema($is_update = false) {
-    $schema = [
-        'name'            => ['type' => 'string', 'required' => !$is_update],
-        'category_id'     => ['type' => 'integer', 'required' => !$is_update],
-        'description'     => ['type' => 'string', 'required' => false],
-        'departure_date'  => ['type' => 'string', 'format' => 'date', 'required' => false],
-        'duration_days'   => ['type' => 'integer', 'required' => false],
-        'status'          => ['type' => 'string', 'default' => 'draft', 'enum' => ['draft', 'published', 'archived']],
-        
-        // Data relasional baru
-        'prices'          => ['type' => 'array', 'required' => false, 'items' => ['type' => 'object']],
-        'flight_ids'      => ['type' => 'array', 'required' => false, 'items' => ['type' => 'integer']],
-        'hotel_bookings'  => ['type' => 'array', 'required' => false, 'items' => ['type' => 'object']],
-    ];
-
-    if ($is_update) {
-        foreach ($schema as $key => &$field) {
-            $field['required'] = false;
-        }
+class UMH_Packages_API_Controller extends UMH_CRUD_Controller {
+    
+    public function __construct() {
+        global $wpdb;
+        $this->table_name = $wpdb->prefix . 'umh_packages';
+        $this->resource_name = 'package';
+        $this->fields = [
+            'name' => ['type' => 'string', 'required' => true],
+            'description' => ['type' => 'text', 'required' => false],
+            'category_id' => ['type' => 'int', 'required' => true],
+            'base_price' => ['type' => 'float', 'required' => true],
+            'duration' => ['type' => 'int', 'required' => false],
+            'status' => ['type' => 'string', 'required' => false, 'default' => 'draft'],
+            'capacity' => ['type' => 'int', 'required' => false, 'default' => 0],
+            'start_date' => ['type' => 'date', 'required' => false],
+            'end_date' => ['type' => 'date', 'required' => false],
+            'created_at' => ['type' => 'datetime', 'readonly' => true],
+            'updated_at' => ['type' => 'datetime', 'readonly' => true],
+        ];
     }
-    return $schema;
+
+    public function register_routes() {
+        register_rest_route('umh/v1', '/' . $this->resource_name . 's', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_items'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => [$this, 'create_item'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+        ]);
+
+        register_rest_route('umh/v1', '/' . $this->resource_name . 's/(?P<id>\d+)', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => [$this, 'get_item_with_relations'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => [$this, 'update_item'],
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => [$this, 'delete_item'], // TODO: Handle cascade delete for relations?
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+        ]);
+        
+        // Endpoint for package relations
+        register_rest_route('umh/v1', '/' . $this->resource_name . 's/(?P<id>\d+)/relations', [
+            [
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => 'umh_get_package_relations',
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => 'umh_save_package_relations',
+                'permission_callback' => 'umh_is_user_authorized',
+            ],
+        ]);
+    }
+    
+    // Override get_base_query to include category name
+    protected function get_base_query() {
+        global $wpdb;
+        $packages_table = $this->table_name;
+        $categories_table = $wpdb->prefix . 'umh_categories';
+        
+        return "SELECT p.*, c.name as category_name 
+                FROM {$packages_table} p
+                LEFT JOIN {$categories_table} c ON p.category_id = c.id";
+    }
+
+    // Override get_item_by_id to include category name
+    protected function get_item_by_id($id) {
+        global $wpdb;
+        $query = $this->get_base_query() . $wpdb->prepare(" WHERE p.id = %d", $id);
+        return $wpdb->get_row($query);
+    }
+    
+    // Override get_searchable_columns
+    protected function get_searchable_columns() {
+        return ['name', 'description', 'category_name']; // 'category_name' adalah alias dari JOIN
+    }
+    
+    // Get item WITH relations
+    public function get_item_with_relations($request) {
+        $id = (int) $request['id'];
+        $item = $this->get_item_by_id($id);
+
+        if (empty($item)) {
+            return new WP_Error('not_found', $this->resource_name . ' not found', ['status' => 404]);
+        }
+        
+        // Add relations data
+        $relations = umh_get_package_relations_data($id);
+        $item->package_prices = $relations['package_prices'];
+        $item->package_flights = $relations['package_flights'];
+        $item->package_hotels = $relations['package_hotels'];
+        
+        return new WP_REST_Response($item, 200);
+    }
 }
 
+// Register routes
+add_action('rest_api_init', function () {
+    $controller = new UMH_Packages_API_Controller();
+    $controller->register_routes();
+});
+
+
 /**
- * Helper: Mengambil data relasi untuk satu paket
+ * Get related data for a package
  */
-function umh_get_package_relations($package_id) {
+function umh_get_package_relations($request) {
+    $id = (int) $request['id'];
+    $data = umh_get_package_relations_data($id);
+    return new WP_REST_Response($data, 200);
+}
+
+function umh_get_package_relations_data($package_id) {
     global $wpdb;
     
-    // 1. Get Prices
+    // Get Prices
     $prices_table = $wpdb->prefix . 'umh_package_prices';
     $prices = $wpdb->get_results($wpdb->prepare(
-        "SELECT room_type, price FROM $prices_table WHERE package_id = %d", $package_id
-    ), ARRAY_A);
-
-    // 2. Get Flight IDs
-    $flights_table = $wpdb->prefix . 'umh_flight_bookings';
-    $flight_ids = $wpdb->get_col($wpdb->prepare(
-        "SELECT flight_id FROM $flights_table WHERE package_id = %d", $package_id
+        "SELECT * FROM {$prices_table} WHERE package_id = %d", 
+        $package_id
     ));
-    // Ubah string jadi integer
-    $flight_ids = array_map('intval', $flight_ids);
-
-    // 3. Get Hotel Bookings
-    $hotels_table = $wpdb->prefix . 'umh_hotel_bookings';
-    $hotel_bookings = $wpdb->get_results($wpdb->prepare(
-        "SELECT hotel_id, check_in_date, check_out_date FROM $hotels_table WHERE package_id = %d", $package_id
-    ), ARRAY_A);
-
+    
+    // Get Flights (IDs and details)
+    $flights_table = $wpdb->prefix . 'umh_package_flights';
+    $flights_data_table = $wpdb->prefix . 'umh_flights';
+    $flights = $wpdb->get_results($wpdb->prepare(
+        "SELECT f.* FROM {$flights_data_table} f
+         JOIN {$flights_table} pf ON f.id = pf.flight_id
+         WHERE pf.package_id = %d",
+        $package_id
+    ));
+    
+    // Get Hotels (IDs and details)
+    $hotels_table = $wpdb->prefix . 'umh_package_hotels';
+    $hotels_data_table = $wpdb->prefix . 'umh_hotels';
+    $hotels = $wpdb->get_results($wpdb->prepare(
+        "SELECT h.* FROM {$hotels_data_table} h
+         JOIN {$hotels_table} ph ON h.id = ph.hotel_id
+         WHERE ph.package_id = %d",
+        $package_id
+    ));
+    
     return [
-        'prices'         => $prices,
-        'flight_ids'     => $flight_ids,
-        'hotel_bookings' => $hotel_bookings,
+        'package_prices' => $prices,
+        'package_flights' => $flights,
+        'package_hotels' => $hotels,
     ];
 }
 
 /**
- * Helper: Menyimpan data relasi
+ * Save related data for a package (Prices, Flights, Hotels)
  */
-function umh_save_package_relations($package_id, $params) {
-    global $wpdb;
-
-    // 1. Simpan Prices
-    if (isset($params['prices']) && is_array($params['prices'])) {
-        $prices_table = $wpdb->prefix . 'umh_package_prices';
-        // Hapus harga lama
-        $wpdb->delete($prices_table, ['package_id' => $package_id], ['%d']);
-        // Tambah harga baru
-        foreach ($params['prices'] as $price_item) {
-            if (!empty($price_item['room_type']) && isset($price_item['price'])) {
-                $wpdb->insert($prices_table, [
-                    'package_id' => $package_id,
-                    'room_type'  => sanitize_text_field($price_item['room_type']),
-                    'price'      => (float) $price_item['price'],
-                ]);
-            }
-        }
-    }
-
-    // 2. Simpan Flights
-    if (isset($params['flight_ids']) && is_array($params['flight_ids'])) {
-        $flights_table = $wpdb->prefix . 'umh_flight_bookings';
-        $wpdb->delete($flights_table, ['package_id' => $package_id], ['%d']);
-        foreach ($params['flight_ids'] as $flight_id) {
-            $wpdb->insert($flights_table, [
-                'package_id' => $package_id,
-                'flight_id'  => (int) $flight_id,
-                'status'     => 'confirmed', // Default
-            ]);
-        }
-    }
-
-    // 3. Simpan Hotels
-    if (isset($params['hotel_bookings']) && is_array($params['hotel_bookings'])) {
-        $hotels_table = $wpdb->prefix . 'umh_hotel_bookings';
-        $wpdb->delete($hotels_table, ['package_id' => $package_id], ['%d']);
-        foreach ($params['hotel_bookings'] as $booking) {
-            if (!empty($booking['hotel_id'])) {
-                $wpdb->insert($hotels_table, [
-                    'package_id'     => $package_id,
-                    'hotel_id'       => (int) $booking['hotel_id'],
-                    'check_in_date'  => sanitize_text_field($booking['check_in_date']),
-                    'check_out_date' => sanitize_text_field($booking['check_out_date']),
-                    'status'         => 'confirmed', // Default
-                ]);
-            }
-        }
-    }
-}
-
-
-/**
- * Callback: GET /packages
- * PERBAIKAN: Ditambahkan logika Paginasi dan Pencarian
- */
-function umh_get_packages(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_packages';
-
-    // Paginasi
-    $page = (int) $request->get_param('page');
-    $per_page = 20; // Tetapkan jumlah item per halaman
-    if ($page < 1) {
-        $page = 1;
-    }
-    $offset = ($page - 1) * $per_page;
-
-    // Pencarian
-    $search = $request->get_param('search');
-    $where_clauses = [];
-    $query_params = [];
-
-    if (!empty($search)) {
-        $search_like = '%' . $wpdb->esc_like($search) . '%';
-        $where_clauses[] = "(name LIKE %s OR description LIKE %s)";
-        $query_params[] = $search_like;
-        $query_params[] = $search_like;
-    }
-
-    $where_sql = "";
-    if (!empty($where_clauses)) {
-        $where_sql = " WHERE " . implode(' AND ', $where_clauses);
-    }
-
-    // Ambil Total Item (untuk paginasi)
-    $total_query = "SELECT COUNT(id) FROM {$table_name}{$where_sql}";
-    $total_items = (int) $wpdb->get_var(
-        empty($query_params) ? $total_query : $wpdb->prepare($total_query, $query_params)
-    );
-    $total_pages = ceil($total_items / $per_page);
-
-    // Ambil Data Item (dengan limit dan offset)
-    $data_query = "SELECT * FROM {$table_name}{$where_sql} ORDER BY id DESC LIMIT %d OFFSET %d";
-    $query_params[] = $per_page;
-    $query_params[] = $offset;
-
-    $packages = $wpdb->get_results(
-        $wpdb->prepare($data_query, $query_params),
-        ARRAY_A
-    );
-    
-    if ($packages === false) {
-        return new WP_Error('db_error', __('Database error.', 'umh'), ['status' => 500]);
-    }
-
-    // Loop dan tambahkan data relasi
-    foreach ($packages as $key => $package) {
-        $relations = umh_get_package_relations($package['id']);
-        $packages[$key] = array_merge($package, $relations);
-    }
-
-    // Kembalikan dalam format objek baru
-    $response = [
-        'data'         => $packages,
-        'total_items'  => $total_items,
-        'total_pages'  => $total_pages,
-        'current_page' => $page,
-    ];
-
-    return new WP_REST_Response($response, 200);
-}
-
-/**
- * Callback: GET /packages/{id}
- */
-function umh_get_package(WP_REST_Request $request) {
-    global $wpdb;
-    $id = (int) $request['id'];
-    $table_name = $wpdb->prefix . 'umh_packages';
-
-    $package = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id), ARRAY_A);
-    
-    if (!$package) {
-        return new WP_Error('not_found', __('Package not found.', 'umh'), ['status' => 404]);
-    }
-
-    // Ambil data relasi
-    $relations = umh_get_package_relations($id);
-    $package = array_merge($package, $relations);
-
-    return new WP_REST_Response($package, 200);
-}
-
-/**
- * Callback: POST /packages
- */
-function umh_create_package(WP_REST_Request $request) {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'umh_packages';
-    $params = $request->get_json_params();
-
-    // 1. Siapkan data utama paket
-    $main_data = [
-        'name'           => sanitize_text_field($params['name']),
-        'category_id'    => (int) $params['category_id'],
-        'description'    => sanitize_textarea_field($params['description']),
-        'departure_date' => sanitize_text_field($params['departure_date']),
-        'duration_days'  => (int) $params['duration_days'],
-        'status'         => sanitize_text_field($params['status']),
-        'created_at'     => current_time('mysql'),
-        'updated_at'     => current_time('mysql'),
-    ];
-
-    // 2. Insert data utama
-    $result = $wpdb->insert($table_name, $main_data);
-    
-    if ($result === false) {
-        return new WP_Error('db_error', __('Failed to create package.', 'umh'), ['status' => 500, 'db_error' => $wpdb->last_error]);
-    }
-    
-    $new_id = $wpdb->insert_id;
-
-    // 3. Simpan data relasi (harga, pesawat, hotel)
-    umh_save_package_relations($new_id, $params);
-
-    // 4. Ambil data lengkap yang baru dibuat
-    $new_package_request = new WP_REST_Request('GET', "/umh/v1/packages/{$new_id}");
-    $new_package_request->set_param('id', $new_id);
-    
-    return umh_get_package($new_package_request);
-}
-
-/**
- * Callback: PUT /packages/{id}
- */
-function umh_update_package(WP_REST_Request $request) {
-    global $wpdb;
-    $id = (int) $request['id'];
-    $table_name = $wpdb->prefix . 'umh_packages';
-    $params = $request->get_json_params();
-
-    // 1. Cek apakah paket ada
-    $existing = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $id));
-    if (!$existing) {
-        return new WP_Error('not_found', __('Package not found.', 'umh'), ['status' => 404]);
-    }
-
-    // 2. Siapkan data utama
-    $main_data = [
-        'name'           => sanitize_text_field($params['name']),
-        'category_id'    => (int) $params['category_id'],
-        'description'    => sanitize_textarea_field($params['description']),
-        'departure_date' => sanitize_text_field($params['departure_date']),
-        'duration_days'  => (int) $params['duration_days'],
-        'status'         => sanitize_text_field($params['status']),
-        'updated_at'     => current_time('mysql'),
-    ];
-
-    // 3. Update data utama
-    $wpdb->update($table_name, $main_data, ['id' => $id]);
-
-    // 4. Simpan (Update) data relasi (ini akan menghapus yg lama dan menambah yg baru)
-    umh_save_package_relations($id, $params);
-
-    // 5. Ambil data lengkap yang baru diupdate
-    $updated_package_request = new WP_REST_Request('GET', "/umh/v1/packages/{$id}");
-    $updated_package_request->set_param('id', $id);
-    
-    return umh_get_package($updated_package_request);
-}
-
-/**
- * Callback: DELETE /packages/{id}
- */
-function umh_delete_package(WP_REST_Request $request) {
+function umh_save_package_relations($request) {
     global $wpdb;
     $id = (int) $request['id'];
 
-    // Hapus dari tabel relasi terlebih dahulu
-    $wpdb->delete($wpdb->prefix . 'umh_package_prices', ['package_id' => $id], ['%d']);
-    $wpdb->delete($wpdb->prefix . 'umh_flight_bookings', ['package_id' => $id], ['%d']);
-    $wpdb->delete($wpdb->prefix . 'umh_hotel_bookings', ['package_id' => $id], ['%d']);
+    // Check if package exists
+    $package_exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}umh_packages WHERE id = %d", $id));
+    if (!$package_exists) {
+        return new WP_Error('not_found', 'Package not found.', ['status' => 404]);
+    }
+
+    $table_prices = $wpdb->prefix . 'umh_package_prices';
+    $table_flights = $wpdb->prefix . 'umh_package_flights';
+    $table_hotels = $wpdb->prefix . 'umh_package_hotels';
+
+    $package_prices = $request->get_param('package_prices') ?: [];
+    $package_flights = $request->get_param('package_flights') ?: [];
+    $package_hotels = $request->get_param('package_hotels') ?: [];
     
-    // Hapus dari tabel utama
-    $result = $wpdb->delete($wpdb->prefix . 'umh_packages', ['id' => $id], ['%d']);
+    // Mulai Transaksi Database
+    $wpdb->query('START TRANSACTION');
 
-    if ($result === false) {
-        return new WP_Error('db_error', __('Failed to delete item.', 'umh'), ['status' => 500]);
-    }
-    if ($result === 0) {
-        return new WP_Error('not_found', __('Item not found to delete.', 'umh'), ['status' => 404]);
+    // 1. Proses Harga (umh_package_prices)
+    // Hapus harga lama
+    $wpdb->delete($table_prices, ['package_id' => $id], ['%d']);
+    // Tambah harga baru
+    foreach ($package_prices as $price) {
+        $result = $wpdb->insert($table_prices, [
+            'package_id' => $id,
+            'room_type' => sanitize_text_field($price['room_type']),
+            'price' => floatval($price['price']),
+        ]);
+        if ($result === false) {
+            $wpdb->query('ROLLBACK'); // Batalkan jika gagal
+            return new WP_Error('db_error', 'Gagal menyimpan harga paket.', ['status' => 500]);
+        }
     }
 
-    return new WP_REST_Response(['id' => $id, 'message' => 'Package and all related data deleted successfully.'], 200);
+    // 2. Proses Penerbangan (umh_package_flights)
+    // Hapus penerbangan lama
+    $wpdb->delete($table_flights, ['package_id' => $id], ['%d']);
+    // Tambah penerbangan baru
+    foreach ($package_flights as $flight_id) {
+        $result = $wpdb->insert($table_flights, [
+            'package_id' => $id,
+            'flight_id' => intval($flight_id),
+        ]);
+        if ($result === false) {
+            $wpdb->query('ROLLBACK'); // Batalkan jika gagal
+            return new WP_Error('db_error', 'Gagal menyimpan penerbangan paket.', ['status' => 500]);
+        }
+    }
+
+    // 3. Proses Hotel (umh_package_hotels)
+    // Hapus hotel lama
+    $wpdb->delete($table_hotels, ['package_id' => $id], ['%d']);
+    // Tambah hotel baru
+    foreach ($package_hotels as $hotel_id) {
+        $result = $wpdb->insert($table_hotels, [
+            'package_id' => $id,
+            'hotel_id' => intval($hotel_id),
+        ]);
+        if ($result === false) {
+            $wpdb->query('ROLLBACK'); // Batalkan jika gagal
+            return new WP_Error('db_error', 'Gagal menyimpan hotel paket.', ['status' => 500]);
+        }
+    }
+
+    // Jika semua berhasil
+    $wpdb->query('COMMIT');
+
+    // Ambil data relasi yang baru saja disimpan
+    $new_relations = umh_get_package_relations_data($id);
+    return new WP_REST_Response($new_relations, 200);
 }

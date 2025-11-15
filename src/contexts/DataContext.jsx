@@ -4,7 +4,7 @@
  */
 
 import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import api, { setupApiErrorInterceptor } from '../utils/api.js'; // PERBAIKAN: Tambah ekstensi .js
+import api, { setupApiErrorInterceptor } from '../utils/api'; // PERBAIKAN: Hapus ekstensi .js
 
 // 1. Buat Context
 const DataContext = createContext(null);
@@ -24,8 +24,14 @@ export const DataProvider = ({ children }) => {
         }
 
         try {
+            // PERBAIKAN: Ambil data roles dari umhData jika itu resource 'roles'
+            if (resource === 'roles' && !forceRefresh && window.umhData && window.umhData.roles) {
+                 setDataCache(prev => ({ ...prev, roles: window.umhData.roles }));
+                 return window.umhData.roles;
+            }
+
             const response = await api.get(resource, { params: { per_page: -1 } }); // Ambil semua data
-            const items = response.data.items || [];
+            const items = response.data.items || (Array.isArray(response.data) ? response.data : []); // Fallback jika .items tidak ada
             setDataCache(prev => ({ ...prev, [resource]: items }));
             return items;
         } catch (error) {
@@ -39,6 +45,10 @@ export const DataProvider = ({ children }) => {
     // Fungsi untuk memuat data awal
     const fetchInitialData = async () => {
         setLoading(true);
+        // PERBAIKAN: Gunakan data 'roles' yang sudah di-bootstrap dari PHP
+        const initialRoles = window.umhData?.roles || [];
+        setDataCache(prev => ({ ...prev, roles: initialRoles }));
+
         await Promise.all([
             fetchData('categories'),
             fetchData('users'),
@@ -46,7 +56,7 @@ export const DataProvider = ({ children }) => {
             fetchData('jamaah'),
             fetchData('flights'),
             fetchData('hotels'),
-            fetchData('roles') // PERBAIKAN: Ambil data roles dari API
+            // 'roles' sudah dimuat dari bootstrap
         ]);
         setLoading(false);
     };

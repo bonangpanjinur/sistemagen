@@ -34,6 +34,8 @@ const settingsNav = [
  * @returns {boolean}
  */
 const hasCapability = (cap, userCapabilities) => {
+    // PERBAIKAN: Pastikan userCapabilities adalah array sebelum memanggil .includes()
+    if (!Array.isArray(userCapabilities)) return false;
     return userCapabilities.includes(cap) || userCapabilities.includes('manage_options');
 };
 
@@ -48,7 +50,7 @@ const SidebarLink = ({ item, currentPath }) => {
                 href={item.href}
                 className={`flex items-center p-2 rounded-lg text-sm font-medium ${
                     isActive
-                        ? 'bg-gray-700 text-white'
+                        ? 'bg-gray-700 text-white' // PERBAIKAN: Ganti bg-blue-600 ke bg-gray-700 agar lebih kontras
                         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
                 }`}
             >
@@ -61,14 +63,20 @@ const SidebarLink = ({ item, currentPath }) => {
 
 // Komponen Sidebar utama
 const Sidebar = ({ currentPath, userCapabilities = [] }) => {
-    const { currentUser } = window.umhData || { currentUser: { name: 'Pengguna', role: '...'} };
+    const { currentUser, pluginUrl } = window.umhData || { currentUser: { name: 'Pengguna', role: '...'}, pluginUrl: '' };
+    
+    // PERBAIKAN UI: Gunakan logo dari file
+    const logoUrl = pluginUrl ? `${pluginUrl}assets/images/login-bg.jpg.png` : '';
 
     return (
-        <div className="w-64 h-screen bg-gray-800 text-white fixed top-0 left-0 flex flex-col z-20">
+        <div className="w-64 h-screen bg-gray-800 text-white fixed top-0 left-0 flex flex-col z-20 shadow-lg">
             {/* Header Sidebar */}
-            <div className="flex items-center justify-center h-16 shadow-md bg-gray-900">
-                <h1 className="text-xl font-bold text-white">Travel M</h1>
-                {/* Ganti dengan Logo jika ada */}
+            <div className="flex items-center justify-center h-16 shadow-md bg-gray-900 px-4">
+                {logoUrl ? (
+                    <img src={logoUrl} alt="Logo Travel M" className="h-12 w-auto" />
+                ) : (
+                    <h1 className="text-xl font-bold text-white">Travel M</h1>
+                )}
             </div>
 
             {/* Konten Navigasi Scrollable */}
@@ -101,10 +109,15 @@ const Sidebar = ({ currentPath, userCapabilities = [] }) => {
             {/* Footer Sidebar (Info User) */}
             <div className="p-4 border-t border-gray-700 bg-gray-900">
                 <div className="flex items-center">
-                    {/* Ganti dengan avatar user */}
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-semibold text-white mr-3">
-                        {currentUser.name ? currentUser.name.charAt(0) : 'U'}
-                    </div>
+                    {/* PERBAIKAN UI: Tampilkan logo kecil */}
+                    {logoUrl ? (
+                         <img src={logoUrl} alt="Avatar" className="w-10 h-10 rounded-full mr-3 bg-gray-700" />
+                    ) : (
+                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-semibold text-white mr-3">
+                            {currentUser.name ? currentUser.name.charAt(0) : 'U'}
+                        </div>
+                    )}
+                   
                     <div>
                         <p className="text-sm font-medium text-white">{currentUser.name || 'Nama Pengguna'}</p>
                         <p className="text-xs text-gray-400 capitalize">{currentUser.role || 'Role'}</p>

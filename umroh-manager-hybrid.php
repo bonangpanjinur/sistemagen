@@ -3,7 +3,7 @@
 Plugin Name: Umroh Manager Hybrid
 Plugin URI: https://github.com/bonangpanjinur/travelmanajemen
 Description: Plugin kustom untuk manajemen Umroh, menggabungkan backend WordPress dengan frontend React.
-Version: 2.0.1
+Version: 2.0.2
 Author: Bonang Panji Nur
 Author URI: https://bonang.id
 License: GPLv2 or later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 // Define constants
 define('UMH_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('UMH_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('UMH_PLUGIN_VERSION', '2.0.1'); // Versi dinaikkan
+define('UMH_PLUGIN_VERSION', '2.0.2'); // Versi dinaikkan
 
 // Include necessary files
 require_once UMH_PLUGIN_DIR . 'includes/db-schema.php';
@@ -136,19 +136,34 @@ function umh_enqueue_admin_scripts($hook) {
         UMH_PLUGIN_VERSION
     );
 
+    // --- PERBAIKAN UI/UX ---
+    // Memuat file CSS yang dihasilkan oleh build React (Tailwind)
+    // Ini adalah perbaikan utama untuk tampilan yang "jelek".
+    wp_enqueue_style(
+        'umh-react-app-style',
+        UMH_PLUGIN_URL . 'build/index.css',
+        [], // Tidak ada dependensi
+        $asset_file['version'] // Gunakan versi yang sama
+    );
+    // --- Akhir Perbaikan UI/UX ---
+
+
     // Fungsi umh_get_current_user_data() tidak ada, ganti dengan umh_get_current_user_data_for_react()
     // Fungsi umh_get_all_roles_data() tidak ada, saya tambahkan
     if (!function_exists('umh_get_all_roles_data')) {
         function umh_get_all_roles_data() {
             global $wpdb;
             $table_name = $wpdb->prefix . 'umh_roles';
-            $results = $wpdb->get_results("SELECT role_key, role_name FROM $table_name", ARRAY_A);
-            $roles = [];
-            foreach ($results as $row) {
-                $roles[$row['role_key']] = ['display_name' => $row['role_name']];
-            }
+            // PERBAIKAN: Ambil semua kolom agar bisa digunakan di React
+            $results = $wpdb->get_results("SELECT id, role_key, role_name FROM $table_name", ARRAY_A);
+            $roles = $results ? $results : [];
+            
             // Tambahkan role Super Admin WP secara manual
-            $roles['super_admin'] = ['display_name' => 'Super Admin'];
+            $roles[] = [
+                'id' => 'super_admin', // Buat ID unik
+                'role_key' => 'super_admin',
+                'role_name' => 'Super Admin'
+            ];
             return $roles;
         }
     }
@@ -178,6 +193,7 @@ function umh_enqueue_admin_scripts($hook) {
                     'status' => 'active',
                     'created_at' => current_time('mysql'),
                     'updated_at' => current_time('mysql'),
+                    'password_hash' => '', // Super admin login via WP
                 ]);
                 $umh_user_id = $wpdb->insert_id;
             } else {
@@ -207,6 +223,7 @@ function umh_enqueue_admin_scripts($hook) {
         'nonce' => wp_create_nonce('wp_rest'),
         'currentUser' => umh_get_current_user_data_for_react(),
         'roles' => umh_get_all_roles_data(),
+        'pluginUrl' => UMH_PLUGIN_URL, // PERBAIKAN UI: Tambahkan URL plugin
     ]);
 }
 add_action('admin_enqueue_scripts', 'umh_enqueue_admin_scripts');

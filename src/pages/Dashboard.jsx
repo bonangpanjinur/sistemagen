@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import api from '../utils/api.js'; // Import API yang sebenarnya
-import { Users, Package, DollarSign, CheckSquare, BarChart2 } from 'lucide-react';
-import Spinner from '../components/Spinner.jsx'; // Import Spinner yang sebenarnya
+import api from '../utils/api'; // Import API yang sebenarnya
+import { Users, Package, DollarSign, BarChart2 } from 'lucide-react'; // PERBAIKAN: Hapus CheckSquare
+import Spinner from '../components/Spinner'; // Import Spinner yang sebenarnya
 
 // Komponen Kartu Statistik
 const StatCard = ({ title, value, icon, colorClass }) => (
-    <div className="bg-white p-6 rounded-lg shadow-md flex items-center space-x-4">
+    // PERBAIKAN UI: Tambahkan shadow-lg, hover:shadow-xl, transition, dan border
+    <div className={`bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-200 border border-gray-100 flex items-center space-x-4`}>
         <div className={`p-3 rounded-full ${colorClass} bg-opacity-20`}>
             {icon}
         </div>
@@ -15,6 +16,20 @@ const StatCard = ({ title, value, icon, colorClass }) => (
         </div>
     </div>
 );
+
+// PERBAIKAN UI: Komponen placeholder untuk grafik
+const ChartPlaceholder = ({ title, icon }) => (
+    <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-100">
+        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+            {icon}
+            {title}
+        </h3>
+        <div className="h-64 bg-gray-50 flex items-center justify-center rounded border border-gray-200 animate-pulse">
+            <p className="text-gray-400">Memuat data grafik...</p>
+        </div>
+    </div>
+);
+
 
 const Dashboard = () => {
     const [stats, setStats] = useState(null);
@@ -82,24 +97,14 @@ const Dashboard = () => {
             
             {/* Placeholder untuk Grafik */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <BarChart2 size={20} className="mr-2 text-blue-600" />
-                        Statistik Pendaftaran Jamaah
-                    </h3>
-                    <div className="h-64 bg-gray-100 flex items-center justify-center rounded">
-                        <p className="text-gray-500">[Placeholder Grafik]</p>
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
-                        <DollarSign size={20} className="mr-2 text-green-600" />
-                        Status Pembayaran
-                    </h3>
-                    <div className="h-64 bg-gray-100 flex items-center justify-center rounded">
-                        <p className="text-gray-500">[Placeholder Grafik Donat]</p>
-                    </div>
-                </div>
+                <ChartPlaceholder 
+                    title="Statistik Pendaftaran Jamaah"
+                    icon={<BarChart2 size={20} className="mr-2 text-blue-600" />}
+                />
+                 <ChartPlaceholder 
+                    title="Status Pembayaran"
+                    icon={<DollarSign size={20} className="mr-2 text-green-600" />}
+                />
             </div>
         </div>
     );

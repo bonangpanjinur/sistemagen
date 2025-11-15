@@ -5,13 +5,13 @@
 
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
-import useCRUD from '../hooks/useCRUD.js'; // PERBAIKAN: Tambah ekstensi .js
-import CrudTable from '../components/CrudTable.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
-import Pagination from '../components/Pagination.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
-import SearchInput from '../components/SearchInput.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
-import Modal from '../components/Modal.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
-import api from '../utils/api.js'; // PERBAIKAN: Tambah ekstensi .js
-import { useData } from '../contexts/DataContext.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+import useCRUD from '../hooks/useCRUD'; // PERBAIKAN: Hapus ekstensi .js
+import CrudTable from '../components/CrudTable'; // PERBAIKAN: Hapus ekstensi .jsx
+import Pagination from '../components/Pagination'; // PERBAIKAN: Hapus ekstensi .jsx
+import SearchInput from '../components/SearchInput'; // PERBAIKAN: Hapus ekstensi .jsx
+import Modal from '../components/Modal'; // PERBAIKAN: Hapus ekstensi .jsx
+import api from '../utils/api'; // PERBAIKAN: Hapus ekstensi .js
+import { useData } from '../contexts/DataContext'; // PERBAIKAN: Hapus ekstensi .jsx
 
 const Users = ({ userCapabilities }) => {
     const {
@@ -161,8 +161,8 @@ const Users = ({ userCapabilities }) => {
                                 <option value="">Pilih Role</option>
                                 {(allRoles || []).map(role => (
                                     // PERBAIKAN: Gunakan allRoles dari useData()
-                                    // Asumsi allRoles adalah array of objects [{ role_key: '...', role_name: '...' }]
-                                    <option key={role.role_key} value={role.role_key}>{role.role_name}</option>
+                                    // allRoles adalah array of objects [{ id: ..., role_key: '...', role_name: '...' }]
+                                    <option key={role.id} value={role.role_key}>{role.role_name}</option>
                                 ))}
                             </select>
                         </div>

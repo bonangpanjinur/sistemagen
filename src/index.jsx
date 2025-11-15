@@ -7,37 +7,43 @@ import React, { useState, useEffect, createContext, useContext } from 'react';
 import ReactDOM from 'react-dom';
 
 // Import komponen layout utama
-import Sidebar from './components/Sidebar.jsx';
-import Header from './components/Header.jsx';
-import Spinner from './components/Spinner.jsx';
-import GlobalErrorAlert from './components/GlobalErrorAlert.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
+// PERBAIKAN: Hapus ekstensi .jsx agar build tool bisa me-resolve path
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import Spinner from './components/Spinner';
+import GlobalErrorAlert from './components/GlobalErrorAlert';
 
 // Import semua halaman
-import Dashboard from './pages/Dashboard.jsx';
-import Packages from './pages/Packages.jsx';
-import Jamaah from './pages/Jamaah.jsx';
-import Finance from './pages/Finance.jsx';
-import Tasks from './pages/Tasks.jsx';
-import Categories from './pages/Categories.jsx';
-import Flights from './pages/Flights.jsx';
-import Hotels from './pages/Hotels.jsx';
-import Departures from './pages/Departures.jsx';
-import Users from './pages/Users.jsx';
-import Roles from './pages/Roles.jsx';
+// PERBAIKAN: Hapus ekstensi .jsx
+import Dashboard from './pages/Dashboard';
+import Packages from './pages/Packages';
+import Jamaah from './pages/Jamaah';
+import Finance from './pages/Finance';
+import Tasks from './pages/Tasks';
+import Categories from './pages/Categories';
+import Flights from './pages/Flights';
+import Hotels from './pages/Hotels';
+import Departures from './pages/Departures';
+import Users from './pages/Users';
+import Roles from './pages/Roles';
 
 // Import Context Provider
-import { DataProvider } from './contexts/DataContext.jsx';
+// PERBAIKAN: Hapus ekstensi .jsx
+import { DataProvider } from './contexts/DataContext';
 
 // Import CSS
-import './index.css'; // Ini adalah path relatif, seharusnya benar
+// PERBAIKAN: Hapus ekstensi .css
+import './index.css';
 
 // Ambil data global dari WordPress
 const { currentUser } = window.umhData || { currentUser: { name: 'Guest', role: 'guest', capabilities: [] } };
 // Buat kapabilitas dari role jika tidak ada (untuk file stub)
 if (!currentUser.capabilities) {
     // PERBAIKAN: Ambil kapabilitas dari data roles yang di-bootstrap
-    const allRoles = window.umhData.roles || {};
-    currentUser.capabilities = allRoles[currentUser.role]?.capabilities || ['read'];
+    const allRoles = window.umhData.roles || [];
+    // Cari role yang sesuai
+    const userRoleData = allRoles.find(r => r.role_key === currentUser.role);
+    currentUser.capabilities = userRoleData?.capabilities || ['read'];
 }
 
 
@@ -99,8 +105,8 @@ const App = () => {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center h-screen">
-                <Spinner text="Memuat aplikasi..." />
+            <div className="flex items-center justify-center h-screen bg-gray-100">
+                <Spinner text="Memuat aplikasi..." size={32} />
             </div>
         );
     }
@@ -119,7 +125,7 @@ const App = () => {
                 <Header title={pageTitle} />
 
                 {/* Area Konten Halaman */}
-                <main className="flex-1 p-6 pt-20 overflow-y-auto"> {/* pt-20 = 16 (tinggi header) + 4 (padding) */}
+                <main className="flex-1 p-6 pt-24 overflow-y-auto"> {/* PERBAIKAN UI: pt-24 = 16 (tinggi header) + 8 (padding) */}
                     <PageRouter route={route} userCapabilities={currentUser.capabilities} />
                 </main>
             </div>

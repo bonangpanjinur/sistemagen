@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination.jsx';
 import SearchInput from '../components/SearchInput.jsx';
 import Modal from '../components/Modal.jsx';
 import api from '../utils/api.js'; // Import API untuk create/update
+import { useData } from '../contexts/DataContext.jsx'; // PERBAIKAN: Import useData
 
 // Daftar kapabilitas
 const allCapabilities = [
@@ -38,6 +39,8 @@ const Roles = ({ userCapabilities }) => {
         sortBy,
         deleteItem
     } = useCRUD('roles');
+
+    const { refreshData } = useData(); // PERBAIKAN: Panggil refreshData
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
@@ -94,9 +97,9 @@ const Roles = ({ userCapabilities }) => {
             } else {
                 await api.post('roles', payload);
             }
-            handlePageChange(1); // Refresh
+            await refreshData('roles'); // PERBAIKAN: Panggil refreshData
             closeModal();
-            window.location.reload(); // Perlu reload untuk kapabilitas baru
+            // window.location.reload(); // Seharusnya tidak perlu reload penuh
         } catch (error) {
             console.error("Gagal menyimpan role:", error);
         }
@@ -105,7 +108,8 @@ const Roles = ({ userCapabilities }) => {
     const handleDelete = async (item) => {
         if (true) { // Hapus window.confirm
             await deleteItem(item.id); // Hapus berdasarkan 'id'
-            window.location.reload(); // Perlu reload
+            await refreshData('roles'); // PERBAIKAN: Panggil refreshData
+            // window.location.reload(); 
         }
     };
     

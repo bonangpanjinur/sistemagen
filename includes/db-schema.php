@@ -2,10 +2,12 @@
 /**
  * File: includes/db-schema.php
  *
- * PERBAIKAN:
- * - Menghapus semua komentar inline SQL (`-- ...`) dari setiap query.
- * - Fungsi `dbDelta` WordPress tidak bisa mem-parsing komentar ini 
- * dan menyebabkan SEMUA error di debug.log Anda.
+ * PERBAIKAN (15/11/2025):
+ * - Menghapus `KEY email (email)` dari tabel `umh_users`.
+ * - Alasan: Kolom `email` sudah didefinisikan sebagai `UNIQUE`,
+ * yang secara otomatis membuat indeks bernama 'email'.
+ * - Menambahkan `KEY email (email)` secara manual menyebabkan
+ * error "Duplicate key name 'email'".
  */
 
 if (!defined('ABSPATH')) {
@@ -27,7 +29,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 2. Tabel Paket Umroh/Haji (DIMODIFIKASI)
+    // 2. Tabel Paket Umroh/Haji
     $table_name = $wpdb->prefix . 'umh_packages';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -78,7 +80,7 @@ function umh_create_db_schema() {
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         transaction_date DATE NOT NULL,
-        type VARCHAR(20) NOT NULL,
+        type VARCHAR(20) NOT NULL, -- 'income' or 'expense'
         category VARCHAR(100),
         description TEXT,
         amount DECIMAL(15, 2) NOT NULL,
@@ -193,8 +195,9 @@ function umh_create_db_schema() {
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY (id),
-        KEY wp_user_id (wp_user_id),
-        KEY email (email)
+        KEY wp_user_id (wp_user_id)
+        -- === PERBAIKAN: Baris ini dihapus ===
+        -- KEY email (email)
     ) $charset_collate;";
     dbDelta($sql);
 
@@ -229,7 +232,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
     
-    // 13. Tabel Dokumen (untuk upload KTP, Paspor, dll - Opsi lebih scalable)
+    // 13. Tabel Dokumen
     $table_name = $wpdb->prefix . 'umh_documents';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -261,7 +264,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 15. Tabel Manifest (Jemaah per Keberangkatan)
+    // 15. Tabel Manifest
     $table_name = $wpdb->prefix . 'umh_manifest';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -310,7 +313,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 19. Tabel Pembayaran Jemaah (DINAMIS)
+    // 19. Tabel Pembayaran Jemaah
     $table_name = $wpdb->prefix . 'umh_payments';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -328,7 +331,7 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
     
-    // 20. Tabel Harga Paket (BARU)
+    // 20. Tabel Harga Paket
     $table_name = $wpdb->prefix . 'umh_package_prices';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -340,6 +343,5 @@ function umh_create_db_schema() {
     ) $charset_collate;";
     dbDelta($sql);
     
-    // Hook untuk tabel kustom
     do_action('umh_after_db_schema_created', $charset_collate);
 }

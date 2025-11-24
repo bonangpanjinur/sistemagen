@@ -1,147 +1,120 @@
-/*
- * Lokasi File: /src/index.jsx
- * File: index.jsx
- */
-
-import React, { useState, useEffect, createContext, useContext } from 'react';
-import ReactDOM from 'react-dom';
-
-// Import komponen layout utama
-// PERBAIKAN: Hapus ekstensi .jsx agar build tool bisa me-resolve path
-import Sidebar from './components/Sidebar';
-import Header from './components/Header';
-import Spinner from './components/Spinner';
-import GlobalErrorAlert from './components/GlobalErrorAlert';
-
-// Import semua halaman
-// PERBAIKAN: Hapus ekstensi .jsx
-import Dashboard from './pages/Dashboard';
-import Packages from './pages/Packages';
-import Jamaah from './pages/Jamaah';
-import Finance from './pages/Finance';
-import Tasks from './pages/Tasks';
-import Categories from './pages/Categories';
-import Flights from './pages/Flights';
-import Hotels from './pages/Hotels';
-import Departures from './pages/Departures';
-import Users from './pages/Users';
-import Roles from './pages/Roles';
-
-// Import Context Provider
-// PERBAIKAN: Hapus ekstensi .jsx
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { DataProvider } from './contexts/DataContext';
 
-// Import CSS
-// PERBAIKAN: Hapus ekstensi .css
+// --- COMPONENTS ---
+import Header from './components/Header';
+import Sidebar from './components/Sidebar';
+import GlobalErrorAlert from './components/GlobalErrorAlert';
+
+// --- PAGES ---
+import Dashboard from './pages/Dashboard';
+
+// Master Data
+import PackageCategories from './pages/PackageCategories'; // Halaman Baru v1.6
+import Packages from './pages/Packages';
+import Jamaah from './pages/Jamaah';
+import Agents from './pages/Agents'; // Halaman Baru v1.4
+
+// Operasional
+import Logistics from './pages/Logistics'; // Halaman Baru v1.4
+import Departures from './pages/Departures';
+import Tasks from './pages/Tasks';
+
+// Keuangan
+import Finance from './pages/Finance';
+import Categories from './pages/Categories'; // Kategori Keuangan
+
+// Inventory
+import Hotels from './pages/Hotels';
+import Flights from './pages/Flights';
+
+// Manajemen & HR
+import Users from './pages/Users';
+import Roles from './pages/Roles';
+import HR from './pages/HR'; // Halaman dengan Sub-routes (Payroll/Attendance)
+import Marketing from './pages/Marketing'; // Halaman dengan Sub-routes
+
 import './index.css';
 
-// Ambil data global dari WordPress
-const { currentUser } = window.umhData || { currentUser: { name: 'Guest', role: 'guest', capabilities: [] } };
-// Buat kapabilitas dari role jika tidak ada (untuk file stub)
-if (!currentUser.capabilities) {
-    // PERBAIKAN: Ambil kapabilitas dari data roles yang di-bootstrap
-    const allRoles = window.umhData.roles || [];
-    // Cari role yang sesuai
-    const userRoleData = allRoles.find(r => r.role_key === currentUser.role);
-    currentUser.capabilities = userRoleData?.capabilities || ['read'];
-}
-
-
-// Komponen untuk merender halaman berdasarkan route
-const PageRouter = ({ route, userCapabilities }) => {
-    switch (route) {
-        case '#/packages':
-            return <Packages userCapabilities={userCapabilities} />;
-        case '#/jamaah':
-            return <Jamaah userCapabilities={userCapabilities} />;
-        case '#/finance':
-            return <Finance userCapabilities={userCapabilities} />;
-        case '#/tasks':
-            return <Tasks userCapabilities={userCapabilities} />;
-        case '#/categories':
-            return <Categories userCapabilities={userCapabilities} />;
-        case '#/flights':
-            return <Flights userCapabilities={userCapabilities} />;
-        case '#/hotels':
-            return <Hotels userCapabilities={userCapabilities} />;
-        case '#/departures':
-            return <Departures userCapabilities={userCapabilities} />;
-        case '#/users':
-            return <Users userCapabilities={userCapabilities} />;
-        case '#/roles':
-            return <Roles userCapabilities={userCapabilities} />;
-        case '#/':
-        default:
-            return <Dashboard userCapabilities={userCapabilities} />;
-    }
-};
-
-// Komponen App utama
 const App = () => {
-    const [route, setRoute] = useState(window.location.hash || '#/');
-    const [pageTitle, setPageTitle] = useState('Dashboard');
-    const [isLoading, setIsLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-    useEffect(() => {
-        const handleHashChange = () => {
-            setRoute(window.location.hash || '#/');
-        };
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
 
-        window.addEventListener('hashchange', handleHashChange);
-        
-        // Simulasikan loading data awal
-        setTimeout(() => setIsLoading(false), 500); 
-
-        return () => window.removeEventListener('hashchange', handleHashChange);
-    }, []);
-
-    // Update judul halaman berdasarkan route
-    useEffect(() => {
-        const newTitle = (route.replace('#/', '') || 'dashboard')
-            .replace(/-/g, ' ')
-            .replace(/\b\w/g, l => l.toUpperCase()); // Kapitalisasi
-        setPageTitle(newTitle);
-    }, [route]);
-
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-gray-100">
-                <Spinner text="Memuat aplikasi..." size={32} />
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex h-screen bg-gray-100 font-inter">
-            {/* PERBAIKAN BARU: Tambahkan komponen error global */}
-            <GlobalErrorAlert />
+  return (
+    <DataProvider>
+      <HashRouter>
+        <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
+          
+          {/* Sidebar Navigation */}
+          <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+          
+          {/* Main Content Area */}
+          <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
             
-            {/* Sidebar */}
-            <Sidebar currentPath={route} userCapabilities={currentUser.capabilities} />
+            {/* Top Header */}
+            <Header toggleSidebar={toggleSidebar} />
+            
+            {/* Scrollable Page Content */}
+            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
+              
+              {/* Global Alert System */}
+              <GlobalErrorAlert />
 
-            {/* Konten Utama */}
-            <div className="flex-1 flex flex-col ml-64"> {/* ml-64 = lebar sidebar */}
-                {/* Header */}
-                <Header title={pageTitle} />
+              {/* Application Routes */}
+              <Routes>
+                {/* Dashboard */}
+                <Route path="/" element={<Dashboard />} />
+                
+                {/* Master Data */}
+                <Route path="/package-categories" element={<PackageCategories />} />
+                <Route path="/packages" element={<Packages />} />
+                <Route path="/jamaah" element={<Jamaah />} />
+                <Route path="/agents" element={<Agents />} />
 
-                {/* Area Konten Halaman */}
-                <main className="flex-1 p-6 pt-24 overflow-y-auto"> {/* PERBAIKAN UI: pt-24 = 16 (tinggi header) + 8 (padding) */}
-                    <PageRouter route={route} userCapabilities={currentUser.capabilities} />
-                </main>
-            </div>
+                {/* Operasional */}
+                <Route path="/logistics" element={<Logistics />} />
+                <Route path="/departures" element={<Departures />} />
+                <Route path="/tasks" element={<Tasks />} />
+
+                {/* Keuangan */}
+                <Route path="/finance" element={<Finance />} />
+                <Route path="/categories" element={<Categories />} />
+
+                {/* Inventory */}
+                <Route path="/hotels" element={<Hotels />} />
+                <Route path="/flights" element={<Flights />} />
+
+                {/* Manajemen */}
+                <Route path="/users" element={<Users />} />
+                <Route path="/roles" element={<Roles />} />
+                
+                {/* Module dengan Sub-Routes */}
+                <Route path="/hr/*" element={<HR />} />
+                <Route path="/marketing/*" element={<Marketing />} />
+              </Routes>
+
+            </main>
+          </div>
         </div>
-    );
+      </HashRouter>
+    </DataProvider>
+  );
 };
 
-// Render aplikasi
-const rootElement = document.getElementById('umh-react-app');
-if (rootElement) {
-    ReactDOM.render(
-        <React.StrictMode>
-            <DataProvider>
-                <App />
-            </DataProvider>
-        </React.StrictMode>,
-        rootElement
-    );
+// Render Application
+const container = document.getElementById('umh-app-root');
+if (container) {
+  const root = createRoot(container);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+} else {
+  console.error('Umroh Manager Error: Target container #umh-app-root not found in the DOM.');
 }

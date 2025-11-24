@@ -1,34 +1,27 @@
 {
   "name": "umroh-dashboard-react",
   "version": "0.1.0",
-  "private": true,
+  "description": "React Dashboard for Umroh Manager WordPress Plugin",
+  "author": "Tim Developer",
+  "license": "GPL-2.0-or-later",
+  "main": "build/index.js",
+  "scripts": {
+    "build": "wp-scripts build --webpack-src-dir=src --output-path=build",
+    "start": "wp-scripts start --webpack-src-dir=src --output-path=build",
+    "packages-update": "wp-scripts packages-update"
+  },
   "dependencies": {
-    "date-fns": "^4.1.0",
-    "lucide-react": "^0.309.0",
+    "@heroicons/react": "^2.0.18",
+    "axios": "^1.6.2",
+    "date-fns": "^2.30.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "recharts": "^2.10.3"
+    "react-router-dom": "^6.20.0"
   },
   "devDependencies": {
-    "@wordpress/scripts": "^27.2.0",
+    "@wordpress/scripts": "^26.18.0",
     "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.18"
-  },
-  "scripts": {
-    "start": "wp-scripts start --webpack-src-dir=src --output-path=build",
-    "build": "wp-scripts build --webpack-src-dir=src --output-path=build"
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5"
   }
 }

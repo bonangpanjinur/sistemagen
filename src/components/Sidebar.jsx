@@ -1,131 +1,146 @@
-// Lokasi File: bonangpanjinur/travelmanajemen/travelmanajemen-f41c18137ac73c115e031d3f61ac18797af42e9f/src/components/
-// Nama File: Sidebar.jsx
-
 import React from 'react';
-import {
-    LayoutDashboard, Package, Users, DollarSign, ListChecks, UserCheck,
-    Ticket, Building, Plane, Settings, BarChart, FileText
-} from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { 
+  HomeIcon, 
+  UserGroupIcon, 
+  UsersIcon, 
+  CubeIcon, 
+  RectangleStackIcon, // Icon untuk Kategori
+  CurrencyDollarIcon, 
+  ClipboardDocumentListIcon,
+  BriefcaseIcon,
+  BuildingOfficeIcon,
+  TicketIcon,
+  MegaphoneIcon,
+  TruckIcon, 
+  IdentificationIcon,
+  ClipboardDocumentCheckIcon
+} from '@heroicons/react/24/outline';
 
-// Navigasi utama
-const mainNav = [
-    { name: 'Dashboard', href: '#/', icon: LayoutDashboard, cap: 'read' },
-    { name: 'Paket', href: '#/packages', icon: Package, cap: 'read_packages' },
-    { name: 'Jamaah', href: '#/jamaah', icon: Users, cap: 'read_jamaah' },
-    { name: 'Keuangan', href: '#/finance', icon: DollarSign, cap: 'manage_finance' },
-    { name: 'Tugas', href: '#/tasks', icon: ListChecks, cap: 'manage_tasks' }, // Icon diperbaiki di sini
-    { name: 'Kategori', href: '#/categories', icon: FileText, cap: 'manage_categories' },
-    { name: 'Penerbangan', href: '#/flights', icon: Plane, cap: 'manage_flights' },
-    { name: 'Hotel', href: '#/hotels', icon: Building, cap: 'manage_hotels' },
-    { name: 'Keberangkatan', href: '#/departures', icon: Ticket, cap: 'manage_departures' },
-];
+const Sidebar = ({ isOpen, toggleSidebar }) => {
+  const location = useLocation();
 
-// Navigasi pengaturan
-const settingsNav = [
-    { name: 'Staff', href: '#/users', icon: UserCheck, cap: 'list_users' },
-    { name: 'Roles', href: '#/roles', icon: Settings, cap: 'manage_roles' },
-    { name: 'Laporan', href: '#/reports', icon: BarChart, cap: 'view_reports' },
-];
-
-/**
- * Cek apakah user memiliki kapabilitas
- * @param {string} cap - Nama kapabilitas
- * @param {Array<string>} userCapabilities - List kapabilitas user
- * @returns {boolean}
- */
-const hasCapability = (cap, userCapabilities) => {
-    // PERBAIKAN: Pastikan userCapabilities adalah array sebelum memanggil .includes()
-    if (!Array.isArray(userCapabilities)) return false;
-    return userCapabilities.includes(cap) || userCapabilities.includes('manage_options');
-};
-
-// Komponen sub-item untuk link navigasi
-const SidebarLink = ({ item, currentPath }) => {
-    const isActive = currentPath === item.href;
-    const Icon = item.icon;
-
-    return (
-        <li>
-            <a
-                href={item.href}
-                className={`flex items-center p-2 rounded-lg text-sm font-medium ${
-                    isActive
-                        ? 'bg-gray-700 text-white' // PERBAIKAN: Ganti bg-blue-600 ke bg-gray-700 agar lebih kontras
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                }`}
-            >
-                <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
-                <span>{item.name}</span>
-            </a>
-        </li>
-    );
-};
-
-// Komponen Sidebar utama
-const Sidebar = ({ currentPath, userCapabilities = [] }) => {
-    const { currentUser, pluginUrl } = window.umhData || { currentUser: { name: 'Pengguna', role: '...'}, pluginUrl: '' };
+  // Helper untuk styling link aktif vs non-aktif
+  const getLinkClass = (path) => {
+    // Cek jika path saat ini diawali dengan path link (untuk handle sub-menu seperti /hr/*)
+    const isActive = location.pathname === path || (path !== '/' && location.pathname.startsWith(path));
     
-    // PERBAIKAN UI: Gunakan logo dari file
-    const logoUrl = pluginUrl ? `${pluginUrl}assets/images/login-bg.jpg.png` : '';
+    return isActive 
+      ? "flex items-center px-6 py-3 bg-blue-800 text-white border-r-4 border-blue-400 transition-colors duration-200"
+      : "flex items-center px-6 py-3 text-blue-100 hover:bg-blue-800 hover:text-white transition-colors duration-200";
+  };
 
-    return (
-        <div className="w-64 h-screen bg-gray-800 text-white fixed top-0 left-0 flex flex-col z-20 shadow-lg">
-            {/* Header Sidebar */}
-            <div className="flex items-center justify-center h-16 shadow-md bg-gray-900 px-4">
-                {logoUrl ? (
-                    <img src={logoUrl} alt="Logo Travel M" className="h-12 w-auto" />
-                ) : (
-                    <h1 className="text-xl font-bold text-white">Travel M</h1>
-                )}
-            </div>
+  return (
+    <div className={`bg-blue-900 text-white h-screen fixed left-0 top-0 overflow-y-auto transition-all duration-300 z-50 ${isOpen ? 'w-64' : 'w-20'} shadow-xl scrollbar-thin scrollbar-thumb-blue-700`}>
+      {/* Header Sidebar */}
+      <div className="flex items-center justify-center h-16 bg-blue-950 shadow-md sticky top-0 z-10">
+        {isOpen ? (
+            <h1 className="text-xl font-bold tracking-wider">JF BANTEN</h1>
+        ) : (
+            <span className="text-xl font-bold">JF</span>
+        )}
+      </div>
 
-            {/* Konten Navigasi Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4">
-                {/* Navigasi Utama */}
-                <nav className="space-y-1">
-                    <h3 className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Utama</h3>
-                    <ul className="space-y-1">
-                        {mainNav
-                            .filter(item => hasCapability(item.cap, userCapabilities))
-                            .map(item => (
-                                <SidebarLink key={item.name} item={item} currentPath={currentPath} />
-                            ))}
-                    </ul>
-                </nav>
+      {/* Menu Items */}
+      <nav className="mt-4 pb-20">
+        <NavLink to="/" className={getLinkClass('/')}>
+          <HomeIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Dashboard</span>}
+        </NavLink>
 
-                {/* Navigasi Pengaturan */}
-                <nav className="mt-6 space-y-1">
-                    <h3 className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Pengaturan</h3>
-                    <ul className="space-y-1">
-                        {settingsNav
-                            .filter(item => hasCapability(item.cap, userCapabilities))
-                            .map(item => (
-                                <SidebarLink key={item.name} item={item} currentPath={currentPath} />
-                            ))}
-                    </ul>
-                </nav>
-            </div>
-
-            {/* Footer Sidebar (Info User) */}
-            <div className="p-4 border-t border-gray-700 bg-gray-900">
-                <div className="flex items-center">
-                    {/* PERBAIKAN UI: Tampilkan logo kecil */}
-                    {logoUrl ? (
-                         <img src={logoUrl} alt="Avatar" className="w-10 h-10 rounded-full mr-3 bg-gray-700" />
-                    ) : (
-                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-semibold text-white mr-3">
-                            {currentUser.name ? currentUser.name.charAt(0) : 'U'}
-                        </div>
-                    )}
-                   
-                    <div>
-                        <p className="text-sm font-medium text-white">{currentUser.name || 'Nama Pengguna'}</p>
-                        <p className="text-xs text-gray-400 capitalize">{currentUser.role || 'Role'}</p>
-                    </div>
-                </div>
-            </div>
+        {/* SECTION: MASTER DATA */}
+        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+            {isOpen ? "Master Data" : "Data"}
         </div>
-    );
+
+        <NavLink to="/package-categories" className={getLinkClass('/package-categories')}>
+          <RectangleStackIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Kategori Paket</span>}
+        </NavLink>
+
+        <NavLink to="/packages" className={getLinkClass('/packages')}>
+          <CubeIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Paket Umroh</span>}
+        </NavLink>
+
+        <NavLink to="/jamaah" className={getLinkClass('/jamaah')}>
+          <UserGroupIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Data Jamaah</span>}
+        </NavLink>
+        
+        <NavLink to="/agents" className={getLinkClass('/agents')}>
+          <IdentificationIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Data Sub Agen</span>}
+        </NavLink>
+
+        {/* SECTION: OPERASIONAL */}
+        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+            {isOpen ? "Operasional" : "Ops"}
+        </div>
+
+        <NavLink to="/logistics" className={getLinkClass('/logistics')}>
+          <TruckIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Logistik & Dokumen</span>}
+        </NavLink>
+        
+        <NavLink to="/departures" className={getLinkClass('/departures')}>
+          <ClipboardDocumentListIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Keberangkatan</span>}
+        </NavLink>
+
+        <NavLink to="/tasks" className={getLinkClass('/tasks')}>
+          <ClipboardDocumentCheckIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Tugas & To-Do</span>}
+        </NavLink>
+
+        {/* SECTION: KEUANGAN */}
+        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+            {isOpen ? "Keuangan" : "Fin"}
+        </div>
+        
+        <NavLink to="/finance" className={getLinkClass('/finance')}>
+          <CurrencyDollarIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Keuangan</span>}
+        </NavLink>
+
+        {/* SECTION: INVENTORY */}
+        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+            {isOpen ? "Inventory" : "Inv"}
+        </div>
+
+        <NavLink to="/hotels" className={getLinkClass('/hotels')}>
+          <BuildingOfficeIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Hotel</span>}
+        </NavLink>
+
+        <NavLink to="/flights" className={getLinkClass('/flights')}>
+          <TicketIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Penerbangan</span>}
+        </NavLink>
+
+        {/* SECTION: MANAJEMEN */}
+        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
+            {isOpen ? "Manajemen" : "Mgt"}
+        </div>
+
+        <NavLink to="/users" className={getLinkClass('/users')}>
+          <UsersIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Users & Staff</span>}
+        </NavLink>
+
+        <NavLink to="/hr" className={getLinkClass('/hr')}>
+          <BriefcaseIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">HR & Payroll</span>}
+        </NavLink>
+
+        <NavLink to="/marketing" className={getLinkClass('/marketing')}>
+          <MegaphoneIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Marketing</span>}
+        </NavLink>
+
+      </nav>
+    </div>
+  );
 };
 
 export default Sidebar;

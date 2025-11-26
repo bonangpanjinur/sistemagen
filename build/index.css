@@ -564,6 +564,9 @@ input[type="checkbox"]:focus {
   top: 0px;
   bottom: 0px;
 }
+.bottom-0 {
+  bottom: 0px;
+}
 .left-0 {
   left: 0px;
 }
@@ -752,6 +755,9 @@ input[type="checkbox"]:focus {
 }
 .flex-shrink-0 {
   flex-shrink: 0;
+}
+.flex-grow {
+  flex-grow: 1;
 }
 @keyframes pulse {
   50% {
@@ -1078,6 +1084,9 @@ input[type="checkbox"]:focus {
 }
 .pb-20 {
   padding-bottom: 5rem;
+}
+.pb-4 {
+  padding-bottom: 1rem;
 }
 .pl-10 {
   padding-left: 2.5rem;

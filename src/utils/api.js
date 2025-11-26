@@ -4,15 +4,15 @@
  */
 
 import axios from 'axios';
-import { DataContext } from '../contexts/DataContext.jsx'; // PERBAIKAN: Tambah ekstensi .jsx
 
-// Ambil data yang di-localize dari WordPress (diset di umroh-manager-hybrid.php)
+// [PERBAIKAN] Pastikan mengambil umhData, bukan umhSettings
+// Karena di PHP kita sudah ubah wp_localize_script menjadi 'umhData'
 const umhData = window.umhData || { apiUrl: '', nonce: '', currentUser: {} };
 
 const api = axios.create({
-    baseURL: umhData.apiUrl,
+    baseURL: umhData.apiUrl, // Gunakan apiUrl yang kita set di PHP
     headers: {
-        'X-WP-Nonce': umhData.nonce // Kirim nonce untuk otentikasi
+        'X-WP-Nonce': umhData.nonce // Kirim nonce untuk otentikasi WordPress REST API
     }
 });
 
@@ -23,7 +23,6 @@ const api = axios.create({
  * @param {function} setGlobalError - Fungsi untuk mengatur pesan error global.
  */
 export const setupApiErrorInterceptor = (setGlobalError) => {
-    // Interceptor untuk menangani error API secara global
     api.interceptors.response.use(
         response => response,
         error => {
@@ -40,10 +39,6 @@ export const setupApiErrorInterceptor = (setGlobalError) => {
                 message = error.message;
             }
             
-            // PERBAIKAN: Hapus alert()
-            // alert(message); 
-            
-            // PERBAIKAN BARU: Set error global
             if (setGlobalError) {
                 setGlobalError(message);
             }
@@ -52,6 +47,5 @@ export const setupApiErrorInterceptor = (setGlobalError) => {
         }
     );
 };
-
 
 export default api;

@@ -30,13 +30,20 @@ body.login #loginform {
 /* === BAGIAN 2: MODE IMERSIF (UNTUK ROLE NON-ADMIN) === */
 
 /* * Style ini HANYA akan aktif jika body memiliki class 'immersive-mode',
- * yang kita tambahkan via hook PHP untuk user non-admin.
+ * yang kita tambahkan via hook PHP.
  */
 
-body.immersive-mode #wpadminbar,       /* Sembunyikan Admin Bar (atas) */
-body.immersive-mode #adminmenumain,   /* Sembunyikan Menu Admin (kiri) */
-body.immersive-mode #wpfooter,        /* Sembunyikan Footer WP */
-body.immersive-mode #adminmenuwrap {  /* Sembunyikan wrapper menu */
+body.immersive-mode #wpadminbar {
+    display: none !important;
+}
+
+body.immersive-mode #adminmenumain,
+body.immersive-mode #adminmenuwrap,
+body.immersive-mode #adminmenuback {
+    display: none !important;
+}
+
+body.immersive-mode #wpfooter {
     display: none !important;
 }
 
@@ -52,7 +59,20 @@ body.immersive-mode #wpbody-content {
     padding-bottom: 0 !important;
 }
 
+body.immersive-mode.auto-fold #wpcontent {
+    padding-left: 0 !important; /* Override WP auto-fold padding */
+}
+
 /* Hapus padding default di halaman plugin */
 body.immersive-mode .wrap {
     margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+
+/* Pastikan App Root mengisi layar */
+body.immersive-mode #umh-app-root {
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
 }

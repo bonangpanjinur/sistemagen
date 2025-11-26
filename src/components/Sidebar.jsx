@@ -5,17 +5,14 @@ import {
   UserGroupIcon, 
   UsersIcon, 
   CubeIcon, 
-  RectangleStackIcon,
   CurrencyDollarIcon, 
   ClipboardDocumentListIcon,
-  BriefcaseIcon,
   BuildingOfficeIcon,
   TicketIcon,
   MegaphoneIcon,
   TruckIcon, 
-  IdentificationIcon,
   ClipboardDocumentCheckIcon,
-  ArrowLeftOnRectangleIcon // Icon untuk back to WP
+  ArrowLeftOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -28,12 +25,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       : "flex items-center px-6 py-3 text-blue-100 hover:bg-blue-800 hover:text-white transition-colors duration-200";
   };
 
-  // [PERBAIKAN 3] Fungsi untuk beralih tampilan
+  // Fungsi untuk mematikan immersive mode (kembali ke WP biasa)
   const handleSwitchToWP = () => {
-    // Hapus class immersive-mode dari body
     document.body.classList.remove('immersive-mode');
-    // Opsional: Anda bisa me-redirect ke dashboard utama WP atau hanya memunculkan menu
-    // window.location.href = window.umhData.adminUrl; 
   };
 
   return (
@@ -47,100 +41,67 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         )}
       </div>
 
-      {/* Menu Items - Flex Grow agar footer terdorong ke bawah */}
+      {/* Menu Items - Urutan Sesuai Screenshot */}
       <nav className="mt-4 flex-grow pb-4">
-        <NavLink to="/" className={getLinkClass('/')}>
+        
+        <NavLink to="/" className={getLinkClass('/')} title="Dashboard">
           <HomeIcon className="w-6 h-6 min-w-[24px]" />
           {isOpen && <span className="ml-3 font-medium truncate">Dashboard</span>}
         </NavLink>
 
-        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
-            {isOpen ? "Master Data" : "Data"}
-        </div>
-
-        <NavLink to="/package-categories" className={getLinkClass('/package-categories')}>
-          <RectangleStackIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Kategori Paket</span>}
-        </NavLink>
-
-        <NavLink to="/packages" className={getLinkClass('/packages')}>
+        <NavLink to="/packages" className={getLinkClass('/packages')} title="Paket">
           <CubeIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Paket Umroh</span>}
+          {isOpen && <span className="ml-3 font-medium truncate">Paket</span>}
         </NavLink>
 
-        <NavLink to="/jamaah" className={getLinkClass('/jamaah')}>
+        <NavLink to="/jamaah" className={getLinkClass('/jamaah')} title="Jamaah">
           <UserGroupIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Data Jamaah</span>}
+          {isOpen && <span className="ml-3 font-medium truncate">Jamaah</span>}
         </NavLink>
         
-        <NavLink to="/agents" className={getLinkClass('/agents')}>
-          <IdentificationIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Data Sub Agen</span>}
-        </NavLink>
-
-        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
-            {isOpen ? "Operasional" : "Ops"}
-        </div>
-
-        <NavLink to="/logistics" className={getLinkClass('/logistics')}>
-          <TruckIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Logistik & Dokumen</span>}
-        </NavLink>
-        
-        <NavLink to="/departures" className={getLinkClass('/departures')}>
+        <NavLink to="/departures" className={getLinkClass('/departures')} title="Jadwal">
           <ClipboardDocumentListIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Keberangkatan</span>}
+          {isOpen && <span className="ml-3 font-medium truncate">Jadwal</span>}
         </NavLink>
 
-        <NavLink to="/tasks" className={getLinkClass('/tasks')}>
-          <ClipboardDocumentCheckIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Tugas & To-Do</span>}
-        </NavLink>
-
-        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
-            {isOpen ? "Keuangan" : "Fin"}
-        </div>
-        
-        <NavLink to="/finance" className={getLinkClass('/finance')}>
+        <NavLink to="/finance" className={getLinkClass('/finance')} title="Keuangan">
           <CurrencyDollarIcon className="w-6 h-6 min-w-[24px]" />
           {isOpen && <span className="ml-3 font-medium truncate">Keuangan</span>}
         </NavLink>
 
-        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
-            {isOpen ? "Inventory" : "Inv"}
-        </div>
+        <NavLink to="/tasks" className={getLinkClass('/tasks')} title="Tugas">
+          <ClipboardDocumentCheckIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Tugas</span>}
+        </NavLink>
 
-        <NavLink to="/hotels" className={getLinkClass('/hotels')}>
+        <NavLink to="/logistics" className={getLinkClass('/logistics')} title="Logistik">
+          <TruckIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Logistik</span>}
+        </NavLink>
+
+        <NavLink to="/hotels" className={getLinkClass('/hotels')} title="Hotel">
           <BuildingOfficeIcon className="w-6 h-6 min-w-[24px]" />
           {isOpen && <span className="ml-3 font-medium truncate">Hotel</span>}
         </NavLink>
 
-        <NavLink to="/flights" className={getLinkClass('/flights')}>
+        <NavLink to="/flights" className={getLinkClass('/flights')} title="Flight">
           <TicketIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Penerbangan</span>}
+          {isOpen && <span className="ml-3 font-medium truncate">Flight</span>}
         </NavLink>
 
-        <div className="px-6 pt-6 pb-2 text-xs font-semibold text-blue-400 uppercase tracking-wider">
-            {isOpen ? "Manajemen" : "Mgt"}
-        </div>
-
-        <NavLink to="/users" className={getLinkClass('/users')}>
-          <UsersIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">Users & Staff</span>}
-        </NavLink>
-
-        <NavLink to="/hr" className={getLinkClass('/hr')}>
-          <BriefcaseIcon className="w-6 h-6 min-w-[24px]" />
-          {isOpen && <span className="ml-3 font-medium truncate">HR & Payroll</span>}
-        </NavLink>
-
-        <NavLink to="/marketing" className={getLinkClass('/marketing')}>
+        <NavLink to="/marketing" className={getLinkClass('/marketing')} title="Marketing">
           <MegaphoneIcon className="w-6 h-6 min-w-[24px]" />
           {isOpen && <span className="ml-3 font-medium truncate">Marketing</span>}
         </NavLink>
+
+        <NavLink to="/users" className={getLinkClass('/users')} title="Staff">
+          <UsersIcon className="w-6 h-6 min-w-[24px]" />
+          {isOpen && <span className="ml-3 font-medium truncate">Staff</span>}
+        </NavLink>
+
       </nav>
 
-      {/* [PERBAIKAN 3] Footer Sidebar: Tombol Kembali ke WP */}
+      {/* Footer Sidebar: Tombol Kembali ke WP */}
       <div className="p-4 bg-blue-950 border-t border-blue-800 sticky bottom-0">
         <button 
             onClick={handleSwitchToWP}

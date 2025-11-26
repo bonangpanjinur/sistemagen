@@ -6,7 +6,6 @@ import { DataProvider } from './contexts/DataContext';
 // Components
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import TopNavigation from './components/TopNavigation';
 import GlobalErrorAlert from './components/GlobalErrorAlert';
 
 // Pages
@@ -29,38 +28,32 @@ import Marketing from './pages/Marketing';
 
 import './index.css';
 
-// Ambil data user
-const umhData = window.umhData || { currentUser: { role: 'guest' } };
-
 const App = () => {
+  // State untuk sidebar (Buka/Tutup)
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
-  // Role yang menggunakan Top Navigation
-  const topNavRoles = ['super_admin', 'administrator', 'owner', 'admin_staff', 'karyawan', 'staff'];
-  const useTopNav = topNavRoles.includes(umhData.currentUser.role);
-
   return (
     <DataProvider>
       <HashRouter>
         <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
           
-          {useTopNav ? (
-            <TopNavigation />
-          ) : (
-            <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
-          )}
+          {/* SIDEBAR: Selalu ditampilkan untuk semua role */}
+          <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
           
+          {/* MAIN CONTENT WRAPPER */}
           <div 
             className={`flex-1 flex flex-col h-full transition-all duration-300 
-              ${useTopNav ? 'pt-16 w-full' : (sidebarOpen ? 'ml-64' : 'ml-20')}
+              ${sidebarOpen ? 'ml-64' : 'ml-20'}
             `}
           >
-            {!useTopNav && <Header toggleSidebar={toggleSidebar} />}
+            {/* HEADER: Mengirim props toggleSidebar untuk tombol hamburger */}
+            <Header toggleSidebar={toggleSidebar} isSidebarOpen={sidebarOpen} />
             
+            {/* MAIN SCROLLABLE AREA */}
             <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 md:p-6 pb-20">
               <GlobalErrorAlert />
 

@@ -1,14 +1,14 @@
 <?php
 // File: includes/db-schema.php
 // Skema Database Lengkap untuk Plugin Travel Umrah/Haji (Umroh Manager Hybrid)
-// Version: 1.6 (Final Consolidated)
+// Version: 1.7 (Added Roles Table)
 
 if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly
 }
 
 global $umh_db_version;
-$umh_db_version = '1.6'; 
+$umh_db_version = '1.7'; // Versi dinaikkan agar tabel baru dibuat
 
 function umh_create_db_tables() {
     global $wpdb;
@@ -31,12 +31,12 @@ function umh_create_db_tables() {
     $table_name = $wpdb->prefix . 'umh_users';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        wp_user_id BIGINT(20) UNSIGNED, -- Relasi ke WP Users (Opsional)
+        wp_user_id BIGINT(20) UNSIGNED,
         full_name VARCHAR(255) NOT NULL,
         email VARCHAR(100) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         phone VARCHAR(20),
-        role VARCHAR(50) NOT NULL, -- 'owner', 'admin', 'finance', 'logistics', 'agent'
+        role VARCHAR(50) NOT NULL,
         auth_token VARCHAR(255),
         token_expires DATETIME,
         status VARCHAR(20) NOT NULL DEFAULT 'active',
@@ -47,13 +47,26 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 1.2 Tabel Log Aktivitas (Audit Trail)
+    // 1.2 [BARU] Tabel Roles (Peran & Hak Akses) - YANG HILANG SEBELUMNYA
+    $table_name = $wpdb->prefix . 'umh_roles';
+    $sql = "CREATE TABLE $table_name (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        role_key VARCHAR(50) NOT NULL UNIQUE, -- e.g. 'marketing_staff'
+        role_name VARCHAR(100) NOT NULL,      -- e.g. 'Marketing Staff'
+        capabilities TEXT,                    -- JSON array of permissions
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY (id)
+    ) $charset_collate;";
+    dbDelta($sql);
+
+    // 1.3 Tabel Log Aktivitas (Audit Trail)
     $table_name = $wpdb->prefix . 'umh_logs';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20),
         action VARCHAR(50) NOT NULL,
-        object_type VARCHAR(50), -- 'jamaah', 'payment', 'package'
+        object_type VARCHAR(50),
         object_id BIGINT(20),
         details TEXT,
         ip_address VARCHAR(100),
@@ -63,15 +76,15 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 1.3 Tabel Uploads (File Manager)
+    // 1.4 Tabel Uploads (File Manager)
     $table_name = $wpdb->prefix . 'umh_uploads';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         user_id BIGINT(20) NOT NULL,
         jamaah_id BIGINT(20),
         file_url VARCHAR(255) NOT NULL,
-        file_type VARCHAR(100), -- 'image/jpeg', 'application/pdf'
-        upload_type VARCHAR(50), -- 'passport', 'ktp', 'receipt'
+        file_type VARCHAR(100),
+        upload_type VARCHAR(50),
         created_at DATETIME NOT NULL,
         PRIMARY KEY (id),
         KEY jamaah_id (jamaah_id)
@@ -82,18 +95,18 @@ function umh_create_db_tables() {
     // 2. MASTER DATA (AGEN & PRODUK)
     // ==========================================
 
-    // 2.1 Tabel Sub Agen (Sesuai File: DATA SUB AGEN)
+    // 2.1 Tabel Sub Agen
     $table_name = $wpdb->prefix . 'umh_agents';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        agent_code VARCHAR(50) NOT NULL UNIQUE, -- e.g., 001-AGBTN
+        agent_code VARCHAR(50) NOT NULL UNIQUE,
         full_name VARCHAR(255) NOT NULL,
         ktp_number VARCHAR(50),
         address TEXT,
         phone VARCHAR(20),
         join_date DATE,
         status VARCHAR(20) DEFAULT 'active',
-        notes TEXT, -- 'Owner', 'Freelance'
+        notes TEXT,
         bank_account VARCHAR(100),
         commission_rate DECIMAL(5, 2) DEFAULT 0,
         created_at DATETIME NOT NULL,
@@ -102,13 +115,13 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 2.2 Tabel Kategori Paket (Hierarki)
+    // 2.2 Tabel Kategori Paket
     $table_name = $wpdb->prefix . 'umh_package_categories';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         name VARCHAR(255) NOT NULL,
         slug VARCHAR(255) NOT NULL,
-        parent_id BIGINT(20) DEFAULT 0, -- 0 = Top Level
+        parent_id BIGINT(20) DEFAULT 0,
         description TEXT,
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
@@ -117,7 +130,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 2.3 Tabel Paket Umroh (Header)
+    // 2.3 Tabel Paket Umroh
     $table_name = $wpdb->prefix . 'umh_packages';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
@@ -126,8 +139,8 @@ function umh_create_db_tables() {
         description TEXT,
         departure_date DATE NOT NULL,
         return_date DATE,
-        duration INT(3) NOT NULL, -- Durasi hari
-        status VARCHAR(20) NOT NULL DEFAULT 'draft', -- 'draft', 'published'
+        duration INT(3) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'draft',
         slots_available INT(4),
         slots_filled INT(4) DEFAULT 0,
         hotel_makkah VARCHAR(255),
@@ -139,12 +152,12 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 2.4 Tabel Variasi Harga Paket (Multi-Price)
+    // 2.4 Tabel Variasi Harga Paket
     $table_name = $wpdb->prefix . 'umh_package_prices';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         package_id BIGINT(20) NOT NULL,
-        room_type VARCHAR(50) NOT NULL, -- 'Quad', 'Triple', 'Double'
+        room_type VARCHAR(50) NOT NULL,
         price DECIMAL(15, 2) NOT NULL,
         currency VARCHAR(3) DEFAULT 'IDR',
         PRIMARY KEY (id),
@@ -156,59 +169,40 @@ function umh_create_db_tables() {
     // 3. TRANSAKSI & JAMAAH
     // ==========================================
 
-    // 3.1 Tabel Jamaah (Gabungan Manifest & Form Master)
+    // 3.1 Tabel Jamaah
     $table_name = $wpdb->prefix . 'umh_jamaah';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        
-        -- KODE REFERENSI PUSAT
-        registration_code VARCHAR(50), -- Kode Reg (e.g., JMH025077)
-        booking_code VARCHAR(50), -- No TRA (e.g., TRA009928)
-        
-        -- RELASI
+        registration_code VARCHAR(50),
+        booking_code VARCHAR(50),
         package_id BIGINT(20) NOT NULL,
         agent_id BIGINT(20),
-        user_id BIGINT(20), -- Staff inputter
-        
-        -- DATA PRIBADI
+        user_id BIGINT(20),
         full_name VARCHAR(255) NOT NULL,
-        father_name VARCHAR(255), -- Bin/Binti
-        id_number VARCHAR(50), -- NIK KTP
-        
-        -- PASPOR
+        father_name VARCHAR(255),
+        id_number VARCHAR(50),
         passport_number VARCHAR(50),
-        passport_issued_at VARCHAR(100), -- Kantor Imigrasi
+        passport_issued_at VARCHAR(100),
         passport_issue_date DATE,
         passport_expiry_date DATE,
-        
-        -- KONTAK
         phone VARCHAR(20),
         phone_alt VARCHAR(20),
         email VARCHAR(100),
         address TEXT,
         city VARCHAR(100),
-        
-        -- DEMOGRAFI
         gender VARCHAR(10), 
         birth_place VARCHAR(100),
         birth_date DATE,
         marital_status VARCHAR(20),
-        clothing_size VARCHAR(10), -- S, M, L, XL
-        
-        -- STATUS KEBERANGKATAN
-        room_type VARCHAR(20) DEFAULT 'Quad', -- Pilihan kamar jamaah
-        status VARCHAR(20) NOT NULL DEFAULT 'pending', -- registered, departed, returned, cancelled
+        clothing_size VARCHAR(10),
+        room_type VARCHAR(20) DEFAULT 'Quad',
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
         payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        
-        -- KEUANGAN
-        total_price DECIMAL(15, 2), -- Harga final setelah diskon/penyesuaian
+        total_price DECIMAL(15, 2),
         amount_paid DECIMAL(15, 2) DEFAULT 0.00,
-        
-        -- FILE PATHS
         passport_scan VARCHAR(255),
         ktp_scan VARCHAR(255),
         photo_path VARCHAR(255),
-        
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY (id),
@@ -219,30 +213,42 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 3.2 Tabel Logistik (Sesuai File: DATA PERLENGKAPAN)
+    // 3.2 Tabel Logistik
     $table_name = $wpdb->prefix . 'umh_logistics';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         jamaah_id BIGINT(20) NOT NULL,
-        
-        -- DOKUMEN PERJALANAN
-        passport_status VARCHAR(50) DEFAULT 'Belum', -- Ada, Belum, Di Kantor, Di Kedutaan
+        passport_status VARCHAR(50) DEFAULT 'Belum',
         meningitis_status VARCHAR(20) DEFAULT 'Belum',
         biometrics_status VARCHAR(20) DEFAULT 'Belum',
-        
-        -- PERLENGKAPAN FISIK
-        suitcase_status VARCHAR(20) DEFAULT 'Belum', -- Sudah Ambil, Belum
+        suitcase_status VARCHAR(20) DEFAULT 'Belum',
         suitcase_taken_date DATE,
-        taken_by VARCHAR(255), -- Nama Pengambil (e.g. Pak Dedi)
-        
-        -- PENGIRIMAN
-        delivery_method VARCHAR(50), -- Ambil Sendiri, Kirim
+        taken_by VARCHAR(255),
+        delivery_method VARCHAR(50),
         delivery_address TEXT,
-        
         notes TEXT,
         updated_at DATETIME NOT NULL,
         PRIMARY KEY (id),
         KEY jamaah_id (jamaah_id)
+    ) $charset_collate;";
+    dbDelta($sql);
+
+    // 3.3 Jadwal Keberangkatan (Departures) - PASTIKAN ADA
+    $table_name = $wpdb->prefix . 'umh_departures';
+    $sql = "CREATE TABLE $table_name (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        package_id BIGINT(20) NOT NULL,
+        flight_id BIGINT(20),
+        departure_date DATE NOT NULL,
+        return_date DATE NOT NULL,
+        total_seats INT(4) NOT NULL,
+        available_seats INT(4) NOT NULL,
+        status VARCHAR(20) DEFAULT 'scheduled',
+        notes TEXT,
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        KEY package_id (package_id)
     ) $charset_collate;";
     dbDelta($sql);
 
@@ -254,19 +260,16 @@ function umh_create_db_tables() {
     $table_name = $wpdb->prefix . 'umh_finance';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        transaction_no VARCHAR(50), -- No Kwitansi (e.g., 1802/JFBTN/XII/2025)
+        transaction_no VARCHAR(50),
         jamaah_id BIGINT(20),
         user_id BIGINT(20),
         category_id BIGINT(20),
-        
-        transaction_type VARCHAR(20) NOT NULL, -- 'income', 'expense'
-        payment_method VARCHAR(50), -- Tunai, Transfer
-        description VARCHAR(255), -- Keterangan (DP, Pelunasan, Bensin)
-        
+        transaction_type VARCHAR(20) NOT NULL,
+        payment_method VARCHAR(50),
+        description VARCHAR(255),
         amount DECIMAL(15, 2) NOT NULL,
         currency VARCHAR(3) DEFAULT 'IDR',
         transaction_date DATE NOT NULL,
-        
         status VARCHAR(20) NOT NULL DEFAULT 'completed',
         created_at DATETIME NOT NULL,
         PRIMARY KEY (id),
@@ -275,12 +278,31 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 4.2 Tabel Kategori Keuangan
+    // 4.2 Tabel Pembayaran Jamaah (Payments) - PENTING
+    $table_name = $wpdb->prefix . 'umh_payments';
+    $sql = "CREATE TABLE $table_name (
+        id BIGINT(20) NOT NULL AUTO_INCREMENT,
+        jamaah_id BIGINT(20) NOT NULL,
+        amount DECIMAL(15, 2) NOT NULL,
+        payment_date DATE NOT NULL,
+        payment_method VARCHAR(50) DEFAULT 'cash',
+        status VARCHAR(20) DEFAULT 'pending',
+        notes TEXT,
+        created_by BIGINT(20),
+        created_at DATETIME NOT NULL,
+        updated_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        KEY jamaah_id (jamaah_id)
+    ) $charset_collate;";
+    dbDelta($sql);
+
+    // 4.3 Tabel Kategori Keuangan
     $table_name = $wpdb->prefix . 'umh_categories';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
-        name VARCHAR(100) NOT NULL, -- e.g. 'Pembayaran Paket', 'Bensin', 'ATK'
-        type VARCHAR(20) NOT NULL, -- 'income', 'expense'
+        name VARCHAR(100) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        description TEXT,
         created_at DATETIME NOT NULL,
         PRIMARY KEY (id)
     ) $charset_collate;";
@@ -349,7 +371,7 @@ function umh_create_db_tables() {
         loan_date DATE NOT NULL,
         amount DECIMAL(15, 2) NOT NULL,
         description TEXT,
-        status VARCHAR(20) DEFAULT 'outstanding', -- 'outstanding', 'paid_off'
+        status VARCHAR(20) DEFAULT 'outstanding',
         due_date DATE,
         created_at DATETIME NOT NULL,
         PRIMARY KEY (id),
@@ -385,7 +407,8 @@ function umh_create_db_tables() {
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         name VARCHAR(255) NOT NULL,
-        city VARCHAR(100), -- Makkah / Madinah
+        city VARCHAR(100),
+        country VARCHAR(100),
         rating INT(1),
         address TEXT,
         contact_person VARCHAR(100),
@@ -397,12 +420,13 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql);
 
-    // 6.2 Tabel Booking Hotel (Relasi Paket)
+    // 6.2 Tabel Booking Hotel
     $table_name = $wpdb->prefix . 'umh_hotel_bookings';
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         package_id BIGINT(20) NOT NULL,
         hotel_id BIGINT(20) NOT NULL,
+        jamaah_id BIGINT(20),
         check_in_date DATE NOT NULL,
         check_out_date DATE NOT NULL,
         room_type VARCHAR(50),
@@ -440,6 +464,8 @@ function umh_create_db_tables() {
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         package_id BIGINT(20) NOT NULL,
         flight_id BIGINT(20) NOT NULL,
+        jamaah_id BIGINT(20),
+        seat_number VARCHAR(10),
         booking_code VARCHAR(100),
         status VARCHAR(20) DEFAULT 'confirmed',
         created_at DATETIME NOT NULL,
@@ -458,7 +484,7 @@ function umh_create_db_tables() {
     $sql = "CREATE TABLE $table_name (
         id BIGINT(20) NOT NULL AUTO_INCREMENT,
         name VARCHAR(255) NOT NULL,
-        type VARCHAR(50), -- 'social_media', 'offline'
+        type VARCHAR(50),
         start_date DATE,
         end_date DATE,
         budget DECIMAL(15, 2),
@@ -478,7 +504,7 @@ function umh_create_db_tables() {
         email VARCHAR(100),
         phone VARCHAR(20),
         source VARCHAR(100),
-        status VARCHAR(20) DEFAULT 'new', -- 'new', 'contacted', 'converted'
+        status VARCHAR(20) DEFAULT 'new',
         assigned_to_user_id BIGINT(20),
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL,

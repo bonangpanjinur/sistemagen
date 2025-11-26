@@ -1,36 +1,34 @@
 <?php
-// File: includes/api/api-categories.php
-// Menangani data Kategori Paket / Kategori Keuangan (tergantung penggunaan)
+/**
+ * File: includes/api/api-categories.php
+ * Menangani data Kategori Keuangan (Finance Categories).
+ * Endpoint: /umh/v1/categories
+ */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
+// Pastikan class controller sudah dimuat
 require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
-class UMH_Package_Categories_API extends UMH_CRUD_Controller {
-    
-    // Perubahan: Ubah protected menjadi public agar sesuai dengan parent class
-    public $table_name; 
+// Schema untuk Kategori Keuangan (umh_categories)
+$categories_schema = [
+    'name'        => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+    'description' => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
+    'type'        => ['type' => 'string', 'required' => false, 'default' => 'expense', 'enum' => ['income', 'expense']],
+];
 
-    public function __construct() {
-        global $wpdb;
-        // Pastikan nama tabel benar sesuai schema database Anda
-        // Biasanya umh_package_categories atau umh_categories
-        $this->table_name = $wpdb->prefix . 'umh_package_categories'; 
-        $this->namespace = 'umh/v1';
-        $this->rest_base = 'package-categories';
-    }
+// Izin akses
+$categories_permissions = [
+    'get_items'    => ['owner', 'admin_staff', 'finance_staff'],
+    'get_item'     => ['owner', 'admin_staff', 'finance_staff'],
+    'create_item'  => ['owner', 'admin_staff', 'finance_staff'],
+    'update_item'  => ['owner', 'admin_staff', 'finance_staff'],
+    'delete_item'  => ['owner', 'admin_staff'],
+];
 
-    // Override register_routes untuk menambahkan custom routes jika perlu
-    // public function register_routes() {
-    //     parent::register_routes();
-    // }
-}
-
-// FIX: Bungkus inisialisasi dengan hook rest_api_init agar tidak crash saat load awal
-add_action('rest_api_init', function() {
-    $umh_categories_api = new UMH_Package_Categories_API();
-    $umh_categories_api->register_routes();
-});
+// Inisialisasi Controller
+// Endpoint: /wp-json/umh/v1/categories
+new UMH_CRUD_Controller('categories', 'umh_categories', $categories_schema, $categories_permissions);
 ?>

@@ -3,40 +3,34 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { DataProvider } from './contexts/DataContext';
 
-// --- COMPONENTS ---
+// Components
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
+import TopNavigation from './components/TopNavigation';
 import GlobalErrorAlert from './components/GlobalErrorAlert';
 
-// --- PAGES ---
+// Pages
 import Dashboard from './pages/Dashboard';
-
-// Master Data
-import PackageCategories from './pages/PackageCategories'; // Halaman Baru v1.6
+import PackageCategories from './pages/PackageCategories';
 import Packages from './pages/Packages';
 import Jamaah from './pages/Jamaah';
-import Agents from './pages/Agents'; // Halaman Baru v1.4
-
-// Operasional
-import Logistics from './pages/Logistics'; // Halaman Baru v1.4
+import Agents from './pages/Agents';
+import Logistics from './pages/Logistics';
 import Departures from './pages/Departures';
 import Tasks from './pages/Tasks';
-
-// Keuangan
 import Finance from './pages/Finance';
-import Categories from './pages/Categories'; // Kategori Keuangan
-
-// Inventory
+import Categories from './pages/Categories';
 import Hotels from './pages/Hotels';
 import Flights from './pages/Flights';
-
-// Manajemen & HR
 import Users from './pages/Users';
 import Roles from './pages/Roles';
-import HR from './pages/HR'; // Halaman dengan Sub-routes (Payroll/Attendance)
-import Marketing from './pages/Marketing'; // Halaman dengan Sub-routes
+import HR from './pages/HR';
+import Marketing from './pages/Marketing';
 
 import './index.css';
+
+// Ambil data user
+const umhData = window.umhData || { currentUser: { role: 'guest' } };
 
 const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -45,59 +39,49 @@ const App = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
+  // Role yang menggunakan Top Navigation
+  const topNavRoles = ['super_admin', 'administrator', 'owner', 'admin_staff', 'karyawan', 'staff'];
+  const useTopNav = topNavRoles.includes(umhData.currentUser.role);
+
   return (
     <DataProvider>
       <HashRouter>
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
+        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
           
-          {/* Sidebar Navigation */}
-          <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+          {useTopNav ? (
+            <TopNavigation />
+          ) : (
+            <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
+          )}
           
-          {/* Main Content Area */}
-          <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-20'}`}>
+          <div 
+            className={`flex-1 flex flex-col h-full transition-all duration-300 
+              ${useTopNav ? 'pt-16 w-full' : (sidebarOpen ? 'ml-64' : 'ml-20')}
+            `}
+          >
+            {!useTopNav && <Header toggleSidebar={toggleSidebar} />}
             
-            {/* Top Header */}
-            <Header toggleSidebar={toggleSidebar} />
-            
-            {/* Scrollable Page Content */}
-            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-6">
-              
-              {/* Global Alert System */}
+            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 md:p-6 pb-20">
               <GlobalErrorAlert />
 
-              {/* Application Routes */}
               <Routes>
-                {/* Dashboard */}
                 <Route path="/" element={<Dashboard />} />
-                
-                {/* Master Data */}
                 <Route path="/package-categories" element={<PackageCategories />} />
                 <Route path="/packages" element={<Packages />} />
                 <Route path="/jamaah" element={<Jamaah />} />
                 <Route path="/agents" element={<Agents />} />
-
-                {/* Operasional */}
                 <Route path="/logistics" element={<Logistics />} />
                 <Route path="/departures" element={<Departures />} />
                 <Route path="/tasks" element={<Tasks />} />
-
-                {/* Keuangan */}
                 <Route path="/finance" element={<Finance />} />
                 <Route path="/categories" element={<Categories />} />
-
-                {/* Inventory */}
                 <Route path="/hotels" element={<Hotels />} />
                 <Route path="/flights" element={<Flights />} />
-
-                {/* Manajemen */}
                 <Route path="/users" element={<Users />} />
                 <Route path="/roles" element={<Roles />} />
-                
-                {/* Module dengan Sub-Routes */}
                 <Route path="/hr/*" element={<HR />} />
                 <Route path="/marketing/*" element={<Marketing />} />
               </Routes>
-
             </main>
           </div>
         </div>
@@ -106,7 +90,7 @@ const App = () => {
   );
 };
 
-// Render Application
+// Render
 const container = document.getElementById('umh-app-root');
 if (container) {
   const root = createRoot(container);
@@ -115,6 +99,4 @@ if (container) {
       <App />
     </React.StrictMode>
   );
-} else {
-  console.error('Umroh Manager Error: Target container #umh-app-root not found in the DOM.');
 }

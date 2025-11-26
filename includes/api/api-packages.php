@@ -10,7 +10,7 @@ require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
 class UMH_Packages_API extends UMH_CRUD_Controller {
     
-    protected $table_name;
+    public $table_name; // Public agar sesuai dengan parent class
     protected $prices_table;
     protected $categories_table;
 
@@ -34,7 +34,7 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
         
         // 1. Pisahkan data harga dari data paket utama
         $prices = isset($data['prices']) ? $data['prices'] : [];
-        unset($data['prices']); // Hapus agar tidak ikut di-insert ke tabel paket utama
+        if (isset($data['prices'])) unset($data['prices']); 
         
         // Validasi dasar
         if (empty($data['package_name'])) {
@@ -45,22 +45,21 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
         $data['created_at'] = current_time('mysql');
         $data['updated_at'] = current_time('mysql');
         
-        // Format data agar aman (sanitize dilakukan oleh wpdb->insert biasanya, tapi kita pastikan fieldnya benar)
-        $wpdb->insert($this->table_name, $data);
-        $package_id = $wpdb->insert_id;
+        $inserted = $wpdb->insert($this->table_name, $data);
         
-        if (!$package_id) {
-            return new WP_Error('db_error', 'Gagal menyimpan paket', ['status' => 500]);
+        if ($inserted === false) {
+             return new WP_Error('db_error', 'Gagal menyimpan paket: ' . $wpdb->last_error, ['status' => 500]);
         }
         
-        // 3. Simpan Variasi Harga (Quad/Triple/Double)
+        $package_id = $wpdb->insert_id;
+        
+        // 3. Simpan Variasi Harga
         if (!empty($prices) && is_array($prices)) {
             foreach ($prices as $price_item) {
-                // Pastikan data harga valid
                 if (!empty($price_item['room_type']) && isset($price_item['price'])) {
                     $wpdb->insert($this->prices_table, [
                         'package_id' => $package_id,
-                        'room_type'  => sanitize_text_field($price_item['room_type']), // Quad, Triple, Double
+                        'room_type'  => sanitize_text_field($price_item['room_type']),
                         'price'      => floatval($price_item['price']),
                         'currency'   => !empty($price_item['currency']) ? sanitize_text_field($price_item['currency']) : 'IDR'
                     ]);
@@ -68,20 +67,17 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
             }
         }
         
-        // Kembalikan respons item lengkap
         return $this->get_item_response($package_id);
     }
 
     /**
      * Override Update Item
-     * Mengupdate paket dan mereset variasi harganya
      */
     public function update_item($request) {
         global $wpdb;
         $id = $request['id'];
         $data = $request->get_json_params();
         
-        // Cek apakah paket ada
         $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$this->table_name} WHERE id = %d", $id));
         if (!$existing) {
             return new WP_Error('not_found', 'Paket tidak ditemukan', ['status' => 404]);
@@ -89,22 +85,18 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
 
         // 1. Pisahkan data harga
         $prices = isset($data['prices']) ? $data['prices'] : null;
-        if (isset($data['prices'])) unset($data['prices']); // Hapus dari payload update utama
+        if (isset($data['prices'])) unset($data['prices']);
         
         // 2. Update Paket Utama
         $data['updated_at'] = current_time('mysql');
-        
-        // Hapus field 'id' dari data update agar tidak error
         unset($data['id']);
 
         $wpdb->update($this->table_name, $data, ['id' => $id]);
         
-        // 3. Update Harga: Hapus yang lama, insert yang baru (Full Refresh)
+        // 3. Update Harga (Full Refresh)
         if ($prices !== null && is_array($prices)) {
-            // Hapus semua harga lama untuk paket ini
             $wpdb->delete($this->prices_table, ['package_id' => $id]);
             
-            // Insert harga baru
             foreach ($prices as $price_item) {
                 if (!empty($price_item['room_type']) && isset($price_item['price'])) {
                     $wpdb->insert($this->prices_table, [
@@ -122,22 +114,17 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
 
     /**
      * Override Delete Item
-     * Menghapus paket beserta harga variasinya
      */
     public function delete_item($request) {
         global $wpdb;
         $id = $request['id'];
 
-        // Cek keberadaan
         $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$this->table_name} WHERE id = %d", $id));
         if (!$existing) {
             return new WP_Error('not_found', 'Item not found', ['status' => 404]);
         }
 
-        // 1. Hapus harga variasi terlebih dahulu (Child records)
         $wpdb->delete($this->prices_table, ['package_id' => $id]);
-
-        // 2. Hapus paket utama
         $deleted = $wpdb->delete($this->table_name, ['id' => $id]);
 
         if ($deleted) {
@@ -149,7 +136,6 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
 
     /**
      * Override Get Item (Single)
-     * Mengambil detail paket + daftar harganya
      */
     public function get_item($request) {
         $id = $request['id'];
@@ -158,25 +144,20 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
 
     /**
      * Override Get Items (List)
-     * Mengambil daftar paket + join kategori + daftar harga
      */
     public function get_items($request) {
         global $wpdb;
 
-        // Ambil parameter search/pagination standard
         $args = parent::get_items_query_args($request);
         $limit = $args['limit'];
         $offset = $args['offset'];
         $order_by = $args['order_by'];
         $order = $args['order'];
         
-        // Query Custom dengan JOIN Kategori
-        // Kita tidak menggunakan parent::get_items() karena kita butuh JOIN custom
         $sql = "SELECT p.*, c.name as category_name 
                 FROM {$this->table_name} p
                 LEFT JOIN {$this->categories_table} c ON p.category_id = c.id";
 
-        // Tambahkan WHERE clause jika ada search
         if (!empty($args['where'])) {
             $sql .= " WHERE 1=1 " . $args['where'];
         }
@@ -186,7 +167,6 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
         
         $packages = $wpdb->get_results($sql, ARRAY_A);
 
-        // Loop untuk menyisipkan data harga ke setiap paket
         if ($packages) {
             foreach ($packages as &$pkg) {
                 $prices = $wpdb->get_results($wpdb->prepare(
@@ -197,7 +177,6 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
             }
         }
 
-        // Hitung total untuk pagination
         $count_sql = "SELECT COUNT(*) FROM {$this->table_name} p";
         if (!empty($args['where'])) {
             $count_sql .= " WHERE 1=1 " . $args['where'];
@@ -213,12 +192,11 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
     }
 
     /**
-     * Helper untuk mengambil respon single item yang konsisten
+     * Helper untuk response
      */
     private function get_item_response($id) {
         global $wpdb;
         
-        // Ambil Paket + Nama Kategori
         $sql = $wpdb->prepare(
             "SELECT p.*, c.name as category_name 
              FROM {$this->table_name} p
@@ -231,7 +209,6 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
         
         if (!$item) return new WP_Error('not_found', 'Paket tidak ditemukan', ['status' => 404]);
 
-        // Ambil Variasi Harga
         $prices = $wpdb->get_results($wpdb->prepare(
             "SELECT room_type, price, currency FROM {$this->prices_table} WHERE package_id = %d", 
             $id
@@ -243,7 +220,8 @@ class UMH_Packages_API extends UMH_CRUD_Controller {
     }
 }
 
-// Inisialisasi API
-$umh_packages_api = new UMH_Packages_API();
-$umh_packages_api->register_routes();
-?>
+// FIX: Bungkus inisialisasi dengan hook rest_api_init
+add_action('rest_api_init', function() {
+    $umh_packages_api = new UMH_Packages_API();
+    $umh_packages_api->register_routes();
+});

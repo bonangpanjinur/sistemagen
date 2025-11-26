@@ -1,60 +1,66 @@
 import React from 'react';
 import { Edit, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
-import Spinner from './Spinner.jsx'; // PERBAIKAN: Import Spinner dengan .jsx
+import Spinner from './Spinner.jsx'; 
 
 const CrudTable = ({
     columns,
-    data,
+    data = [], // Default value sangat penting!
     loading,
     sortBy,
     onSort,
     onEdit,
     onDelete,
     renderRowActions,
-    userCapabilities, // 'super_admin' or ['cap1', 'cap2']
+    userCapabilities = [],
     editCapability,
     deleteCapability
 }) => {
 
+    // Safety check: Pastikan data selalu array
+    const safeData = Array.isArray(data) ? data : [];
+
     const canPerformAction = (capability) => {
-        if (!capability) return true; // No specific capability required
-        if (!userCapabilities) return false; // User has no capabilities
-        if (userCapabilities === 'super_admin' || userCapabilities.includes('manage_options')) return true; // Super admin
-        return userCapabilities.includes(capability);
+        if (!capability) return true;
+        if (!userCapabilities) return false;
+        if (userCapabilities === 'super_admin' || (Array.isArray(userCapabilities) && userCapabilities.includes('manage_options'))) return true;
+        return Array.isArray(userCapabilities) && userCapabilities.includes(capability);
     };
     
     const canEdit = canPerformAction(editCapability);
     const canDelete = canPerformAction(deleteCapability);
 
-    if (loading && data.length === 0) {
+    if (loading && safeData.length === 0) {
         return (
-            <div className="flex justify-center items-center p-6">
-                {/* PERBAIKAN: Ganti placeholder dengan Spinner */}
-                <Spinner text="Memuat data..." />
+            <div className="flex justify-center items-center p-12 bg-white rounded-lg shadow">
+                <Spinner text="Sedang memuat data..." />
             </div>
         );
     }
 
-    if (data.length === 0) {
-        return <p className="text-center p-6 text-gray-500">Tidak ada data ditemukan.</p>;
+    if (safeData.length === 0) {
+        return (
+            <div className="text-center p-12 bg-white rounded-lg shadow border border-gray-100">
+                <p className="text-gray-500">Tidak ada data ditemukan.</p>
+            </div>
+        );
     }
 
     return (
-        <div className="overflow-x-auto bg-white rounded-lg shadow">
+        <div className="overflow-x-auto bg-white rounded-lg shadow border border-gray-200">
             <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                     <tr>
                         {columns.map((col) => (
                             <th
-                                key={col.accessor}
+                                key={col.accessor || col.header} // Fallback key
                                 scope="col"
-                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                                onClick={() => col.sortable && onSort(col.accessor)}
+                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                                onClick={() => col.sortable && onSort && onSort(col.accessor)}
                             >
-                                <div className="flex items-center">
-                                    {col.Header}
-                                    {col.sortable && (
-                                        <span className="ml-2">
+                                <div className="flex items-center gap-1">
+                                    {col.Header || col.header}
+                                    {col.sortable && sortBy && (
+                                        <span className="inline-block">
                                             {sortBy.field === col.accessor ? (
                                                 sortBy.order === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
                                             ) : (
@@ -66,39 +72,52 @@ const CrudTable = ({
                             </th>
                         ))}
                         {(onEdit || onDelete || renderRowActions) && (
-                            <th scope="col" className="relative px-6 py-3">
-                                <span className="sr-only">Actions</span>
+                            <th scope="col" className="relative px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Aksi
                             </th>
                         )}
                     </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                    {loading && data.length > 0 && (
+                    {loading && (
                         <tr>
-                            {/* PERBAIKAN: Ganti placeholder dengan Spinner */}
-                            <td colSpan={columns.length + (onEdit || onDelete || renderRowActions ? 1 : 0)} className="p-4 text-center">
-                                <Spinner text="Memuat..." />
+                            <td colSpan={columns.length + 1} className="p-2 bg-blue-50">
+                                <div className="flex justify-center items-center text-blue-600 text-xs">
+                                    <Spinner size={16} text="Memperbarui data..." />
+                                </div>
                             </td>
                         </tr>
                     )}
-                    {data.map((item) => (
-                        <tr key={item.id} className="hover:bg-gray-50">
+                    {safeData.map((item, index) => (
+                        <tr key={item.id || index} className="hover:bg-gray-50 transition-colors">
                             {columns.map((col) => (
-                                <td key={col.accessor} className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                    {col.render ? col.render(item[col.accessor], item) : item[col.accessor]}
+                                <td key={col.accessor || index} className={`px-6 py-4 whitespace-nowrap text-sm text-gray-700 ${col.className || ''}`}>
+                                    {col.render 
+                                        ? col.render(item[col.accessor], item) 
+                                        : (item[col.accessor] !== undefined && item[col.accessor] !== null ? item[col.accessor] : '-')}
                                 </td>
                             ))}
                             {(onEdit || onDelete || renderRowActions) && (
-                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                                     {renderRowActions && renderRowActions(item)}
+                                    
                                     {onEdit && canEdit && (
-                                        <button onClick={() => onEdit(item)} className="text-blue-600 hover:text-blue-900">
-                                            <Edit size={16} />
+                                        <button 
+                                            onClick={() => onEdit(item)} 
+                                            className="text-blue-600 hover:text-blue-900 transition-colors"
+                                            title="Edit"
+                                        >
+                                            <Edit size={18} />
                                         </button>
                                     )}
+                                    
                                     {onDelete && canDelete && (
-                                        <button onClick={() => onDelete(item)} className="text-red-600 hover:text-red-900">
-                                            <Trash2 size={16} />
+                                        <button 
+                                            onClick={() => onDelete(item)} 
+                                            className="text-red-600 hover:text-red-900 transition-colors"
+                                            title="Hapus"
+                                        >
+                                            <Trash2 size={18} />
                                         </button>
                                     )}
                                 </td>

@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import useCRUD from '../hooks/useCRUD.js';
-import { useData } from '../contexts/DataContext.jsx';
-import CrudTable from '../components/CrudTable.jsx';
-import Pagination from '../components/Pagination.jsx';
-import SearchInput from '../components/SearchInput.jsx';
-import Modal from '../components/Modal.jsx';
-import { formatCurrency, formatDate, formatDateForInput } from '../utils/formatters.js';
+import { Plus, User, FileText } from 'lucide-react';
+import useCRUD from '../hooks/useCRUD';
+import CrudTable from '../components/CrudTable';
+import Pagination from '../components/Pagination';
+import SearchInput from '../components/SearchInput';
+import Modal from '../components/Modal';
+import { useData } from '../contexts/DataContext';
 
 const Jamaah = ({ userCapabilities }) => {
     const {
-        data: jamaah,
+        items: jamaahList,
         loading,
         pagination,
         handlePageChange,
@@ -19,178 +18,174 @@ const Jamaah = ({ userCapabilities }) => {
         sortBy,
         createItem,
         updateItem,
-        deleteItem
+        deleteItem,
+        fetchItems
     } = useCRUD('jamaah');
-    
-    const { packages, departures, refreshData } = useData();
 
+    const { refreshData } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
 
+    // Safe Capabilities Access
+    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
+    const canManage = caps.includes('manage_jamaah') || caps.includes('manage_options');
+
     const columns = [
         { Header: 'ID', accessor: 'id', sortable: true },
-        { Header: 'Nama Lengkap', accessor: 'full_name', sortable: true },
-        { Header: 'Paket', accessor: 'package_name', sortable: true }, // Asumsi ini ada dari JOIN
-        { Header: 'Telepon', accessor: 'phone' },
-        { Header: 'Status Bayar', accessor: 'payment_status', sortable: true,
-            render: (val) => (
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    val === 'lunas' ? 'bg-green-100 text-green-800' :
-                    val === 'belum_lunas' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-gray-100 text-gray-800'
-                }`}>
-                    {val}
-                </span>
-            )
+        { Header: 'Nama Lengkap', accessor: 'name', sortable: true },
+        { Header: 'No. Paspor', accessor: 'passport_number', render: (val) => val || '-' },
+        { 
+            Header: 'Paket', 
+            accessor: 'package_name',
+            render: (val) => val || <span className="text-gray-400 italic">Belum pilih paket</span>
         },
-        { Header: 'Sisa Tagihan', accessor: 'amount_paid', sortable: true, render: (val) => formatCurrency(val) }, // Seharusnya sisa tagihan
+        {
+            Header: 'Status',
+            accessor: 'status',
+            render: (val) => {
+                const colors = {
+                    'registered': 'bg-gray-100 text-gray-800',
+                    'deposit': 'bg-yellow-100 text-yellow-800',
+                    'paid': 'bg-green-100 text-green-800',
+                    'cancelled': 'bg-red-100 text-red-800'
+                };
+                return (
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${colors[val] || 'bg-gray-100'}`}>
+                        {val ? val.charAt(0).toUpperCase() + val.slice(1) : '-'}
+                    </span>
+                );
+            }
+        }
     ];
 
     const openModal = (item = null) => {
         setCurrentItem(item);
-        const defaultData = {
-            full_name: '', email: '', phone: '', address: '',
-            birth_date: '', gender: 'male', package_id: '', departure_id: '',
-            room_type: '', status: 'pending', total_price: 0,
-        };
-        
-        setFormData(item ? {
-            ...defaultData, ...item,
-            birth_date: formatDateForInput(item.birth_date),
-        } : defaultData);
+        setFormData(item ? { ...item } : { name: '', passport_number: '', phone: '', status: 'registered' });
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setCurrentItem(null);
+        setFormData({});
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (currentItem) {
-            await updateItem(currentItem.id, formData);
-        } else {
-            await createItem(formData);
+        try {
+            if (currentItem) {
+                await updateItem(currentItem.id, formData);
+            } else {
+                await createItem(formData);
+            }
+            await fetchItems();
+            refreshData('jamaah');
+            closeModal();
+        } catch (error) {
+            alert("Gagal menyimpan data jamaah.");
         }
-        await refreshData('jamaah');
-        closeModal();
     };
 
     const handleDelete = async (item) => {
-        if (true) { // Hapus window.confirm
-            await deleteItem(item.id);
-            await refreshData('jamaah');
+        if (window.confirm(`Hapus data jamaah "${item.name}"?`)) {
+            try {
+                await deleteItem(item.id);
+                refreshData('jamaah');
+            } catch (error) {
+                alert("Gagal menghapus data.");
+            }
         }
     };
 
-    const getFormValue = (key) => formData[key] || '';
-    const canManage = userCapabilities.includes('manage_jamaah') || userCapabilities.includes('manage_options');
-
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <SearchInput onSearch={handleSearch} placeholder="Cari jamaah..." />
-                {canManage && (
-                    <button
-                        onClick={() => openModal(null)}
-                        className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700"
-                    >
-                        <Plus size={18} className="mr-1" />
-                        Tambah Jamaah
-                    </button>
-                )}
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800">Data Jamaah</h1>
+                    <p className="text-sm text-gray-500">Manajemen pendaftaran dan dokumen jamaah.</p>
+                </div>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <SearchInput onSearch={handleSearch} placeholder="Cari nama / paspor..." />
+                    {canManage && (
+                        <button
+                            onClick={() => openModal(null)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus size={18} /> Tambah Jamaah
+                        </button>
+                    )}
+                </div>
             </div>
 
             <CrudTable
                 columns={columns}
-                data={jamaah}
+                data={jamaahList}
                 loading={loading}
                 sortBy={sortBy}
-                onSort={(field) => handleSort(field)}
+                onSort={handleSort}
                 onEdit={canManage ? openModal : null}
                 onDelete={canManage ? handleDelete : null}
-                userCapabilities={userCapabilities}
+                userCapabilities={caps}
                 editCapability="manage_jamaah"
                 deleteCapability="manage_jamaah"
             />
-
+            
             <Pagination pagination={pagination} onPageChange={handlePageChange} />
 
-            <Modal title={currentItem ? 'Edit Jamaah' : 'Tambah Jamaah'} show={isModalOpen} onClose={closeModal} size="max-w-4xl">
+            <Modal 
+                title={currentItem ? 'Edit Data Jamaah' : 'Registrasi Jamaah Baru'} 
+                show={isModalOpen} 
+                onClose={closeModal}
+            >
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Nama Lengkap (Sesuai Paspor)</label>
+                        <input 
+                            type="text" 
+                            required 
+                            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                            value={formData.name || ''}
+                            onChange={e => setFormData({...formData, name: e.target.value})}
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                            <input type="text" value={getFormValue('full_name')} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="mt-1 block w-full" required />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" value={getFormValue('email')} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="mt-1 block w-full" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Telepon</label>
-                            <input type="tel" value={getFormValue('phone')} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="mt-1 block w-full" required />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Tgl Lahir</label>
-                            <input type="date" value={getFormValue('birth_date')} onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })} className="mt-1 block w-full" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Jenis Kelamin</label>
-                            <select value={getFormValue('gender')} onChange={(e) => setFormData({ ...formData, gender: e.target.value })} className="mt-1 block w-full">
-                                <option value="male">Laki-laki</option>
-                                <option value="female">Perempuan</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700">Nomor Paspor</label>
+                            <input 
+                                type="text" 
+                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                                value={formData.passport_number || ''}
+                                onChange={e => setFormData({...formData, passport_number: e.target.value})}
+                            />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Paket</label>
-                            <select value={getFormValue('package_id')} onChange={(e) => setFormData({ ...formData, package_id: e.target.value })} className="mt-1 block w-full" required>
-                                <option value="">Pilih Paket</option>
-                                {(packages || []).map(pkg => (
-                                    <option key={pkg.id} value={pkg.id}>{pkg.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Keberangkatan</label>
-                            <select value={getFormValue('departure_id')} onChange={(e) => setFormData({ ...formData, departure_id: e.target.value })} className="mt-1 block w-full" required>
-                                <option value="">Pilih Keberangkatan</option>
-                                {(departures || []).filter(d => d.package_id == getFormValue('package_id')).map(d => (
-                                    <option key={d.id} value={d.id}>{formatDate(d.departure_date)}</option>
-                                ))}
-                            </select>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tipe Kamar</label>
-                            <select value={getFormValue('room_type')} onChange={(e) => setFormData({ ...formData, room_type: e.target.value })} className="mt-1 block w-full">
-                                <option value="">Pilih Tipe Kamar</option>
-                                <option value="QUAD">QUAD</option>
-                                <option value="TRIPLE">TRIPLE</option>
-                                <option value="DOUBLE">DOUBLE</option>
-                            </select>
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Total Tagihan (IDR)</label>
-                            <input type="number" value={getFormValue('total_price')} onChange={(e) => setFormData({ ...formData, total_price: e.target.value })} className="mt-1 block w-full" required />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Status Jamaah</label>
-                            <select value={getFormValue('status')} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="mt-1 block w-full">
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700">No. Telepon / WA</label>
+                            <input 
+                                type="tel" 
+                                required
+                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                                value={formData.phone || ''}
+                                onChange={e => setFormData({...formData, phone: e.target.value})}
+                            />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Alamat</label>
-                        <textarea rows="3" value={getFormValue('address')} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="mt-1 block w-full"></textarea>
+                        <label className="block text-sm font-medium text-gray-700">Status Pendaftaran</label>
+                        <select 
+                            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+                            value={formData.status || 'registered'}
+                            onChange={e => setFormData({...formData, status: e.target.value})}
+                        >
+                            <option value="registered">Terdaftar (Belum DP)</option>
+                            <option value="deposit">Sudah DP</option>
+                            <option value="paid">Lunas</option>
+                            <option value="cancelled">Batal</option>
+                        </select>
                     </div>
-                    <div className="flex justify-end space-x-2">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Batal</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Simpan</button>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">Batal</button>
+                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan</button>
                     </div>
                 </form>
             </Modal>

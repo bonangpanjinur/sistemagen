@@ -1,16 +1,15 @@
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
 import useCRUD from '../hooks/useCRUD';
-import { useData } from '../contexts/DataContext';
 import CrudTable from '../components/CrudTable';
 import Pagination from '../components/Pagination';
 import SearchInput from '../components/SearchInput';
 import Modal from '../components/Modal';
-import { formatCurrency, formatDate, formatDateForInput } from '../utils/formatters';
+import { formatCurrency, formatDate } from '../utils/formatters';
 
 const Finance = ({ userCapabilities }) => {
     const {
-        data: payments,
+        items: transactions,
         loading,
         pagination,
         handlePageChange,
@@ -19,188 +18,149 @@ const Finance = ({ userCapabilities }) => {
         sortBy,
         createItem,
         updateItem,
-        deleteItem
-    } = useCRUD('payments');
-    
-    const { jamaah, refreshData } = useData();
+        deleteItem,
+        fetchItems
+    } = useCRUD('finance');
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
 
+    // Proteksi akses
+    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
+    const canManage = caps.includes('manage_finance') || caps.includes('manage_options');
+
     const columns = [
         { Header: 'ID', accessor: 'id', sortable: true },
-        { Header: 'Nama Jamaah', accessor: 'jamaah_name', sortable: true },
-        { Header: 'Jumlah', accessor: 'amount', sortable: true, render: (val) => formatCurrency(val) },
-        { Header: 'Tgl Bayar', accessor: 'payment_date', sortable: true, render: (val) => formatDate(val) },
-        { Header: 'Metode', accessor: 'payment_method', sortable: true },
-        { Header: 'Status', accessor: 'status', sortable: true, 
+        { Header: 'Tanggal', accessor: 'date', sortable: true, render: (val) => val ? formatDate(val) : '-' },
+        { Header: 'Keterangan', accessor: 'description' },
+        { 
+            Header: 'Tipe', 
+            accessor: 'type',
             render: (val) => (
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    val === 'confirmed' ? 'bg-green-100 text-green-800' :
-                    val === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800'
-                }`}>
-                    {val}
+                <span className={`flex items-center gap-1 ${val === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                    {val === 'income' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                    {val === 'income' ? 'Pemasukan' : 'Pengeluaran'}
                 </span>
             )
         },
+        { 
+            Header: 'Nominal', 
+            accessor: 'amount', 
+            sortable: true,
+            render: (val, item) => (
+                <span className={`font-mono ${item.type === 'income' ? 'text-green-700' : 'text-red-700'}`}>
+                    {item.type === 'expense' ? '-' : ''}{formatCurrency(val || 0)}
+                </span>
+            )
+        },
+        { Header: 'Kategori', accessor: 'category', render: (val) => val || '-' }
     ];
 
     const openModal = (item = null) => {
         setCurrentItem(item);
-        setFormData(item ? {
-            ...item,
-            payment_date: formatDateForInput(item.payment_date)
-        } : {
-            jamaah_id: '',
-            amount: '',
-            payment_date: '',
-            payment_method: 'cash',
-            status: 'pending',
-            notes: ''
-        });
+        setFormData(item ? { ...item } : { description: '', amount: 0, type: 'income', date: new Date().toISOString().split('T')[0], category: '' });
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setCurrentItem(null);
+        setFormData({});
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (currentItem) {
-            await updateItem(currentItem.id, formData);
-        } else {
-            await createItem(formData);
+        try {
+            if (currentItem) {
+                await updateItem(currentItem.id, formData);
+            } else {
+                await createItem(formData);
+            }
+            fetchItems();
+            closeModal();
+        } catch (error) {
+            alert("Gagal menyimpan transaksi.");
         }
-        await refreshData('payments');
-        await refreshData('jamaah'); // Refresh jamaah juga
-        closeModal();
     };
 
     const handleDelete = async (item) => {
-        if (true) { // Hapus window.confirm
-            await deleteItem(item.id);
-            await refreshData('payments');
-            await refreshData('jamaah'); // Refresh jamaah juga
+        if (window.confirm("Hapus transaksi ini?")) {
+            try {
+                await deleteItem(item.id);
+            } catch (error) {
+                alert("Gagal menghapus data.");
+            }
         }
     };
-    
-    const getFormValue = (key) => formData[key] || '';
-    const canManage = userCapabilities.includes('manage_finance') || userCapabilities.includes('manage_options');
 
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <SearchInput onSearch={handleSearch} placeholder="Cari pembayaran..." />
-                {canManage && (
-                    <button
-                        onClick={() => openModal(null)}
-                        className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700"
-                    >
-                        <Plus size={18} className="mr-1" />
-                        Tambah Pembayaran
-                    </button>
-                )}
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800">Keuangan</h1>
+                    <p className="text-sm text-gray-500">Pencatatan pemasukan dan pengeluaran.</p>
+                </div>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <SearchInput onSearch={handleSearch} placeholder="Cari transaksi..." />
+                    {canManage && (
+                        <button
+                            onClick={() => openModal(null)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus size={18} /> Tambah Transaksi
+                        </button>
+                    )}
+                </div>
             </div>
 
             <CrudTable
                 columns={columns}
-                data={payments}
+                data={transactions}
                 loading={loading}
                 sortBy={sortBy}
-                onSort={(field) => handleSort(field)}
+                onSort={handleSort}
                 onEdit={canManage ? openModal : null}
                 onDelete={canManage ? handleDelete : null}
-                userCapabilities={userCapabilities}
+                userCapabilities={caps}
                 editCapability="manage_finance"
                 deleteCapability="manage_finance"
             />
-
+            
             <Pagination pagination={pagination} onPageChange={handlePageChange} />
 
-            <Modal title={currentItem ? 'Edit Pembayaran' : 'Tambah Pembayaran'} show={isModalOpen} onClose={closeModal}>
+            <Modal title={currentItem ? 'Edit Transaksi' : 'Transaksi Baru'} show={isModalOpen} onClose={closeModal}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="jamaah_id" className="block text-sm font-medium text-gray-700">Jamaah</label>
-                        <select
-                            id="jamaah_id"
-                            value={getFormValue('jamaah_id')}
-                            onChange={(e) => setFormData({ ...formData, jamaah_id: e.target.value })}
-                            className="mt-1 block w-full"
-                            required
-                        >
-                            <option value="">Pilih Jamaah</option>
-                            {(jamaah || []).map(j => (
-                                <option key={j.id} value={j.id}>{j.full_name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Jumlah (IDR)</label>
-                            <input
-                                type="number"
-                                id="amount"
-                                value={getFormValue('amount')}
-                                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                className="mt-1 block w-full"
-                                required
-                            />
+                            <label className="block text-sm font-medium text-gray-700">Tanggal</label>
+                            <input type="date" required className="mt-1 w-full border p-2 rounded" value={formData.date || ''} onChange={e => setFormData({...formData, date: e.target.value})} />
                         </div>
                         <div>
-                            <label htmlFor="payment_date" className="block text-sm font-medium text-gray-700">Tgl Bayar</label>
-                            <input
-                                type="date"
-                                id="payment_date"
-                                value={getFormValue('payment_date')}
-                                onChange={(e) => setFormData({ ...formData, payment_date: e.target.value })}
-                                className="mt-1 block w-full"
-                                required
-                            />
-                        </div>
-                         <div>
-                            <label htmlFor="payment_method" className="block text-sm font-medium text-gray-700">Metode</label>
-                            <select
-                                id="payment_method"
-                                value={getFormValue('payment_method')}
-                                onChange={(e) => setFormData({ ...formData, payment_method: e.target.value })}
-                                className="mt-1 block w-full"
-                            >
-                                <option value="cash">Cash</option>
-                                <option value="transfer">Transfer Bank</option>
-                                <option value="debit">Debit</option>
-                                <option value="credit_card">Kartu Kredit</option>
-                            </select>
-                        </div>
-                         <div>
-                            <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
-                            <select
-                                id="status"
-                                value={getFormValue('status')}
-                                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                className="mt-1 block w-full"
-                            >
-                                <option value="pending">Pending</option>
-                                <option value="confirmed">Confirmed</option>
-                                <option value="cancelled">Cancelled</option>
+                            <label className="block text-sm font-medium text-gray-700">Tipe</label>
+                            <select className="mt-1 w-full border p-2 rounded" value={formData.type || 'income'} onChange={e => setFormData({...formData, type: e.target.value})}>
+                                <option value="income">Pemasukan</option>
+                                <option value="expense">Pengeluaran</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Catatan</label>
-                        <textarea
-                            id="notes"
-                            rows="3"
-                            value={getFormValue('notes')}
-                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="mt-1 block w-full"
-                        ></textarea>
+                        <label className="block text-sm font-medium text-gray-700">Keterangan</label>
+                        <input type="text" required className="mt-1 w-full border p-2 rounded" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
                     </div>
-                    <div className="flex justify-end space-x-2">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Batal</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Simpan</button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Nominal (Rp)</label>
+                            <input type="number" required min="0" className="mt-1 w-full border p-2 rounded" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Kategori</label>
+                            <input type="text" className="mt-1 w-full border p-2 rounded" placeholder="Contoh: Operasional" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded">Batal</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
                     </div>
                 </form>
             </Modal>

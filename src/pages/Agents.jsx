@@ -1,210 +1,159 @@
 import React, { useState } from 'react';
+import { Plus, Users } from 'lucide-react';
 import useCRUD from '../hooks/useCRUD';
 import CrudTable from '../components/CrudTable';
+import Pagination from '../components/Pagination';
+import SearchInput from '../components/SearchInput';
 import Modal from '../components/Modal';
-import Alert from '../components/Alert';
-import Spinner from '../components/Spinner';
 
-const Agents = () => {
-  const { 
-    items: agents, 
-    loading, 
-    error, 
-    createItem, 
-    updateItem, 
-    deleteItem,
-    pagination,
-    fetchItems 
-  } = useCRUD('agents');
+const Agents = ({ userCapabilities }) => {
+    const {
+        items: agents,
+        loading,
+        pagination,
+        handlePageChange,
+        handleSearch,
+        handleSort,
+        sortBy,
+        createItem,
+        updateItem,
+        deleteItem,
+        fetchItems
+    } = useCRUD('agents');
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({});
-  const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [currentItem, setCurrentItem] = useState(null);
+    const [formData, setFormData] = useState({});
 
-  const columns = [
-    { header: 'Kode Agen', accessor: 'agent_code', className: 'font-mono text-sm font-bold text-blue-600' },
-    { header: 'Nama Lengkap', accessor: 'full_name', className: 'font-medium' },
-    { header: 'No HP', accessor: 'phone' },
-    { header: 'Kota/Alamat', accessor: 'address', render: (row) => row.address ? row.address.substring(0, 20) + '...' : '-' },
-    { header: 'Status', accessor: 'status', render: (row) => (
-        <span className={`px-2 py-1 rounded-full text-xs ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-            {row.status}
-        </span>
-    )},
-    { header: 'Keterangan', accessor: 'notes' },
-  ];
+    // Safe Capabilities
+    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
+    const canManage = caps.includes('manage_agents') || caps.includes('manage_options');
 
-  const handleCreate = () => {
-    setFormData({
-        agent_code: '',
-        full_name: '',
-        phone: '',
-        address: '',
-        status: 'active',
-        notes: '',
-        ktp_number: '',
-        bank_account: ''
-    });
-    setModalMode('create');
-    setIsModalOpen(true);
-  };
+    const columns = [
+        { Header: 'ID', accessor: 'id', sortable: true },
+        { Header: 'Nama Agen', accessor: 'name', sortable: true },
+        { Header: 'Email', accessor: 'email' },
+        { Header: 'Telepon', accessor: 'phone', render: (val) => val || '-' },
+        { 
+            Header: 'Total Jamaah', 
+            accessor: 'total_jamaah', 
+            sortable: true,
+            render: (val) => <span className="font-bold text-blue-600">{val || 0}</span>
+        },
+        {
+            Header: 'Status',
+            accessor: 'status',
+            render: (val) => (
+                <span className={`px-2 py-1 rounded text-xs ${val === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {val === 'active' ? 'Aktif' : 'Non-Aktif'}
+                </span>
+            )
+        }
+    ];
 
-  const handleEdit = (item) => {
-    setFormData({ ...item });
-    setModalMode('edit');
-    setIsModalOpen(true);
-  };
+    const openModal = (item = null) => {
+        setCurrentItem(item);
+        setFormData(item ? { ...item } : { name: '', email: '', phone: '', status: 'active' });
+        setIsModalOpen(true);
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    let result;
-    if (modalMode === 'create') {
-      result = await createItem(formData);
-    } else {
-      result = await updateItem(formData.id, formData);
-    }
-    
-    if (result.success) {
-      setIsModalOpen(false);
-    }
-  };
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setCurrentItem(null);
+        setFormData({});
+    };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Yakin ingin menghapus agen ini? Data jamaah terkait mungkin akan kehilangan referensi agen.')) {
-      await deleteItem(id);
-    }
-  };
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            if (currentItem) {
+                await updateItem(currentItem.id, formData);
+            } else {
+                await createItem(formData);
+            }
+            fetchItems();
+            closeModal();
+        } catch (error) {
+            alert("Gagal menyimpan data agen.");
+        }
+    };
 
-  if (loading && agents.length === 0) return <Spinner />;
+    const handleDelete = async (item) => {
+        if (window.confirm(`Yakin hapus agen "${item.name}"?`)) {
+            try {
+                await deleteItem(item.id);
+            } catch (error) {
+                alert("Gagal menghapus agen.");
+            }
+        }
+    };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Data Sub Agen</h1>
-        <button 
-          onClick={handleCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm"
-        >
-          + Tambah Agen
-        </button>
-      </div>
-
-      {error && <Alert type="error" message={error} />}
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <CrudTable 
-          columns={columns}
-          data={agents}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          pagination={pagination}
-          onPageChange={(page) => fetchItems({ page })}
-        />
-      </div>
-
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={modalMode === 'create' ? 'Tambah Agen Baru' : 'Edit Data Agen'}
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Kode Agen (No ID)</label>
-                    <input 
-                        type="text" 
-                        required
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.agent_code || ''}
-                        onChange={(e) => setFormData({...formData, agent_code: e.target.value})}
-                        placeholder="Contoh: 001-AGBTN"
-                    />
+                    <h1 className="text-2xl font-bold text-gray-800">Data Agen</h1>
+                    <p className="text-sm text-gray-500">Kelola mitra agen dan performa penjualan.</p>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                    <input 
-                        type="text" 
-                        required
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.full_name || ''}
-                        onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                    />
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <SearchInput onSearch={handleSearch} placeholder="Cari agen..." />
+                    {canManage && (
+                        <button
+                            onClick={() => openModal(null)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus size={18} /> Tambah Agen
+                        </button>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">No HP / WA</label>
-                    <input 
-                        type="text" 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.phone || ''}
-                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">No KTP</label>
-                    <input 
-                        type="text" 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.ktp_number || ''}
-                        onChange={(e) => setFormData({...formData, ktp_number: e.target.value})}
-                    />
-                </div>
-            </div>
+            <CrudTable
+                columns={columns}
+                data={agents}
+                loading={loading}
+                sortBy={sortBy}
+                onSort={handleSort}
+                onEdit={canManage ? openModal : null}
+                onDelete={canManage ? handleDelete : null}
+                userCapabilities={caps}
+                editCapability="manage_agents"
+                deleteCapability="manage_agents"
+            />
+            
+            <Pagination pagination={pagination} onPageChange={handlePageChange} />
 
-            <div>
-                <label className="block text-sm font-medium text-gray-700">Alamat</label>
-                <textarea 
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                    rows="2"
-                    value={formData.address || ''}
-                    onChange={(e) => setFormData({...formData, address: e.target.value})}
-                ></textarea>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <select 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.status || 'active'}
-                        onChange={(e) => setFormData({...formData, status: e.target.value})}
-                    >
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                    </select>
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Keterangan (Owner/Freelance)</label>
-                    <input 
-                        type="text" 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                        value={formData.notes || ''}
-                        onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    />
-                </div>
-            </div>
-
-            <div className="flex justify-end pt-4">
-                <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="mr-3 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                    Batal
-                </button>
-                <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                    {modalMode === 'create' ? 'Simpan' : 'Update'}
-                </button>
-            </div>
-        </form>
-      </Modal>
-    </div>
-  );
+            <Modal title={currentItem ? 'Edit Agen' : 'Tambah Agen Baru'} show={isModalOpen} onClose={closeModal}>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Nama Agen</label>
+                        <input type="text" required className="mt-1 w-full border p-2 rounded" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Email</label>
+                            <input type="email" required className="mt-1 w-full border p-2 rounded" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Telepon</label>
+                            <input type="tel" required className="mt-1 w-full border p-2 rounded" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Status</label>
+                        <select className="mt-1 w-full border p-2 rounded" value={formData.status || 'active'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                            <option value="active">Aktif</option>
+                            <option value="inactive">Non-Aktif</option>
+                        </select>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded">Batal</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+                    </div>
+                </form>
+            </Modal>
+        </div>
+    );
 };
 
 export default Agents;

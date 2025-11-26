@@ -1,127 +1,126 @@
-/*
- * Lokasi File: /src/pages/Users.jsx
- * File: Users.jsx
- */
-
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
-import useCRUD from '../hooks/useCRUD'; // PERBAIKAN: Hapus ekstensi .js
-import CrudTable from '../components/CrudTable'; // PERBAIKAN: Hapus ekstensi .jsx
-import Pagination from '../components/Pagination'; // PERBAIKAN: Hapus ekstensi .jsx
-import SearchInput from '../components/SearchInput'; // PERBAIKAN: Hapus ekstensi .jsx
-import Modal from '../components/Modal'; // PERBAIKAN: Hapus ekstensi .jsx
-import api from '../utils/api'; // PERBAIKAN: Hapus ekstensi .js
-import { useData } from '../contexts/DataContext'; // PERBAIKAN: Hapus ekstensi .jsx
+import { Plus, User, Shield } from 'lucide-react';
+import useCRUD from '../hooks/useCRUD';
+import CrudTable from '../components/CrudTable';
+import Pagination from '../components/Pagination';
+import SearchInput from '../components/SearchInput';
+import Modal from '../components/Modal';
 
 const Users = ({ userCapabilities }) => {
     const {
-        data: users,
+        items: users,
         loading,
         pagination,
         handlePageChange,
         handleSearch,
         handleSort,
         sortBy,
+        createItem,
+        updateItem,
         deleteItem,
-        createItem, // PERBAIKAN: Tambahkan createItem
-        updateItem  // PERBAIKAN: Tambahkan updateItem
+        fetchItems
     } = useCRUD('users');
-    
-    // Ambil data roles dari WordPress
-    const { roles: allRoles, refreshData } = useData();
-    
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
-    
-    // PERBAIKAN BARU: State untuk modal konfirmasi hapus
-    const [itemToDelete, setItemToDelete] = useState(null);
-    
-    const getFormValue = (key) => formData[key] || '';
+
+    // Proteksi ketat untuk manajemen user
+    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
+    const canManage = caps.includes('list_users') || caps.includes('manage_options');
 
     const columns = [
-        { Header: 'ID', accessor: 'id', sortable: true },
-        { Header: 'Nama', accessor: 'full_name', sortable: true },
-        { Header: 'Email', accessor: 'email', sortable: true },
-        { Header: 'Role', accessor: 'role', sortable: true },
-        { Header: 'Status', accessor: 'status', sortable: true },
+        { Header: 'ID', accessor: 'ID', sortable: true },
+        { 
+            Header: 'Username', 
+            accessor: 'user_login', 
+            sortable: true,
+            render: (val, item) => (
+                <div className="flex flex-col">
+                    <span className="font-medium text-gray-900">{val}</span>
+                    <span className="text-xs text-gray-500">{item.display_name}</span>
+                </div>
+            )
+        },
+        { Header: 'Email', accessor: 'user_email' },
+        { 
+            Header: 'Role', 
+            accessor: 'roles', 
+            render: (val) => (
+                <div className="flex gap-1">
+                    {Array.isArray(val) ? val.map((role, idx) => (
+                        <span key={idx} className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {role}
+                        </span>
+                    )) : <span className="text-gray-400">-</span>}
+                </div>
+            )
+        },
+        { Header: 'Terdaftar', accessor: 'user_registered', render: (val) => val ? new Date(val).toLocaleDateString() : '-' }
     ];
 
     const openModal = (item = null) => {
         setCurrentItem(item);
-        setFormData(item ? {
-            id: item.id,
-            full_name: item.full_name,
-            email: item.email,
-            role: item.role,
-            phone: item.phone,
-            status: item.status,
-        } : {
-            full_name: '',
-            email: '',
-            role: '', 
-            phone: '',
-            status: 'active',
-            password: '',
-        });
+        // Reset password field saat edit untuk keamanan
+        setFormData(item ? { ...item, user_pass: '' } : { user_login: '', user_email: '', first_name: '', last_name: '', role: 'subscriber', user_pass: '' });
         setIsModalOpen(true);
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setCurrentItem(null);
+        setFormData({});
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (currentItem) {
-                await updateItem(currentItem.id, formData);
-            } else {
-                await createItem(formData);
+            // Hapus password kosong jika sedang edit agar tidak ter-reset
+            const dataToSend = { ...formData };
+            if (currentItem && !dataToSend.user_pass) {
+                delete dataToSend.user_pass;
             }
-            await refreshData('users'); 
+
+            if (currentItem) {
+                await updateItem(currentItem.ID, dataToSend);
+            } else {
+                await createItem(dataToSend);
+            }
+            fetchItems();
             closeModal();
         } catch (error) {
-            console.error("Gagal menyimpan user:", error);
-            // Error sudah ditangani oleh interceptor global
+            alert("Gagal menyimpan pengguna. Username/Email mungkin sudah ada.");
         }
     };
 
-    // PERBAIKAN BARU: Pisahkan logika untuk membuka modal konfirmasi
-    const handleDeleteClick = (item) => {
-        setItemToDelete(item);
-    };
-
-    // PERBAIKAN BARU: Fungsi ini dipanggil oleh modal konfirmasi
-    const confirmDelete = async () => {
-        if (!itemToDelete) return;
-        
-        try {
-            await deleteItem(itemToDelete.id); 
-            await refreshData('users'); 
-            setItemToDelete(null); // Tutup modal
-        } catch (error) {
-            console.error("Gagal menghapus user:", error);
-            setItemToDelete(null); // Tutup modal walaupun gagal
+    const handleDelete = async (item) => {
+        if (window.confirm(`Hapus pengguna "${item.user_login}"?`)) {
+            try {
+                await deleteItem(item.ID);
+            } catch (error) {
+                alert("Gagal menghapus pengguna.");
+            }
         }
     };
-    
-    const canManage = userCapabilities.includes('manage_users') || userCapabilities.includes('manage_options');
 
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <SearchInput onSearch={handleSearch} placeholder="Cari staff..." />
-                {canManage && (
-                    <button
-                        onClick={() => openModal(null)}
-                        className="flex items-center bg-blue-600 text-white px-4 py-2 rounded-md shadow hover:bg-blue-700"
-                    >
-                        <Plus size={18} className="mr-1" />
-                        Tambah Staff
-                    </button>
-                )}
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800">Pengguna Sistem</h1>
+                    <p className="text-sm text-gray-500">Kelola akses staff dan agen.</p>
+                </div>
+                <div className="flex gap-3 w-full sm:w-auto">
+                    <SearchInput onSearch={handleSearch} placeholder="Cari username/email..." />
+                    {canManage && (
+                        <button
+                            onClick={() => openModal(null)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                        >
+                            <Plus size={18} /> Tambah User
+                        </button>
+                    )}
+                </div>
             </div>
 
             <CrudTable
@@ -129,96 +128,71 @@ const Users = ({ userCapabilities }) => {
                 data={users}
                 loading={loading}
                 sortBy={sortBy}
-                onSort={(field) => handleSort(field)}
+                onSort={handleSort}
                 onEdit={canManage ? openModal : null}
-                onDelete={canManage ? handleDeleteClick : null} // PERBAIKAN: Ganti ke handleDeleteClick
-                userCapabilities={userCapabilities}
-                editCapability="manage_users"
-                deleteCapability="manage_users"
+                onDelete={canManage ? handleDelete : null}
+                userCapabilities={caps}
+                editCapability="list_users"
+                deleteCapability="delete_users"
             />
-
+            
             <Pagination pagination={pagination} onPageChange={handlePageChange} />
 
-            {/* Modal untuk Tambah/Edit Staff */}
-            <Modal title={currentItem ? 'Edit Staff' : 'Tambah Staff'} show={isModalOpen} onClose={closeModal} size="max-w-3xl">
+            <Modal title={currentItem ? 'Edit Pengguna' : 'Tambah Pengguna Baru'} show={isModalOpen} onClose={closeModal}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                            <input type="text" value={getFormValue('full_name')} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} className="mt-1 block w-full" required />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" value={getFormValue('email')} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="mt-1 block w-full" required />
-                        </div>
-                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Telepon</label>
-                            <input type="tel" value={getFormValue('phone')} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="mt-1 block w-full" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Role</label>
-                            <select value={getFormValue('role')} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="mt-1 block w-full" required>
-                                <option value="">Pilih Role</option>
-                                {(allRoles || []).map(role => (
-                                    // PERBAIKAN: Gunakan allRoles dari useData()
-                                    // allRoles adalah array of objects [{ id: ..., role_key: '...', role_name: '...' }]
-                                    <option key={role.id} value={role.role_key}>{role.role_name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Password</label>
-                            <input
-                                type="password"
-                                value={getFormValue('password')}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                className="mt-1 block w-full"
-                                placeholder={currentItem ? 'Kosongkan jika tidak ganti' : ''}
-                                required={!currentItem}
+                            <label className="block text-sm font-medium text-gray-700">Username</label>
+                            <input 
+                                type="text" 
+                                required 
+                                disabled={!!currentItem} // Username tidak bisa diubah saat edit
+                                className={`mt-1 w-full border p-2 rounded ${currentItem ? 'bg-gray-100 text-gray-500' : ''}`}
+                                value={formData.user_login || ''} 
+                                onChange={e => setFormData({...formData, user_login: e.target.value})} 
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Status</label>
-                             <select value={getFormValue('status')} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="mt-1 block w-full">
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </select>
+                            <label className="block text-sm font-medium text-gray-700">Email</label>
+                            <input type="email" required className="mt-1 w-full border p-2 rounded" value={formData.user_email || ''} onChange={e => setFormData({...formData, user_email: e.target.value})} />
                         </div>
                     </div>
-                    <div className="flex justify-end space-x-2">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">Batal</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Simpan</button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Nama Depan</label>
+                            <input type="text" className="mt-1 w-full border p-2 rounded" value={formData.first_name || ''} onChange={e => setFormData({...formData, first_name: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Nama Belakang</label>
+                            <input type="text" className="mt-1 w-full border p-2 rounded" value={formData.last_name || ''} onChange={e => setFormData({...formData, last_name: e.target.value})} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Role (Peran)</label>
+                        <select className="mt-1 w-full border p-2 rounded" value={formData.role || 'subscriber'} onChange={e => setFormData({...formData, role: e.target.value})}>
+                            <option value="subscriber">Subscriber (Jamaah)</option>
+                            <option value="agent">Agent</option>
+                            <option value="editor">Editor (Staff)</option>
+                            <option value="administrator">Administrator</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                            {currentItem ? 'Password Baru (Kosongkan jika tidak ubah)' : 'Password'}
+                        </label>
+                        <input 
+                            type="password" 
+                            required={!currentItem} // Wajib jika user baru
+                            className="mt-1 w-full border p-2 rounded" 
+                            value={formData.user_pass || ''} 
+                            onChange={e => setFormData({...formData, user_pass: e.target.value})} 
+                        />
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded">Batal</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
                     </div>
                 </form>
-            </Modal>
-            
-            {/* PERBAIKAN BARU: Modal untuk Konfirmasi Hapus */}
-            <Modal 
-                title="Konfirmasi Hapus" 
-                show={!!itemToDelete} 
-                onClose={() => setItemToDelete(null)}
-                size="max-w-md"
-            >
-                <div className="space-y-4">
-                    <p>Apakah Anda yakin ingin menghapus staff **{itemToDelete?.full_name}**?</p>
-                    <p className="text-sm text-red-600">Tindakan ini tidak dapat dibatalkan.</p>
-                    <div className="flex justify-end space-x-2">
-                        <button 
-                            type="button" 
-                            onClick={() => setItemToDelete(null)} 
-                            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                        >
-                            Batal
-                        </button>
-                        <button 
-                            type="button" 
-                            onClick={confirmDelete} 
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                        >
-                            Ya, Hapus
-                        </button>
-                    </div>
-                </div>
             </Modal>
         </div>
     );

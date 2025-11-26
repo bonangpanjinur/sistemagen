@@ -1,113 +1,105 @@
-import React, { useState, useEffect } from 'react';
-import api from '../utils/api'; // Import API yang sebenarnya
-import { Users, Package, DollarSign, BarChart2 } from 'lucide-react'; // PERBAIKAN: Hapus CheckSquare
-import Spinner from '../components/Spinner'; // Import Spinner yang sebenarnya
+import React from 'react';
+import { useData } from '../contexts/DataContext';
+import { Users, Briefcase, DollarSign, Calendar } from 'lucide-react';
+import Spinner from '../components/Spinner';
+import { formatCurrency } from '../utils/formatters';
 
-// Komponen Kartu Statistik
-const StatCard = ({ title, value, icon, colorClass }) => (
-    // PERBAIKAN UI: Tambahkan shadow-lg, hover:shadow-xl, transition, dan border
-    <div className={`bg-white p-6 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-200 border border-gray-100 flex items-center space-x-4`}>
-        <div className={`p-3 rounded-full ${colorClass} bg-opacity-20`}>
-            {icon}
-        </div>
-        <div>
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            <p className="text-3xl font-bold text-gray-900">{value}</p>
-        </div>
-    </div>
-);
+const Dashboard = ({ userCapabilities }) => {
+    // Default stats to prevent crash if stats are undefined
+    const { stats = {}, loading, error } = useData();
 
-// PERBAIKAN UI: Komponen placeholder untuk grafik
-const ChartPlaceholder = ({ title, icon }) => (
-    <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-            {icon}
-            {title}
-        </h3>
-        <div className="h-64 bg-gray-50 flex items-center justify-center rounded border border-gray-200 animate-pulse">
-            <p className="text-gray-400">Memuat data grafik...</p>
-        </div>
-    </div>
-);
+    // Safe stats access
+    const totalJamaah = stats.total_jamaah || 0;
+    const activePackages = stats.active_packages || 0;
+    const totalRevenue = stats.total_revenue || 0;
+    const upcomingDepartures = stats.upcoming_departures || [];
 
+    // Safe Capabilities
+    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
+    // Anda bisa menambahkan logika render berdasarkan caps di sini jika perlu
 
-const Dashboard = () => {
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    // Ambil data statistik dari API
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
-                setLoading(true);
-                // Menggunakan endpoint yang benar dari api-stats.php
-                const response = await api.get('stats/totals'); 
-                setStats(response.data);
-            } catch (error) {
-                console.error("Gagal mengambil statistik:", error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchStats();
-    }, []);
-
-    if (loading || !stats) {
-        return <Spinner size={32} text="Memuat statistik..." />;
-    }
+    if (loading) return <div className="p-10 flex justify-center"><Spinner text="Memuat Dashboard..." /></div>;
     
-    // Helper untuk format mata uang
-    const formatCurrency = (amount) => {
-         return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-        }).format(amount || 0);
-    }
+    // Tampilkan error jika ada, tapi jangan crash
+    if (error) return (
+        <div className="p-6 bg-red-50 border border-red-200 rounded text-red-700">
+            <h3 className="font-bold">Gagal memuat dashboard</h3>
+            <p>{error}</p>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
-            {/* Grid Kartu Statistik */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <h1 className="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard 
                     title="Total Jamaah" 
-                    value={stats.total_jamaah || 0} 
-                    icon={<Users size={24} className="text-blue-600" />}
-                    colorClass="text-blue-600 bg-blue-100"
+                    value={totalJamaah} 
+                    icon={<Users className="text-blue-600" />} 
+                    bg="bg-blue-50" 
                 />
                 <StatCard 
-                    title="Total Paket" 
-                    value={stats.total_packages || 0} 
-                    icon={<Package size={24} className="text-green-600" />}
-                    colorClass="text-green-600 bg-green-100"
+                    title="Paket Aktif" 
+                    value={activePackages} 
+                    icon={<Briefcase className="text-green-600" />} 
+                    bg="bg-green-50" 
                 />
                 <StatCard 
-                    title="Total Pemasukan" 
-                    value={formatCurrency(stats.total_revenue)} 
-                    icon={<DollarSign size={24} className="text-yellow-600" />}
-                    colorClass="text-yellow-600 bg-yellow-100"
+                    title="Pendapatan" 
+                    value={formatCurrency(totalRevenue)} 
+                    icon={<DollarSign className="text-yellow-600" />} 
+                    bg="bg-yellow-50" 
                 />
                 <StatCard 
-                    title="Total Pengeluaran" // Mengganti tugas dengan data keuangan
-                    value={formatCurrency(stats.total_expense)}
-                    icon={<DollarSign size={24} className="text-red-600" />}
-                    colorClass="text-red-600 bg-red-100"
+                    title="Keberangkatan" 
+                    value={upcomingDepartures.length} 
+                    icon={<Calendar className="text-purple-600" />} 
+                    bg="bg-purple-50" 
                 />
             </div>
-            
-            {/* Placeholder untuk Grafik */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ChartPlaceholder 
-                    title="Statistik Pendaftaran Jamaah"
-                    icon={<BarChart2 size={20} className="mr-2 text-blue-600" />}
-                />
-                 <ChartPlaceholder 
-                    title="Status Pembayaran"
-                    icon={<DollarSign size={20} className="mr-2 text-green-600" />}
-                />
+
+            <div className="bg-white p-6 rounded-lg shadow border border-gray-100">
+                <h2 className="text-lg font-semibold mb-4">Jadwal Keberangkatan Terdekat</h2>
+                {upcomingDepartures.length > 0 ? (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-4 py-2 text-left">Paket</th>
+                                    <th className="px-4 py-2 text-left">Tanggal</th>
+                                    <th className="px-4 py-2 text-left">Kuota</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {upcomingDepartures.map((item, index) => (
+                                    <tr key={index} className="border-t">
+                                        <td className="px-4 py-3 font-medium">{item.name || 'Nama Paket'}</td>
+                                        <td className="px-4 py-3">{item.date || '-'}</td>
+                                        <td className="px-4 py-3">{item.booked}/{item.quota}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : (
+                    <p className="text-gray-500 text-center py-4">Belum ada jadwal keberangkatan dalam waktu dekat.</p>
+                )}
             </div>
         </div>
     );
 };
+
+const StatCard = ({ title, value, icon, bg }) => (
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex items-center space-x-4">
+        <div className={`p-3 rounded-full ${bg}`}>
+            {icon}
+        </div>
+        <div>
+            <p className="text-sm text-gray-500">{title}</p>
+            <p className="text-xl font-bold text-gray-800">{value}</p>
+        </div>
+    </div>
+);
 
 export default Dashboard;

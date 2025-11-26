@@ -1,72 +1,32 @@
 import React from 'react';
-import { Bell, UserCircle, LogOut, Menu, Layout } from 'lucide-react'; // Tambah Icon Layout
-
-// Ambil data user dari global object
-const { currentUser } = window.umhData || { currentUser: { display_name: 'Guest' } };
 
 const Header = ({ title, toggleSidebar }) => {
     return (
-        <header className="bg-white shadow-sm sticky top-0 z-20 h-16 border-b border-gray-200 w-full">
-            <div className="flex items-center justify-between h-full px-6">
+        <header className="flex items-center justify-between bg-white px-6 py-4 shadow-md border-b border-gray-200">
+            <div className="flex items-center">
+                {/* Mobile Menu Button */}
+                <button 
+                    onClick={toggleSidebar} 
+                    className="mr-4 text-gray-500 hover:text-gray-700 focus:outline-none lg:hidden"
+                >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
                 
-                <div className="flex items-center">
-                    {/* Tombol Hamburger */}
-                    <button 
-                        onClick={toggleSidebar} 
-                        className="text-gray-500 hover:text-blue-600 p-2 rounded-md hover:bg-gray-100 mr-4 focus:outline-none"
-                    >
-                        <Menu size={24} />
-                    </button>
-                    
-                    <h2 className="text-xl font-semibold text-gray-800 hidden sm:block">
-                        {title || "Sistem Manajemen Travel"}
-                    </h2>
+                <h2 className="text-xl font-bold text-gray-800 tracking-tight">{title}</h2>
+            </div>
+            
+            <div className="flex items-center space-x-4">
+                <div className="flex flex-col text-right hidden sm:block">
+                    <span className="text-sm font-semibold text-gray-700">Administrator</span>
+                    <span className="text-xs text-gray-500">Super Admin</span>
                 </div>
-                
-                {/* Bagian Kanan Header */}
-                <div className="flex items-center space-x-3 md:space-x-4">
-                    {/* TOMBOL BARU: Switch to WordPress */}
-                    <a 
-                        href="/wp-admin/" 
-                        className="hidden md:flex items-center px-3 py-1.5 text-sm font-medium text-gray-600 bg-gray-100 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors border border-gray-200"
-                        title="Kembali ke Tampilan WordPress Biasa"
-                    >
-                        <Layout size={16} className="mr-2" />
-                        Ke WP Admin
-                    </a>
-
-                    <div className="h-6 w-px bg-gray-300 mx-1 hidden md:block"></div>
-
-                    <button className="text-gray-500 hover:text-blue-600 p-2 rounded-full hover:bg-gray-100 transition-colors relative">
-                        <Bell size={20} />
-                        <span className="absolute top-2 right-2 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-                    </button>
-                    
-                    <div className="flex items-center space-x-3 pl-2">
-                        <div className="text-right hidden md:block">
-                            <div className="text-sm font-bold text-gray-700">{currentUser.display_name}</div>
-                            <div className="text-xs text-gray-500 uppercase">{currentUser.role ? currentUser.role.replace('_', ' ') : 'Staff'}</div>
-                        </div>
-                        
-                        {currentUser.avatar ? (
-                            <img 
-                                src={currentUser.avatar} 
-                                alt="Profile" 
-                                className="h-8 w-8 rounded-full border border-gray-200 object-cover"
-                            />
-                        ) : (
-                            <UserCircle size={32} className="text-gray-400" />
-                        )}
-                    </div>
-                    
-                    {/* Link Logout */}
-                    <a 
-                        href="/wp-login.php?action=logout" 
-                        className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors ml-1" 
-                        title="Keluar Aplikasi"
-                    >
-                        <LogOut size={20} />
-                    </a>
+                <div className="h-10 w-10 rounded-full bg-gray-300 overflow-hidden border-2 border-white shadow-sm">
+                    {/* Placeholder Avatar */}
+                    <svg className="h-full w-full text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
                 </div>
             </div>
         </header>

@@ -1,170 +1,121 @@
-import React, { useState } from 'react';
-import { Plus, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
 import useCRUD from '../hooks/useCRUD';
 import CrudTable from '../components/CrudTable';
-import Pagination from '../components/Pagination';
-import SearchInput from '../components/SearchInput';
 import Modal from '../components/Modal';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import Spinner from '../components/Spinner';
 
-const Finance = ({ userCapabilities }) => {
-    const {
-        items: transactions,
-        loading,
-        pagination,
-        handlePageChange,
-        handleSearch,
-        handleSort,
-        sortBy,
-        createItem,
-        updateItem,
-        deleteItem,
-        fetchItems
-    } = useCRUD('finance');
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentItem, setCurrentItem] = useState(null);
-    const [formData, setFormData] = useState({});
-
-    // Proteksi akses
-    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
-    const canManage = caps.includes('manage_finance') || caps.includes('manage_options');
-
+const Finance = () => {
     const columns = [
-        { Header: 'ID', accessor: 'id', sortable: true },
-        { Header: 'Tanggal', accessor: 'date', sortable: true, render: (val) => val ? formatDate(val) : '-' },
-        { Header: 'Keterangan', accessor: 'description' },
+        { header: 'Tanggal', accessor: 'transaction_date' },
         { 
-            Header: 'Tipe', 
-            accessor: 'type',
-            render: (val) => (
-                <span className={`flex items-center gap-1 ${val === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                    {val === 'income' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                    {val === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+            header: 'Tipe', 
+            accessor: 'transaction_type',
+            render: (row) => (
+                <span className={`px-2 py-1 text-xs rounded font-bold ${row.transaction_type === 'income' ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'}`}>
+                    {row.transaction_type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
                 </span>
             )
         },
+        { header: 'Deskripsi', accessor: 'description' },
         { 
-            Header: 'Nominal', 
-            accessor: 'amount', 
-            sortable: true,
-            render: (val, item) => (
-                <span className={`font-mono ${item.type === 'income' ? 'text-green-700' : 'text-red-700'}`}>
-                    {item.type === 'expense' ? '-' : ''}{formatCurrency(val || 0)}
-                </span>
-            )
+            header: 'Jumlah', 
+            accessor: 'amount',
+            render: (row) => `Rp ${parseInt(row.amount).toLocaleString('id-ID')}`
         },
-        { Header: 'Kategori', accessor: 'category', render: (val) => val || '-' }
+        { header: 'Status', accessor: 'status' },
     ];
 
-    const openModal = (item = null) => {
-        setCurrentItem(item);
-        setFormData(item ? { ...item } : { description: '', amount: 0, type: 'income', date: new Date().toISOString().split('T')[0], category: '' });
-        setIsModalOpen(true);
-    };
+    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/finance');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const [formData, setFormData] = useState({
+        transaction_date: new Date().toISOString().split('T')[0],
+        transaction_type: 'income',
+        amount: 0,
+        description: '',
+        payment_method: 'transfer',
+        status: 'completed'
+    });
 
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setCurrentItem(null);
-        setFormData({});
-    };
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        try {
-            if (currentItem) {
-                await updateItem(currentItem.id, formData);
-            } else {
-                await createItem(formData);
-            }
-            fetchItems();
-            closeModal();
-        } catch (error) {
-            alert("Gagal menyimpan transaksi.");
+        const success = editId ? await updateItem(editId, formData) : await createItem(formData);
+        if (success) {
+            setIsModalOpen(false);
+            setFormData({
+                transaction_date: new Date().toISOString().split('T')[0],
+                transaction_type: 'income',
+                amount: 0,
+                description: '',
+                payment_method: 'transfer',
+                status: 'completed'
+            });
         }
     };
 
-    const handleDelete = async (item) => {
-        if (window.confirm("Hapus transaksi ini?")) {
-            try {
-                await deleteItem(item.id);
-            } catch (error) {
-                alert("Gagal menghapus data.");
-            }
-        }
+    const handleEdit = (item) => {
+        setFormData(item);
+        setEditId(item.id);
+        setIsModalOpen(true);
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Keuangan</h1>
-                    <p className="text-sm text-gray-500">Pencatatan pemasukan dan pengeluaran.</p>
-                </div>
-                <div className="flex gap-3 w-full sm:w-auto">
-                    <SearchInput onSearch={handleSearch} placeholder="Cari transaksi..." />
-                    {canManage && (
-                        <button
-                            onClick={() => openModal(null)}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                        >
-                            <Plus size={18} /> Tambah Transaksi
-                        </button>
-                    )}
-                </div>
+        <Layout title="Keuangan & Transaksi">
+            <div className="flex justify-between mb-4">
+                <h2 className="text-lg font-semibold">Daftar Transaksi</h2>
+                <button onClick={() => { setEditId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded">+ Transaksi Baru</button>
             </div>
 
-            <CrudTable
-                columns={columns}
-                data={transactions}
-                loading={loading}
-                sortBy={sortBy}
-                onSort={handleSort}
-                onEdit={canManage ? openModal : null}
-                onDelete={canManage ? handleDelete : null}
-                userCapabilities={caps}
-                editCapability="manage_finance"
-                deleteCapability="manage_finance"
-            />
-            
-            <Pagination pagination={pagination} onPageChange={handlePageChange} />
+            {loading ? <Spinner /> : <CrudTable columns={columns} data={data} onEdit={handleEdit} onDelete={deleteItem} />}
 
-            <Modal title={currentItem ? 'Edit Transaksi' : 'Transaksi Baru'} show={isModalOpen} onClose={closeModal}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editId ? "Edit Transaksi" : "Catat Transaksi Baru"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tanggal</label>
-                            <input type="date" required className="mt-1 w-full border p-2 rounded" value={formData.date || ''} onChange={e => setFormData({...formData, date: e.target.value})} />
+                            <label className="block text-sm font-medium">Tanggal</label>
+                            <input type="date" className="w-full border p-2 rounded" value={formData.transaction_date} onChange={e => setFormData({...formData, transaction_date: e.target.value})} required />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tipe</label>
-                            <select className="mt-1 w-full border p-2 rounded" value={formData.type || 'income'} onChange={e => setFormData({...formData, type: e.target.value})}>
-                                <option value="income">Pemasukan</option>
-                                <option value="expense">Pengeluaran</option>
+                            <label className="block text-sm font-medium">Tipe Transaksi</label>
+                            <select className="w-full border p-2 rounded" value={formData.transaction_type} onChange={e => setFormData({...formData, transaction_type: e.target.value})}>
+                                <option value="income">Pemasukan (+)</option>
+                                <option value="expense">Pengeluaran (-)</option>
                             </select>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Keterangan</label>
-                        <input type="text" required className="mt-1 w-full border p-2 rounded" value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
+                        <label className="block text-sm font-medium">Jumlah (Rp)</label>
+                        <input type="number" className="w-full border p-2 rounded" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Deskripsi</label>
+                        <textarea className="w-full border p-2 rounded" rows="2" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Contoh: Pembayaran DP Jamaah A"></textarea>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Nominal (Rp)</label>
-                            <input type="number" required min="0" className="mt-1 w-full border p-2 rounded" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value})} />
+                            <label className="block text-sm font-medium">Metode Pembayaran</label>
+                            <select className="w-full border p-2 rounded" value={formData.payment_method} onChange={e => setFormData({...formData, payment_method: e.target.value})}>
+                                <option value="cash">Tunai</option>
+                                <option value="transfer">Transfer Bank</option>
+                                <option value="qris">QRIS</option>
+                            </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Kategori</label>
-                            <input type="text" className="mt-1 w-full border p-2 rounded" placeholder="Contoh: Operasional" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} />
+                            <label className="block text-sm font-medium">Status</label>
+                            <select className="w-full border p-2 rounded" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                <option value="completed">Selesai</option>
+                                <option value="pending">Pending</option>
+                                <option value="failed">Gagal</option>
+                            </select>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-6">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded">Batal</button>
-                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
-                    </div>
+                    <button className="w-full bg-blue-600 text-white py-2 rounded">Simpan Transaksi</button>
                 </form>
             </Modal>
-        </div>
+        </Layout>
     );
 };
 

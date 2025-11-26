@@ -1,224 +1,108 @@
-import React, { useState } from 'react';
-import { Plus, Users, Calendar, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import Layout from '../components/Layout';
 import useCRUD from '../hooks/useCRUD';
 import CrudTable from '../components/CrudTable';
-import Pagination from '../components/Pagination';
-import SearchInput from '../components/SearchInput';
 import Modal from '../components/Modal';
-import { useData } from '../contexts/DataContext';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import Spinner from '../components/Spinner';
 
-const Packages = ({ userCapabilities }) => {
-    // Gunakan 'items' sebagai 'packages' agar lebih semantik
-    const {
-        items: packages,
-        loading,
-        pagination,
-        handlePageChange,
-        handleSearch,
-        handleSort,
-        sortBy,
-        createItem,
-        updateItem,
-        deleteItem,
-        fetchItems
-    } = useCRUD('packages');
-
-    const { refreshData } = useData();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentItem, setCurrentItem] = useState(null);
-    const [formData, setFormData] = useState({});
-
-    // Proteksi User Capabilities
-    const caps = Array.isArray(userCapabilities) ? userCapabilities : [];
-    const canManage = caps.includes('manage_packages') || caps.includes('manage_options');
-
+const Packages = () => {
+    // 1. Definisi Kolom
     const columns = [
-        { Header: 'ID', accessor: 'id', sortable: true },
-        { Header: 'Nama Paket', accessor: 'name', sortable: true },
+        { header: 'Nama Paket', accessor: 'package_name' },
+        { header: 'Keberangkatan', accessor: 'departure_date' },
+        { header: 'Durasi', accessor: 'duration', render: (row) => `${row.duration} Hari` },
         { 
-            Header: 'Tanggal Berangkat', 
-            accessor: 'departure_date', 
-            sortable: true,
-            render: (val) => val ? formatDate(val) : '-'
-        },
-        { 
-            Header: 'Harga', 
-            accessor: 'price', 
-            sortable: true,
-            render: (val) => val ? formatCurrency(val) : 'Rp 0'
-        },
-        { 
-            Header: 'Kuota', 
-            accessor: 'quota', 
-            sortable: true,
-            render: (val, item) => (
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    (item.booked || 0) >= val ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
-                }`}>
-                    {item.booked || 0} / {val}
+            header: 'Kuota', 
+            accessor: 'slots_available',
+            render: (row) => (
+                <span className={`${row.slots_available < 5 ? 'text-red-600 font-bold' : 'text-gray-600'}`}>
+                    {row.slots_filled} / {row.slots_available}
                 </span>
             )
         },
-        {
-            Header: 'Status',
-            accessor: 'status',
-            render: (val) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                    val === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                }`}>
-                    {val === 'active' ? 'Aktif' : 'Draft'}
+        { 
+            header: 'Status', 
+            accessor: 'status', 
+            render: (row) => (
+                <span className={`px-2 py-1 text-xs rounded-full ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {row.status}
                 </span>
             )
-        }
+        },
     ];
 
-    const openModal = (item = null) => {
-        setCurrentItem(item);
-        setFormData(item ? { ...item } : { name: '', departure_date: '', price: 0, quota: 45, status: 'active' });
+    // 2. Setup State & Hook
+    const { data, loading, error, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/packages');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const [formData, setFormData] = useState({
+        package_name: '',
+        departure_date: '',
+        duration: 9,
+        slots_available: 45,
+        status: 'draft'
+    });
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // 3. Handlers
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const success = editId ? await updateItem(editId, formData) : await createItem(formData);
+        if (success) {
+            setIsModalOpen(false);
+            setFormData({ package_name: '', departure_date: '', duration: 9, slots_available: 45, status: 'draft' });
+        }
+    };
+
+    const handleEdit = (item) => {
+        setFormData(item);
+        setEditId(item.id);
         setIsModalOpen(true);
     };
 
-    const closeModal = () => {
-        setIsModalOpen(false);
-        setCurrentItem(null);
-        setFormData({});
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            if (currentItem) {
-                await updateItem(currentItem.id, formData);
-            } else {
-                await createItem(formData);
-            }
-            await fetchItems();
-            refreshData('packages'); // Refresh global stats if needed
-            closeModal();
-        } catch (error) {
-            console.error("Failed to save package:", error);
-            alert("Gagal menyimpan paket. Periksa koneksi atau input Anda.");
-        }
-    };
-
-    const handleDelete = async (item) => {
-        if (window.confirm(`Yakin ingin menghapus paket "${item.name}"?`)) {
-            try {
-                await deleteItem(item.id);
-                refreshData('packages');
-            } catch (error) {
-                alert("Gagal menghapus paket.");
-            }
-        }
-    };
-
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800">Paket Umroh</h1>
-                    <p className="text-sm text-gray-500">Kelola jadwal dan harga paket perjalanan.</p>
-                </div>
-                <div className="flex gap-3 w-full sm:w-auto">
-                    <SearchInput onSearch={handleSearch} placeholder="Cari paket..." />
-                    {canManage && (
-                        <button
-                            onClick={() => openModal(null)}
-                            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-                        >
-                            <Plus size={18} /> Tambah Paket
-                        </button>
-                    )}
-                </div>
+        <Layout title="Manajemen Paket Umroh">
+            <div className="mb-6 flex justify-between items-center">
+                <p className="text-gray-600">Atur paket perjalanan umroh dan haji.</p>
+                <button 
+                    onClick={() => { setEditId(null); setIsModalOpen(true); }} 
+                    className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                >
+                    + Buat Paket Baru
+                </button>
             </div>
 
-            <CrudTable
-                columns={columns}
-                data={packages}
-                loading={loading}
-                sortBy={sortBy}
-                onSort={handleSort}
-                onEdit={canManage ? openModal : null}
-                onDelete={canManage ? handleDelete : null}
-                userCapabilities={caps}
-                editCapability="manage_packages"
-                deleteCapability="manage_packages"
-            />
-            
-            <Pagination pagination={pagination} onPageChange={handlePageChange} />
+            {loading ? <Spinner /> : (
+                <CrudTable columns={columns} data={data} onEdit={handleEdit} onDelete={deleteItem} />
+            )}
 
-            <Modal 
-                title={currentItem ? 'Edit Paket' : 'Tambah Paket Baru'} 
-                show={isModalOpen} 
-                onClose={closeModal}
-            >
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editId ? "Edit Paket" : "Paket Baru"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Nama Paket</label>
-                        <input 
-                            type="text" 
-                            required 
-                            className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                            value={formData.name || ''}
-                            onChange={e => setFormData({...formData, name: e.target.value})}
-                        />
+                        <label className="block text-sm font-medium">Nama Paket</label>
+                        <input className="w-full border p-2 rounded" value={formData.package_name} onChange={(e) => setFormData({...formData, package_name: e.target.value})} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tanggal Berangkat</label>
-                            <input 
-                                type="date" 
-                                required 
-                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                value={formData.departure_date || ''}
-                                onChange={e => setFormData({...formData, departure_date: e.target.value})}
-                            />
+                            <label className="block text-sm font-medium">Tanggal Berangkat</label>
+                            <input type="date" className="w-full border p-2 rounded" value={formData.departure_date} onChange={(e) => setFormData({...formData, departure_date: e.target.value})} required />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Harga (Rp)</label>
-                            <input 
-                                type="number" 
-                                required 
-                                min="0"
-                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                value={formData.price || ''}
-                                onChange={e => setFormData({...formData, price: e.target.value})}
-                            />
+                            <label className="block text-sm font-medium">Durasi (Hari)</label>
+                            <input type="number" className="w-full border p-2 rounded" value={formData.duration} onChange={(e) => setFormData({...formData, duration: e.target.value})} required />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Kuota</label>
-                            <input 
-                                type="number" 
-                                required 
-                                min="1"
-                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                value={formData.quota || ''}
-                                onChange={e => setFormData({...formData, quota: e.target.value})}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Status</label>
-                            <select 
-                                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                                value={formData.status || 'active'}
-                                onChange={e => setFormData({...formData, status: e.target.value})}
-                            >
-                                <option value="active">Aktif</option>
-                                <option value="draft">Draft</option>
-                                <option value="archived">Arsip</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label className="block text-sm font-medium">Kuota Kursi</label>
+                        <input type="number" className="w-full border p-2 rounded" value={formData.slots_available} onChange={(e) => setFormData({...formData, slots_available: e.target.value})} required />
                     </div>
-                    <div className="flex justify-end gap-2 mt-6">
-                        <button type="button" onClick={closeModal} className="px-4 py-2 border rounded text-gray-600 hover:bg-gray-50">Batal</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Simpan</button>
-                    </div>
+                    <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Simpan</button>
                 </form>
             </Modal>
-        </div>
+        </Layout>
     );
 };
 

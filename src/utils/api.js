@@ -1,59 +1,27 @@
 import axios from 'axios';
 
-// Mengambil konfigurasi dari wp_localize_script
-const umhData = window.umhData || { apiUrl: '', nonce: '', currentUser: {} };
+// Ambil URL dasar REST API dan Nonce dari objek global WordPress
+// Biasanya dilokalisasi via wp_localize_script di PHP
+const apiUrl = window.umhData?.root_url || '/wp-json/';
+const nonce = window.umhData?.nonce || '';
 
 const api = axios.create({
-    baseURL: umhData.apiUrl || '/wp-json/umh/v1/', // Fallback jika umhData belum siap
+    baseURL: apiUrl,
     headers: {
-        'X-WP-Nonce': umhData.nonce,
         'Content-Type': 'application/json',
+        'X-WP-Nonce': nonce, // Header Wajib untuk keamanan WP
     },
 });
 
-/**
- * Interceptor Response
- * Menangani error global (seperti 401 Unauthorized, 403 Forbidden, 500 Server Error)
- * Dan mem-parsing pesan error dari WordPress REST API
- */
-export const setupApiErrorInterceptor = (setGlobalError) => {
-    api.interceptors.response.use(
-        (response) => response,
-        (error) => {
-            let message = 'Terjadi kesalahan yang tidak diketahui.';
-
-            if (error.response) {
-                // Error dari server (status code di luar 2xx)
-                console.error('API Error Response:', error.response.status, error.response.data);
-                
-                // Coba ambil pesan error dari body response WordPress
-                if (error.response.data && error.response.data.message) {
-                    message = error.response.data.message;
-                } else if (error.response.status === 403) {
-                    message = 'Anda tidak memiliki izin untuk melakukan aksi ini (403).';
-                } else if (error.response.status === 404) {
-                    message = 'Data atau endpoint tidak ditemukan (404).';
-                } else if (error.response.status === 500) {
-                    message = 'Terjadi kesalahan pada server (500).';
-                }
-            } else if (error.request) {
-                // Request dibuat tapi tidak ada respon (masalah koneksi)
-                console.error('API Error Request:', error.request);
-                message = 'Gagal terhubung ke server. Periksa koneksi internet Anda.';
-            } else {
-                // Error saat setup request
-                console.error('API Error Message:', error.message);
-                message = error.message;
-            }
-
-            // Set error ke state global jika fungsi tersedia
-            if (setGlobalError) {
-                setGlobalError(message);
-            }
-
-            return Promise.reject(error);
+// Interceptor untuk menangani error global
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 403) {
+            console.error('Akses ditolak. Coba logout dan login kembali ke WordPress.');
         }
-    );
-};
+        return Promise.reject(error);
+    }
+);
 
 export default api;

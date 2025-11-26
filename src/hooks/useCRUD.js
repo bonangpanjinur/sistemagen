@@ -1,147 +1,98 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import api from '../utils/api';
+import toast from 'react-hot-toast'; // Optional: Gunakan jika sudah install react-hot-toast
 
-/**
- * Hook kustom untuk operasi CRUD yang AMAN (Anti-Blank Page).
- */
-const useCRUD = (resource) => {
-    const [data, setData] = useState([]); // Default array kosong
-    const [loading, setLoading] = useState(true);
+const useCRUD = (endpoint) => {
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [pagination, setPagination] = useState({
-        total_items: 0,
-        total_pages: 1,
-        current_page: 1,
-        per_page: 10
-    });
-    const [searchTerm, setSearchTerm] = useState('');
-    const [sortBy, setSortBy] = useState({ field: 'id', order: 'desc' });
 
-    const fetchData = useCallback(async (page = 1, search = searchTerm, sort = sortBy) => {
+    // 1. Fetch Data
+    const fetchData = useCallback(async (params = {}) => {
         setLoading(true);
         setError(null);
         try {
-            const params = {
-                page: page,
-                per_page: pagination.per_page,
-                search: search,
-                orderby: sort.field,
-                order: sort.order,
-            };
-            
-            const response = await api.get(resource, { params });
-            
-            // PERBAIKAN UTAMA: Gunakan Optional Chaining (?.) dan Default Value (|| [])
-            // Ini mencegah crash jika response.data atau response.data.items tidak ada
-            const items = response.data?.items || []; 
-            
-            setData(items);
-
-            setPagination({
-                total_items: parseInt(response.data?.total_items || 0),
-                total_pages: parseInt(response.data?.total_pages || 1),
-                current_page: parseInt(response.data?.current_page || 1),
-                per_page: parseInt(response.data?.per_page || 10),
-            });
-
+            const response = await api.get(endpoint, { params });
+            // Sesuaikan dengan struktur return API Anda (misal response.data atau response.data.data)
+            const result = response.data || []; 
+            setData(Array.isArray(result) ? result : []);
         } catch (err) {
-            // Tangani error dengan anggun, jangan biarkan app crash
-            console.error(`Failed to fetch ${resource}:`, err);
-            setError(err.message || 'Gagal memuat data');
-            setData([]); // Pastikan data kembali ke array kosong saat error
+            const errMsg = err.response?.data?.message || err.message || 'Gagal memuat data';
+            setError(errMsg);
+            console.error("Fetch Error:", err);
         } finally {
             setLoading(false);
         }
-    }, [resource, pagination.per_page, searchTerm, sortBy]);
+    }, [endpoint]);
 
-    useEffect(() => {
-        fetchData(pagination.current_page, searchTerm, sortBy);
-    }, [fetchData, pagination.current_page, searchTerm, sortBy]);
-
-    const handlePageChange = (newPage) => {
-        if (newPage !== pagination.current_page && newPage > 0 && newPage <= pagination.total_pages) {
-            setPagination(prev => ({ ...prev, current_page: newPage }));
-        }
-    };
-
-    const handleSearch = (term) => {
-        setSearchTerm(term);
-        setPagination(prev => ({ ...prev, current_page: 1 }));
-    };
-    
-    const handleSort = (field) => {
-        const order = (sortBy.field === field && sortBy.order === 'asc') ? 'desc' : 'asc';
-        setSortBy({ field, order });
-    };
-
-    const createItem = async (item) => {
-        try {
-            const response = await api.post(resource, item);
-            fetchData(1, '', sortBy);
-            return { success: true, data: response.data };
-        } catch (err) {
-            console.error(`Failed to create in ${resource}:`, err);
-            throw err;
-        }
-    };
-
-    const updateItem = async (id, item) => {
-        try {
-            const response = await api.put(`${resource}/${id}`, item);
-            fetchData(pagination.current_page, searchTerm, sortBy);
-            return { success: true, data: response.data };
-        } catch (err) {
-            console.error(`Failed to update in ${resource}:`, err);
-            throw err;
-        }
-    };
-
-    const deleteItem = async (id) => {
-        try {
-            await api.delete(`${resource}/${id}`);
-            if (data.length === 1 && pagination.current_page > 1) {
-                 fetchData(pagination.current_page - 1, searchTerm, sortBy);
-            } else {
-                 fetchData(pagination.current_page, searchTerm, sortBy);
-            }
-            return { success: true };
-        } catch (err) {
-            console.error(`Failed to delete in ${resource}:`, err);
-            throw err;
-        }
-    };
-    
-    const fetchItemById = useCallback(async (id) => {
+    // 2. Create Item
+    const createItem = async (newItem) => {
         setLoading(true);
+        const toastId = toast.loading('Menyimpan data...');
         try {
-            const response = await api.get(`${resource}/${id}`);
-            return response.data;
+            await api.post(endpoint, newItem);
+            await fetchData(); // Refresh data otomatis
+            toast.success('Data berhasil disimpan!', { id: toastId });
+            return true;
         } catch (err) {
-            setError(err.message || 'Failed to fetch item');
-            return null;
+            const errMsg = err.response?.data?.message || 'Gagal menyimpan data';
+            setError(errMsg);
+            toast.error(errMsg, { id: toastId });
+            return false;
         } finally {
             setLoading(false);
         }
-    }, [resource]);
+    };
 
-    // Mengembalikan 'items' sebagai alias untuk 'data' agar konsisten dengan penggunaan di page lain
+    // 3. Update Item
+    const updateItem = async (id, updatedItem) => {
+        setLoading(true);
+        const toastId = toast.loading('Memperbarui data...');
+        try {
+            // Menggunakan POST ke endpoint ID biasanya standar di WP REST API jika PUT bermasalah
+            await api.post(`${endpoint}/${id}`, updatedItem); 
+            await fetchData();
+            toast.success('Data berhasil diperbarui!', { id: toastId });
+            return true;
+        } catch (err) {
+            const errMsg = err.response?.data?.message || 'Gagal memperbarui data';
+            setError(errMsg);
+            toast.error(errMsg, { id: toastId });
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // 4. Delete Item
+    const deleteItem = async (id) => {
+        setLoading(true);
+        const toastId = toast.loading('Menghapus data...');
+        try {
+            await api.delete(`${endpoint}/${id}`);
+            // Optimistic Update: Hapus dari UI dulu biar cepat
+            setData((prev) => prev.filter((item) => item.id !== id));
+            toast.success('Data dihapus', { id: toastId });
+            return true;
+        } catch (err) {
+            const errMsg = err.response?.data?.message || 'Gagal menghapus data';
+            setError(errMsg);
+            toast.error(errMsg, { id: toastId });
+            fetchData(); // Rollback/Refresh jika gagal
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return {
-        data,        // Untuk backward compatibility
-        items: data, // Nama yang lebih deskriptif
+        data,
         loading,
         error,
-        pagination,
-        searchTerm,
-        sortBy,
-        fetchData, // alias untuk fetchItems
-        fetchItems: fetchData,
-        handlePageChange,
-        handleSearch,
-        handleSort,
+        fetchData,
         createItem,
         updateItem,
-        deleteItem,
-        fetchItemById
+        deleteItem
     };
 };
 

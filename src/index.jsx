@@ -1,111 +1,78 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 
-// Components
-import Sidebar from './components/Sidebar.jsx';
-import Header from './components/Header.jsx';
-import GlobalErrorAlert from './components/GlobalErrorAlert.jsx';
-import { DataProvider } from './contexts/DataContext.jsx';
-
-// Pages
-import Dashboard from './pages/Dashboard.jsx';
-import Agents from './pages/Agents.jsx';
-import Jamaah from './pages/Jamaah.jsx';
-import Packages from './pages/Packages.jsx';
-import PackageCategories from './pages/PackageCategories.jsx';
-import Flights from './pages/Flights.jsx';
-import Hotels from './pages/Hotels.jsx';
-import Departures from './pages/Departures.jsx';
-
-import Finance from './pages/Finance.jsx';
-import Logistics from './pages/Logistics.jsx';
-import Users from './pages/Users.jsx';
-import Roles from './pages/Roles.jsx';
-import Tasks from './pages/Tasks.jsx';
-import Categories from './pages/Categories.jsx'; 
-
-// NEW PAGES
-import HR from './pages/HR.jsx';
-import Marketing from './pages/Marketing.jsx';
+// Import Pages (Sesuai dengan file yang ada di folder src/pages/)
+import Dashboard from './pages/Dashboard';
+import Agents from './pages/Agents';
+import Packages from './pages/Packages';
+import PackageCategories from './pages/PackageCategories'; // Tambahan: File ada
+import Flights from './pages/Flights';
+import Hotels from './pages/Hotels';
+import Jamaah from './pages/Jamaah';
+import Logistics from './pages/Logistics';
+import Departures from './pages/Departures';
+import Finance from './pages/Finance';
+import Categories from './pages/Categories'; // Tambahan: File ada (Kategori Keuangan)
+import HR from './pages/HR';
+import Tasks from './pages/Tasks';
+import Marketing from './pages/Marketing';
+import Users from './pages/Users';
+import Roles from './pages/Roles'; // Tambahan: File ada
 
 const App = () => {
-    const [userCapabilities, setUserCapabilities] = useState([]);
-    const [currentUser, setCurrentUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        console.log("Umroh Manager App Mounted"); // Debug log
-
-        if (window.umhData) {
-            console.log("Data loaded from WordPress:", window.umhData); // Debug log
-            setUserCapabilities(window.umhData.capabilities || []);
-            const userData = window.umhData.currentUser || {};
-            if (!userData.avatar) {
-                userData.avatar = 'https://www.gravatar.com/avatar/?d=mp'; 
-            }
-            setCurrentUser(userData);
-        } else {
-            console.error("umhData not found in window object. PHP localization failed.");
-        }
-        setLoading(false);
-    }, []);
-
-    if (loading) return (
-        <div className="flex h-screen items-center justify-center bg-gray-50">
-            <div className="text-center">
-                <div className="spinner-border animate-spin inline-block w-8 h-8 border-4 rounded-full text-blue-600" role="status"></div>
-                <p className="mt-2 text-gray-600">Memuat Aplikasi...</p>
-            </div>
-        </div>
-    );
-
     return (
         <HashRouter>
-            <DataProvider>
-                <div className="flex h-screen bg-gray-100">
-                    <Sidebar userCapabilities={userCapabilities} />
-                    
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header user={currentUser} />
-                        
-                        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
-                            <GlobalErrorAlert />
-                            <Routes>
-                                <Route path="/" element={<Dashboard userCapabilities={userCapabilities} />} />
-                                <Route path="/agents" element={<Agents userCapabilities={userCapabilities} />} />
-                                <Route path="/jamaah" element={<Jamaah userCapabilities={userCapabilities} />} />
-                                <Route path="/packages" element={<Packages userCapabilities={userCapabilities} />} />
-                                <Route path="/package-categories" element={<PackageCategories userCapabilities={userCapabilities} />} />
-                                <Route path="/flights" element={<Flights userCapabilities={userCapabilities} />} />
-                                <Route path="/hotels" element={<Hotels userCapabilities={userCapabilities} />} />
-                                <Route path="/departures" element={<Departures userCapabilities={userCapabilities} />} />
-                                <Route path="/hr/*" element={<HR userCapabilities={userCapabilities} />} />
-                                <Route path="/marketing/*" element={<Marketing userCapabilities={userCapabilities} />} />
-                                <Route path="/finance/*" element={<Finance userCapabilities={userCapabilities} />} />
-                                <Route path="/logistics/*" element={<Logistics userCapabilities={userCapabilities} />} />
-                                <Route path="/users" element={<Users userCapabilities={userCapabilities} />} />
-                                <Route path="/roles" element={<Roles userCapabilities={userCapabilities} />} />
-                                <Route path="/tasks" element={<Tasks userCapabilities={userCapabilities} />} />
-                                <Route path="/categories" element={<Categories userCapabilities={userCapabilities} />} />
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </main>
+            <Routes>
+                {/* Dashboard */}
+                <Route path="/" element={<Dashboard />} />
+                
+                {/* Master Data */}
+                <Route path="/agents" element={<Agents />} />
+                <Route path="/packages" element={<Packages />} />
+                <Route path="/package-categories" element={<PackageCategories />} /> {/* Route Baru */}
+                <Route path="/flights" element={<Flights />} />
+                <Route path="/hotels" element={<Hotels />} />
+
+                {/* Operasional */}
+                <Route path="/jamaah" element={<Jamaah />} />
+                <Route path="/logistics" element={<Logistics />} />
+                <Route path="/departures" element={<Departures />} />
+
+                {/* Keuangan */}
+                <Route path="/finance" element={<Finance />} />
+                <Route path="/categories" element={<Categories />} /> {/* Route Baru */}
+
+                {/* HR & Kantor */}
+                <Route path="/hr" element={<HR />} />
+                <Route path="/tasks" element={<Tasks />} />
+
+                {/* Marketing */}
+                <Route path="/marketing" element={<Marketing />} />
+
+                {/* Sistem */}
+                <Route path="/users" element={<Users />} />
+                <Route path="/roles" element={<Roles />} /> {/* Route Baru */}
+                
+                {/* 404 Not Found */}
+                <Route path="*" element={
+                    <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-800">
+                        <h1 className="text-6xl font-bold mb-4">404</h1>
+                        <p className="text-xl mb-8">Halaman modul ini belum tersedia atau sedang dikembangkan.</p>
+                        <a href="#/" className="bg-blue-600 text-white px-6 py-3 rounded shadow hover:bg-blue-700 transition">
+                            Kembali ke Dashboard
+                        </a>
                     </div>
-                </div>
-            </DataProvider>
+                } />
+            </Routes>
         </HashRouter>
     );
 };
 
-// Mount Application
-const container = document.getElementById('umh-app-root');
-
+// Mount React ke DIV 'umh-app'
+const container = document.getElementById('umh-app');
 if (container) {
-    console.log("Container #umh-app-root found. Mounting React...");
     const root = createRoot(container);
     root.render(<App />);
-} else {
-    console.error("CRITICAL: Target container 'umh-app-root' not found in DOM.");
 }

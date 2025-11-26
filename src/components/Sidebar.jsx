@@ -1,154 +1,121 @@
 import React from 'react';
-import { 
-    Home, Users, Briefcase, Calendar, FileText, 
-    Settings, DollarSign, Truck, BarChart2, 
-    Clipboard, user, MapPin, Package, Grid, 
-    UserCheck, Briefcase as Office, Plane,
-    LogOut, Menu, X
-} from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 
-const Sidebar = ({ activePage, setActivePage, isMobileOpen, setIsMobileOpen, userCapabilities = [] }) => {
+const Sidebar = () => {
+    const location = useLocation();
     
-    // Helper untuk cek akses (opsional, saat ini kita tampilkan semua dulu agar muncul)
-    const hasAccess = (cap) => {
-        return true; // Sementara di-bypass agar menu muncul semua untuk debugging
-        // if (!userCapabilities.length) return true;
-        // return userCapabilities.includes(cap) || userCapabilities.includes('manage_options');
-    };
-
-    const menuGroups = [
-        {
-            title: "Utama",
-            items: [
-                { id: 'dashboard', label: 'Dashboard', icon: <Home size={20} /> },
-                { id: 'tasks', label: 'Tugas & Approval', icon: <Clipboard size={20} /> },
-            ]
-        },
-        {
-            title: "Operasional",
-            items: [
-                { id: 'jamaah', label: 'Data Jamaah', icon: <Users size={20} /> },
-                { id: 'departures', label: 'Keberangkatan', icon: <Calendar size={20} /> },
-                { id: 'finance', label: 'Keuangan', icon: <DollarSign size={20} /> },
-            ]
-        },
-        {
-            title: "Produk & Layanan",
-            items: [
-                { id: 'packages', label: 'Paket Umroh', icon: <Briefcase size={20} /> },
-                { id: 'package-categories', label: 'Kategori Paket', icon: <Grid size={20} /> },
-                { id: 'hotel-bookings', label: 'Booking Hotel', icon: <MapPin size={20} /> }, // Opsional jika ada page ini
-                { id: 'flight-bookings', label: 'Booking Pesawat', icon: <Plane size={20} /> }, // Opsional
-            ]
-        },
-        {
-            title: "Data Master",
-            items: [
-                { id: 'hotels', label: 'Hotel', icon: <MapPin size={20} /> },
-                { id: 'flights', label: 'Penerbangan', icon: <Plane size={20} /> },
-                { id: 'logistics', label: 'Logistik', icon: <Truck size={20} /> },
-                { id: 'categories', label: 'Kategori Umum', icon: <Grid size={20} /> },
-            ]
-        },
-        {
-            title: "Mitra & SDM",
-            items: [
-                { id: 'agents', label: 'Agen', icon: <UserCheck size={20} /> },
-                { id: 'hr', label: 'SDM / HR', icon: <Office size={20} /> },
-                { id: 'marketing', label: 'Marketing', icon: <BarChart2 size={20} /> },
-            ]
-        },
-        {
-            title: "Pengaturan",
-            items: [
-                { id: 'users', label: 'Pengguna', icon: <Users size={20} /> },
-                { id: 'roles', label: 'Peran & Akses', icon: <UserCheck size={20} /> },
-                // { id: 'settings', label: 'Pengaturan', icon: <Settings size={20} /> },
-            ]
-        }
-    ];
-
-    const handleNavClick = (pageId) => {
-        setActivePage(pageId);
-        if (window.innerWidth < 1024) {
-            setIsMobileOpen(false);
-        }
-    };
+    // Fungsi helper untuk mengecek menu aktif
+    const isActive = (path) => location.pathname === path ? 'bg-gray-800 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white';
 
     return (
-        <>
-            {/* Mobile Overlay */}
-            {isMobileOpen && (
-                <div 
-                    className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
-                    onClick={() => setIsMobileOpen(false)}
-                />
-            )}
+        <div className="flex flex-col h-full bg-gray-900 text-white w-64 shadow-xl">
+            {/* Logo Area */}
+            <div className="flex items-center justify-center h-16 bg-gray-900 border-b border-gray-800">
+                <span className="text-xl font-bold tracking-wider text-blue-500">UMRAH<span className="text-white">MANAGER</span></span>
+            </div>
 
-            {/* Sidebar Container */}
-            <div className={`
-                fixed lg:static inset-y-0 left-0 z-30
-                w-64 bg-white border-r border-gray-200 transform transition-transform duration-200 ease-in-out
-                ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-                flex flex-col h-full
-            `}>
-                {/* Logo Area */}
-                <div className="h-16 flex items-center justify-between px-6 border-b border-gray-200">
-                    <span className="text-xl font-bold text-blue-600">UmrohManager</span>
-                    <button 
-                        onClick={() => setIsMobileOpen(false)}
-                        className="lg:hidden text-gray-500 hover:text-gray-700"
-                    >
-                        <X size={24} />
-                    </button>
-                </div>
+            {/* Scrollable Menu Area */}
+            <div className="flex-1 overflow-y-auto py-4">
+                <nav className="space-y-1 px-2">
+                    
+                    {/* DASHBOARD */}
+                    <Link to="/" className={`${isActive('/')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <svg className="mr-3 h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                        </svg>
+                        Dashboard
+                    </Link>
 
-                {/* Menu Items */}
-                <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-                    {menuGroups.map((group, groupIdx) => (
-                        <div key={groupIdx}>
-                            <h3 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                                {group.title}
-                            </h3>
-                            <div className="space-y-1">
-                                {group.items.map((item) => (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => handleNavClick(item.id)}
-                                        className={`
-                                            w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                                            ${activePage === item.id 
-                                                ? 'bg-blue-50 text-blue-700' 
-                                                : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'}
-                                        `}
-                                    >
-                                        <span className={`mr-3 ${activePage === item.id ? 'text-blue-600' : 'text-gray-400'}`}>
-                                            {item.icon}
-                                        </span>
-                                        {item.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                    {/* MODULE: MASTER DATA */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Master Data
+                    </div>
+                    <Link to="/agents" className={`${isActive('/agents')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">🤝</span>
+                        Agen & Mitra
+                    </Link>
+                    <Link to="/packages" className={`${isActive('/packages')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">📦</span>
+                        Paket Umroh
+                    </Link>
+                    <Link to="/flights" className={`${isActive('/flights')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">✈️</span>
+                        Penerbangan
+                    </Link>
+                    <Link to="/hotels" className={`${isActive('/hotels')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">🏨</span>
+                        Hotel
+                    </Link>
 
-                {/* Footer / User Profile Summary */}
-                <div className="p-4 border-t border-gray-200 bg-gray-50">
-                    <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                            <div className="h-8 w-8 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 font-bold">
-                                A
-                            </div>
-                        </div>
-                        <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-700">Administrator</p>
-                            <p className="text-xs text-gray-500">Super Admin</p>
-                        </div>
+                    {/* MODULE: TRANSAKSI & JAMAAH */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Operasional
+                    </div>
+                    <Link to="/jamaah" className={`${isActive('/jamaah')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">👥</span>
+                        Data Jamaah
+                    </Link>
+                    <Link to="/logistics" className={`${isActive('/logistics')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">🎒</span>
+                        Logistik & Perlengkapan
+                    </Link>
+                    <Link to="/departures" className={`${isActive('/departures')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">📅</span>
+                        Jadwal Keberangkatan
+                    </Link>
+
+                    {/* MODULE: KEUANGAN */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Keuangan
+                    </div>
+                    <Link to="/finance" className={`${isActive('/finance')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">💰</span>
+                        Transaksi & Pembayaran
+                    </Link>
+
+                    {/* MODULE: HR & KANTOR */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        HR & Kantor
+                    </div>
+                    <Link to="/hr" className={`${isActive('/hr')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">👔</span>
+                        Karyawan & Payroll
+                    </Link>
+                    <Link to="/tasks" className={`${isActive('/tasks')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">✅</span>
+                        Tugas & To-Do
+                    </Link>
+
+                    {/* MODULE: MARKETING */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Marketing
+                    </div>
+                    <Link to="/marketing" className={`${isActive('/marketing')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">📢</span>
+                        Kampanye & Leads
+                    </Link>
+
+                    {/* MODULE: PENGATURAN */}
+                    <div className="mt-6 mb-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                        Sistem
+                    </div>
+                    <Link to="/users" className={`${isActive('/users')} group flex items-center px-2 py-2 text-sm font-medium rounded-md`}>
+                        <span className="mr-3 h-6 w-6 text-center text-lg leading-6">🔐</span>
+                        Pengguna & Hak Akses
+                    </Link>
+                </nav>
+            </div>
+
+            {/* User Profile Area */}
+            <div className="border-t border-gray-800 p-4">
+                <div className="flex items-center">
+                    <div className="ml-3">
+                        <p className="text-sm font-medium text-white">Administrator</p>
+                        <p className="text-xs font-medium text-gray-400">View Profile</p>
                     </div>
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 

@@ -1,124 +1,102 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Routes, Route } from 'react-router-dom';
-import { DataProvider } from './contexts/DataContext';
-
-// Components
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import GlobalErrorAlert from './components/GlobalErrorAlert';
-
-// Pages
-import Dashboard from './pages/Dashboard';
-import PackageCategories from './pages/PackageCategories';
-import Packages from './pages/Packages';
-import Jamaah from './pages/Jamaah';
-import Agents from './pages/Agents';
-import Logistics from './pages/Logistics';
-import Departures from './pages/Departures';
-import Tasks from './pages/Tasks';
-import Finance from './pages/Finance';
-import Categories from './pages/Categories';
-import Hotels from './pages/Hotels';
-import Flights from './pages/Flights';
-import Users from './pages/Users';
-import Roles from './pages/Roles';
-import HR from './pages/HR';
-import Marketing from './pages/Marketing';
-
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './index.css';
 
-// Helper: Mapping Role ke Capabilities
-// Ini mencegah error "undefined" di halaman-halaman
-const getUserCapabilities = (role) => {
-  const capabilitiesMap = {
-    // Super Admin / Owner
-    administrator: ['manage_options', 'manage_packages', 'manage_jamaah', 'manage_finance', 'manage_tasks', 'manage_categories', 'manage_flights', 'manage_hotels', 'manage_departures', 'manage_users', 'manage_roles', 'view_reports', 'list_users'],
-    owner: ['manage_options', 'manage_packages', 'manage_jamaah', 'manage_finance', 'manage_tasks', 'manage_categories', 'manage_flights', 'manage_hotels', 'manage_departures', 'manage_users', 'manage_roles', 'view_reports', 'list_users'],
-    
-    // Staff Khusus
-    admin_staff: ['read_packages', 'manage_packages', 'read_jamaah', 'manage_jamaah', 'manage_tasks', 'manage_categories', 'manage_flights', 'manage_hotels', 'manage_departures', 'list_users', 'view_reports'],
-    finance_staff: ['read_packages', 'read_jamaah', 'manage_finance', 'view_reports'],
-    marketing_staff: ['read_packages', 'read_jamaah', 'manage_marketing'],
-    hr_staff: ['list_users', 'manage_users', 'manage_hr'],
-    ops_staff: ['read_packages', 'read_jamaah', 'manage_jamaah', 'manage_flights', 'manage_hotels', 'manage_departures']
-  };
+// Components
+import Sidebar from './components/Sidebar.jsx';
+import Header from './components/Header.jsx';
+import GlobalErrorAlert from './components/GlobalErrorAlert.jsx';
+import { DataProvider } from './contexts/DataContext.jsx';
 
-  // Return capabilities sesuai role, atau array kosong jika tidak ditemukan
-  return capabilitiesMap[role] || [];
-};
+// Pages
+import Dashboard from './pages/Dashboard.jsx';
+import Agents from './pages/Agents.jsx';
+import Jamaah from './pages/Jamaah.jsx';
+import Packages from './pages/Packages.jsx';
+import PackageCategories from './pages/PackageCategories.jsx';
+import Flights from './pages/Flights.jsx';
+import Hotels from './pages/Hotels.jsx';
+import Departures from './pages/Departures.jsx';
+
+import Finance from './pages/Finance.jsx';
+import Logistics from './pages/Logistics.jsx';
+import Users from './pages/Users.jsx';
+import Roles from './pages/Roles.jsx';
+import Tasks from './pages/Tasks.jsx';
+import Categories from './pages/Categories.jsx'; 
+
+// NEW PAGES
+import HR from './pages/HR.jsx';
+import Marketing from './pages/Marketing.jsx';
 
 const App = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+    const [userCapabilities, setUserCapabilities] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-  // 1. AMBIL DATA USER DARI WINDOW (Dikirim dari PHP)
-  // Default ke 'subscriber' jika tidak ada data untuk mencegah crash
-  const currentUserRole = window.umhData?.currentUser?.role || 'subscriber';
-  
-  // 2. HITUNG CAPABILITIES SEKALI SAJA
-  const userCapabilities = useMemo(() => getUserCapabilities(currentUserRole), [currentUserRole]);
+    useEffect(() => {
+        // Load capabilities from global object provided by WordPress
+        if (window.umhData) {
+            setUserCapabilities(window.umhData.capabilities || []);
+            setCurrentUser(window.umhData.currentUser || { name: 'Admin', avatar: '' });
+        }
+        setLoading(false);
+    }, []);
 
-  const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
+    if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
-  return (
-    <DataProvider>
-      <HashRouter>
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
-          
-          <Sidebar isOpen={sidebarOpen} toggleSidebar={toggleSidebar} />
-          
-          <div 
-            className={`flex-1 flex flex-col h-full transition-all duration-300 
-              ${sidebarOpen ? 'ml-64' : 'ml-20'}
-            `}
-          >
-            <Header toggleSidebar={toggleSidebar} isSidebarOpen={sidebarOpen} />
-            
-            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 md:p-6 pb-20">
-              <GlobalErrorAlert />
+    return (
+        <HashRouter>
+            <DataProvider>
+                <div className="flex h-screen bg-gray-100">
+                    <Sidebar userCapabilities={userCapabilities} />
+                    
+                    <div className="flex-1 flex flex-col overflow-hidden">
+                        <Header user={currentUser} />
+                        
+                        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+                            <GlobalErrorAlert />
+                            <Routes>
+                                <Route path="/" element={<Dashboard userCapabilities={userCapabilities} />} />
+                                
+                                {/* Core Modules */}
+                                <Route path="/agents" element={<Agents userCapabilities={userCapabilities} />} />
+                                <Route path="/jamaah" element={<Jamaah userCapabilities={userCapabilities} />} />
+                                
+                                {/* Products */}
+                                <Route path="/packages" element={<Packages userCapabilities={userCapabilities} />} />
+                                <Route path="/package-categories" element={<PackageCategories userCapabilities={userCapabilities} />} />
+                                <Route path="/flights" element={<Flights userCapabilities={userCapabilities} />} />
+                                <Route path="/hotels" element={<Hotels userCapabilities={userCapabilities} />} />
+                                <Route path="/departures" element={<Departures userCapabilities={userCapabilities} />} />
 
-              {/* PERBAIKAN UTAMA: 
-                 Mengirim props `userCapabilities` ke semua halaman 
-                 yang membutuhkannya untuk pengecekan izin tombol.
-              */}
-              <Routes>
-                {/* Dashboard jarang butuh capabilities, tapi bisa dikirim jika perlu */}
-                <Route path="/" element={<Dashboard />} />
+                                {/* Modules with Sub-Routes (PENTING: Pakai /*) */}
+                                <Route path="/hr/*" element={<HR userCapabilities={userCapabilities} />} />
+                                <Route path="/marketing/*" element={<Marketing userCapabilities={userCapabilities} />} />
+                                <Route path="/finance/*" element={<Finance userCapabilities={userCapabilities} />} />
+                                <Route path="/logistics/*" element={<Logistics userCapabilities={userCapabilities} />} />
 
-                <Route path="/package-categories" element={<PackageCategories userCapabilities={userCapabilities} />} />
-                <Route path="/packages" element={<Packages userCapabilities={userCapabilities} />} />
-                <Route path="/jamaah" element={<Jamaah userCapabilities={userCapabilities} />} />
-                <Route path="/agents" element={<Agents userCapabilities={userCapabilities} />} />
-                <Route path="/logistics" element={<Logistics userCapabilities={userCapabilities} />} />
-                <Route path="/departures" element={<Departures userCapabilities={userCapabilities} />} />
-                <Route path="/tasks" element={<Tasks userCapabilities={userCapabilities} />} />
-                <Route path="/finance" element={<Finance userCapabilities={userCapabilities} />} />
-                <Route path="/categories" element={<Categories userCapabilities={userCapabilities} />} />
-                <Route path="/hotels" element={<Hotels userCapabilities={userCapabilities} />} />
-                <Route path="/flights" element={<Flights userCapabilities={userCapabilities} />} />
-                <Route path="/users" element={<Users userCapabilities={userCapabilities} />} />
-                <Route path="/roles" element={<Roles userCapabilities={userCapabilities} />} />
-                
-                {/* Sub-routes mungkin menangani capabilities di dalamnya, tapi kita kirim saja */}
-                <Route path="/hr/*" element={<HR userCapabilities={userCapabilities} />} />
-                <Route path="/marketing/*" element={<Marketing userCapabilities={userCapabilities} />} />
-              </Routes>
-            </main>
-          </div>
-        </div>
-      </HashRouter>
-    </DataProvider>
-  );
+                                {/* Settings & System */}
+                                <Route path="/users" element={<Users userCapabilities={userCapabilities} />} />
+                                <Route path="/roles" element={<Roles userCapabilities={userCapabilities} />} />
+                                <Route path="/tasks" element={<Tasks userCapabilities={userCapabilities} />} />
+                                <Route path="/categories" element={<Categories userCapabilities={userCapabilities} />} />
+                                
+                                {/* Fallback */}
+                                <Route path="*" element={<Navigate to="/" replace />} />
+                            </Routes>
+                        </main>
+                    </div>
+                </div>
+            </DataProvider>
+        </HashRouter>
+    );
 };
 
-const container = document.getElementById('umh-app-root');
+// Mount React App
+const container = document.getElementById('umh-admin-app');
 if (container) {
-  const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
+    const root = createRoot(container);
+    root.render(<App />);
 }

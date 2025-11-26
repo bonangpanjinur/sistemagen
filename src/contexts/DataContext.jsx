@@ -1,94 +1,50 @@
-/*
- * Lokasi File: /src/contexts/DataContext.jsx
- * File: DataContext.jsx
- */
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import api, { setupApiErrorInterceptor } from '../utils/api';
 
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
-import api, { setupApiErrorInterceptor } from '../utils/api'; // PERBAIKAN: Hapus ekstensi .js
+const DataContext = createContext();
 
-// 1. Buat Context
-const DataContext = createContext(null);
+export const useData = () => useContext(DataContext);
 
-// 2. Buat Provider Component
 export const DataProvider = ({ children }) => {
-    const [loading, setLoading] = useState(true);
-    const [dataCache, setDataCache] = useState({});
-    
-    // PERBAIKAN BARU: State untuk error global
-    const [globalError, setGlobalError] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true); // Default true saat pertama buka
 
-    // Fungsi untuk mengambil data (dengan caching)
-    const fetchData = useCallback(async (resource, forceRefresh = false) => {
-        if (!forceRefresh && dataCache[resource]) {
-            return dataCache[resource];
-        }
-
-        try {
-            // PERBAIKAN: Ambil data roles dari umhData jika itu resource 'roles'
-            if (resource === 'roles' && !forceRefresh && window.umhData && window.umhData.roles) {
-                 setDataCache(prev => ({ ...prev, roles: window.umhData.roles }));
-                 return window.umhData.roles;
-            }
-
-            const response = await api.get(resource, { params: { per_page: -1 } }); // Ambil semua data
-            const items = response.data.items || (Array.isArray(response.data) ? response.data : []); // Fallback jika .items tidak ada
-            setDataCache(prev => ({ ...prev, [resource]: items }));
-            return items;
-        } catch (error) {
-            console.error(`Gagal mengambil data untuk ${resource}:`, error);
-            // Error sudah ditangani oleh interceptor, tapi kita set state error lokal
-            // setGlobalError(error.message || 'Gagal memuat data penting.');
-            return []; // Kembalikan array kosong jika gagal
-        }
-    }, [dataCache]);
-
-    // Fungsi untuk memuat data awal
-    const fetchInitialData = async () => {
-        setLoading(true);
-        // PERBAIKAN: Gunakan data 'roles' yang sudah di-bootstrap dari PHP
-        const initialRoles = window.umhData?.roles || [];
-        setDataCache(prev => ({ ...prev, roles: initialRoles }));
-
-        await Promise.all([
-            fetchData('categories'),
-            fetchData('users'),
-            fetchData('packages'),
-            fetchData('jamaah'),
-            fetchData('flights'),
-            fetchData('hotels'),
-            // 'roles' sudah dimuat dari bootstrap
-        ]);
-        setLoading(false);
-    };
-
-    // Muat data awal dan setup interceptor
+    // Ambil data user dari localize script PHP (biar cepat)
+    // Jadi tidak perlu fetch API lagi untuk data dasar user
     useEffect(() => {
-        // Setup interceptor agar bisa update state React
-        setupApiErrorInterceptor(setGlobalError);
-        
-        fetchInitialData();
-    }, []); // Hanya sekali
+        const initApp = async () => {
+            setLoading(true);
+            try {
+                // 1. Cek data dari window object (yang dikirim PHP tadi)
+                if (window.umhData && window.umhData.user) {
+                    setUser(window.umhData.user);
+                } else {
+                    // Fallback: Jika tidak ada di window, coba fetch API
+                    // Endpoint ini harus ada di backend (opsional)
+                    // const res = await api.get('wp/v2/users/me');
+                    // setUser(res.data);
+                }
 
-    // Fungsi untuk me-refresh data tertentu
-    const refreshData = async (resource) => {
-        await fetchData(resource, true); // Paksa refresh
-    };
-    
-    // Fungsi untuk menghapus error global
-    const clearGlobalError = () => {
-        setGlobalError(null);
-    };
+                // Setup interceptor untuk handle error 401/Logout otomatis
+                setupApiErrorInterceptor(() => {
+                    console.warn("Sesi habis, silakan login ulang.");
+                });
 
-    // Nilai yang akan dibagikan
+            } catch (error) {
+                console.error("Gagal inisialisasi aplikasi:", error);
+            } finally {
+                // [KUNCI] Apapun yang terjadi (sukses/error), matikan loading!
+                // Agar menu tidak muter terus.
+                setLoading(false);
+            }
+        };
+
+        initApp();
+    }, []);
+
     const value = {
+        user,
         loading,
-        ...dataCache, // Sebarkan semua data yang di-cache (categories, users, etc.)
-        fetchData,   // Bagikan fungsi fetch jika komponen perlu data on-demand
-        refreshData, // Bagikan fungsi refresh
-        
-        // PERBAIKAN BARU: Bagikan state error
-        globalError,
-        clearGlobalError
     };
 
     return (
@@ -98,11 +54,4 @@ export const DataProvider = ({ children }) => {
     );
 };
 
-// 3. Buat Custom Hook untuk menggunakan context
-export const useData = () => {
-    const context = useContext(DataContext);
-    if (!context) {
-        throw new Error('useData harus digunakan di dalam DataProvider');
-    }
-    return context;
-};
+export default DataContext;

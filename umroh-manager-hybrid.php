@@ -31,8 +31,7 @@ foreach ($core_files as $file) {
     }
 }
 
-// 3. REGISTER API ENDPOINTS (Safe Include)
-// Pastikan semua file API ada di folder includes/api/
+// 3. REGISTER API ENDPOINTS
 $api_files = [
     'includes/api/api-stats.php',
     'includes/api/api-roles.php',
@@ -65,45 +64,64 @@ foreach ($api_files as $file) {
     }
 }
 
+// [PERBAIKAN] Include file halaman admin agar fungsi rendernya dikenali
+require_once UMH_PLUGIN_DIR . 'admin/settings-page.php';
+require_once UMH_PLUGIN_DIR . 'admin/dashboard-react.php';
+
 // 4. HOOK AKTIVASI PLUGIN
 register_activation_hook(__FILE__, 'umh_activate_plugin');
 
 function umh_activate_plugin() {
-    // Panggil fungsi pembuatan tabel dari db-schema.php
     if (function_exists('umh_create_db_tables')) {
         umh_create_db_tables();
     }
-    // [PENTING] Flush rules agar WordPress sadar ada route API baru
     flush_rewrite_rules();
 }
 
-// Cek update DB setiap plugin dimuat (aman, hanya jalan jika versi beda)
 add_action('plugins_loaded', 'umh_update_db_check_main');
 function umh_update_db_check_main() {
     global $umh_db_version;
-    // Jika variabel global belum diset (misal file db-schema belum load), skip
     if (!isset($umh_db_version)) return;
 
     if (get_site_option('umh_db_version') != $umh_db_version) {
         if (function_exists('umh_create_db_tables')) {
             umh_create_db_tables();
         }
-        flush_rewrite_rules(); // Flush juga saat update
+        flush_rewrite_rules();
     }
 }
+
+// Init Settings Page
+add_action('admin_init', function() {
+    if (class_exists('UMH_Settings_Page')) {
+        $settings_page = new UMH_Settings_Page();
+        $settings_page->register_settings();
+    }
+});
 
 // 5. ADMIN MENU & UI
 add_action('admin_menu', 'umh_add_admin_menu');
 
 function umh_add_admin_menu() {
+    // Menu Utama (Dashboard React)
     $hook = add_menu_page(
         'Umroh Manager',
         'Umroh Manager',
         'read', 
         'umroh-manager',
-        'umh_render_admin_page',
+        'umh_render_admin_page', // Callback function
         'dashicons-palmtree',
         6
+    );
+
+    // Submenu Settings (PHP Native)
+    add_submenu_page(
+        'umroh-manager',
+        'Pengaturan',
+        'Pengaturan',
+        'manage_options',
+        'umh-settings',
+        'umh_render_settings_page'
     );
 
     add_action("load-$hook", function() {
@@ -115,10 +133,13 @@ function umh_add_immersive_class($classes) {
     return "$classes immersive-mode"; 
 }
 
+// [PERBAIKAN] Fungsi render memanggil file terpisah
 function umh_render_admin_page() {
-    // ID ini harus sesuai dengan yang dicari oleh ReactDOM di src/index.jsx
-    // Gunakan 'umh-app-root' agar konsisten dengan kode React yang terakhir
-    echo '<div id="umh-app-root"></div>';
+    if (function_exists('umroh_manager_render_dashboard_react')) {
+        umroh_manager_render_dashboard_react();
+    } else {
+        echo '<div id="umh-app-root">Error: File template dashboard tidak ditemukan.</div>';
+    }
 }
 
 // 6. ENQUEUE SCRIPTS
@@ -161,7 +182,7 @@ function umh_enqueue_admin_scripts($hook) {
         $current_user = wp_get_current_user();
         $roles = ( array ) $current_user->roles;
 
-        // Data penting yang dikirim ke React
+        // [PERBAIKAN] Data lengkap untuk React
         wp_localize_script('umroh-manager-react', 'umhData', array(
             'rootUrl'  => get_rest_url(null, 'umh/v1/'),
             'nonce'    => wp_create_nonce('wp_rest'),
@@ -171,9 +192,10 @@ function umh_enqueue_admin_scripts($hook) {
                 'id' => $current_user->ID,
                 'display_name' => $current_user->display_name,
                 'email' => $current_user->user_email,
+                'avatar' => get_avatar_url($current_user->ID), // React butuh ini
                 'role' => $roles[0] ?? 'subscriber'
             ),
-            // Placeholder untuk roles, nanti diambil via API
+            'capabilities' => array_keys($current_user->allcaps), // React butuh ini
             'roles' => [] 
         ));
     } else {

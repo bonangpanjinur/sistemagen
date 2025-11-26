@@ -39,12 +39,19 @@ const App = () => {
         // Load capabilities from global object provided by WordPress
         if (window.umhData) {
             setUserCapabilities(window.umhData.capabilities || []);
-            setCurrentUser(window.umhData.currentUser || { name: 'Admin', avatar: '' });
+            // Default avatar fallback jika null
+            const userData = window.umhData.currentUser || {};
+            if (!userData.avatar) {
+                userData.avatar = 'https://www.gravatar.com/avatar/?d=mp'; 
+            }
+            setCurrentUser(userData);
+        } else {
+            console.warn("umhData not found in window object");
         }
         setLoading(false);
     }, []);
 
-    if (loading) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    if (loading) return <div className="flex h-screen items-center justify-center">Loading Application...</div>;
 
     return (
         <HashRouter>
@@ -71,7 +78,7 @@ const App = () => {
                                 <Route path="/hotels" element={<Hotels userCapabilities={userCapabilities} />} />
                                 <Route path="/departures" element={<Departures userCapabilities={userCapabilities} />} />
 
-                                {/* Modules with Sub-Routes (PENTING: Pakai /*) */}
+                                {/* Modules with Sub-Routes */}
                                 <Route path="/hr/*" element={<HR userCapabilities={userCapabilities} />} />
                                 <Route path="/marketing/*" element={<Marketing userCapabilities={userCapabilities} />} />
                                 <Route path="/finance/*" element={<Finance userCapabilities={userCapabilities} />} />
@@ -94,9 +101,12 @@ const App = () => {
     );
 };
 
-// Mount React App
-const container = document.getElementById('umh-admin-app');
+// [PERBAIKAN CRITICAL] Pastikan ID ini sama dengan di dashboard-react.php
+const container = document.getElementById('umh-app-root');
+
 if (container) {
     const root = createRoot(container);
     root.render(<App />);
+} else {
+    console.error("Target container 'umh-app-root' not found in DOM.");
 }

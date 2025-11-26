@@ -24,6 +24,7 @@ require_once UMROH_MANAGER_PATH . 'includes/db-schema.php';
 require_once UMROH_MANAGER_PATH . 'includes/class-umh-crud-controller.php';
 
 // 3. REGISTER API ENDPOINTS
+// Pastikan semua file API ada di folder includes/api/
 require_once UMROH_MANAGER_PATH . 'includes/api/api-stats.php';
 require_once UMROH_MANAGER_PATH . 'includes/api/api-roles.php';
 require_once UMROH_MANAGER_PATH . 'includes/api/api-users.php';
@@ -53,14 +54,17 @@ register_activation_hook(__FILE__, 'umh_activate_plugin');
 
 function umh_activate_plugin() {
     umh_create_db_tables();
+    // [PENTING] Flush rules agar WordPress sadar ada route API baru
     flush_rewrite_rules();
 }
 
+// Cek update DB setiap plugin dimuat (aman, hanya jalan jika versi beda)
 add_action('plugins_loaded', 'umh_update_db_check');
 function umh_update_db_check() {
     global $umh_db_version;
     if (get_site_option('umh_db_version') != $umh_db_version) {
         umh_create_db_tables();
+        flush_rewrite_rules(); // Flush juga saat update
     }
 }
 
@@ -71,25 +75,24 @@ function umh_add_admin_menu() {
     $hook = add_menu_page(
         'Umroh Manager',
         'Umroh Manager',
-        'read', // Diubah ke 'read' agar staff bisa akses, permission detail di API
+        'read', 
         'umroh-manager',
         'umh_render_admin_page',
         'dashicons-palmtree',
         6
     );
 
-    // [PERBAIKAN 1] Tambahkan class 'immersive-mode' ke body HANYA di halaman ini
     add_action("load-$hook", function() {
         add_filter('admin_body_class', 'umh_add_immersive_class');
     });
 }
 
 function umh_add_immersive_class($classes) {
-    // Tambahkan class agar CSS admin-style.css bisa menyembunyikan menu WP
     return "$classes immersive-mode"; 
 }
 
 function umh_render_admin_page() {
+    // ID ini harus sesuai dengan yang dicari oleh ReactDOM di src/index.jsx
     echo '<div id="umh-app-root"></div>';
 }
 
@@ -130,24 +133,26 @@ function umh_enqueue_admin_scripts($hook) {
             );
         }
 
-        // [PERBAIKAN 2] Ganti nama variabel ke 'umhData' agar cocok dengan React
         $current_user = wp_get_current_user();
         $roles = ( array ) $current_user->roles;
 
+        // Data penting yang dikirim ke React
         wp_localize_script('umroh-manager-react', 'umhData', array(
             'rootUrl'  => get_rest_url(null, 'umh/v1/'),
-            'nonce'    => wp_create_nonce('wp_rest'), // Penting untuk keamanan!
+            'nonce'    => wp_create_nonce('wp_rest'),
             'adminUrl' => admin_url(),
-            'apiUrl'   => get_rest_url(null, 'umh/v1/'), // Tambahan untuk konsistensi
+            'apiUrl'   => get_rest_url(null, 'umh/v1/'),
             'currentUser' => array(
                 'id' => $current_user->ID,
                 'display_name' => $current_user->display_name,
                 'email' => $current_user->user_email,
-                'role' => $roles[0] // Role utama WP
-            )
+                'role' => $roles[0]
+            ),
+            // Bisa tambahkan roles list global di sini jika perlu
+            'roles' => [] 
         ));
     } else {
-        wp_add_inline_script('common', 'console.error("Umroh Manager: Build files not found.");');
+        wp_add_inline_script('common', 'console.error("Umroh Manager: Build files not found. Jalankan npm run build.");');
     }
 }
 ?>

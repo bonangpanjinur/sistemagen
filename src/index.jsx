@@ -1,112 +1,103 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Sidebar from './components/Sidebar';
+import Header from './components/Header';
+import { DataProvider } from './contexts/DataContext';
 import './index.css';
 
-// Components
-import Sidebar from './components/Sidebar.jsx';
-import Header from './components/Header.jsx';
-import GlobalErrorAlert from './components/GlobalErrorAlert.jsx';
-import { DataProvider } from './contexts/DataContext.jsx';
-
-// Pages
-import Dashboard from './pages/Dashboard.jsx';
-import Agents from './pages/Agents.jsx';
-import Jamaah from './pages/Jamaah.jsx';
-import Packages from './pages/Packages.jsx';
-import PackageCategories from './pages/PackageCategories.jsx';
-import Flights from './pages/Flights.jsx';
-import Hotels from './pages/Hotels.jsx';
-import Departures from './pages/Departures.jsx';
-
-import Finance from './pages/Finance.jsx';
-import Logistics from './pages/Logistics.jsx';
-import Users from './pages/Users.jsx';
-import Roles from './pages/Roles.jsx';
-import Tasks from './pages/Tasks.jsx';
-import Categories from './pages/Categories.jsx'; 
-
-// NEW PAGES
-import HR from './pages/HR.jsx';
-import Marketing from './pages/Marketing.jsx';
+// Import semua halaman
+import Dashboard from './pages/Dashboard';
+import Jamaah from './pages/Jamaah';
+import Agents from './pages/Agents';
+import Packages from './pages/Packages';
+import PackageCategories from './pages/PackageCategories';
+import Hotels from './pages/Hotels';
+import Flights from './pages/Flights';
+import Departures from './pages/Departures';
+import Finance from './pages/Finance';
+import Logistics from './pages/Logistics';
+import Marketing from './pages/Marketing';
+import HR from './pages/HR';
+import Tasks from './pages/Tasks';
+import Users from './pages/Users';
+import Roles from './pages/Roles';
+import Categories from './pages/Categories';
 
 const App = () => {
+    const [activePage, setActivePage] = useState('dashboard');
+    const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [userCapabilities, setUserCapabilities] = useState([]);
-    const [currentUser, setCurrentUser] = useState(null);
-    const [loading, setLoading] = useState(true);
 
+    // Ambil capabilities dari window object (injected by WordPress)
     useEffect(() => {
-        // Load capabilities from global object provided by WordPress
-        if (window.umhData) {
-            setUserCapabilities(window.umhData.capabilities || []);
-            // Default avatar fallback jika null
-            const userData = window.umhData.currentUser || {};
-            if (!userData.avatar) {
-                userData.avatar = 'https://www.gravatar.com/avatar/?d=mp'; 
-            }
-            setCurrentUser(userData);
-        } else {
-            console.warn("umhData not found in window object");
+        if (window.umrohManagerData && window.umrohManagerData.capabilities) {
+            setUserCapabilities(window.umrohManagerData.capabilities);
         }
-        setLoading(false);
+        
+        // Cek hash URL untuk deep linking sederhana (misal: #/hotels)
+        const hash = window.location.hash.replace('#/', '');
+        if (hash) {
+            setActivePage(hash);
+        }
     }, []);
 
-    if (loading) return <div className="flex h-screen items-center justify-center">Loading Application...</div>;
+    // Update hash saat page berubah
+    useEffect(() => {
+        window.location.hash = `#/${activePage}`;
+    }, [activePage]);
+
+    const renderPage = () => {
+        switch (activePage) {
+            case 'dashboard': return <Dashboard userCapabilities={userCapabilities} />;
+            case 'jamaah': return <Jamaah userCapabilities={userCapabilities} />;
+            case 'agents': return <Agents userCapabilities={userCapabilities} />;
+            case 'packages': return <Packages userCapabilities={userCapabilities} />;
+            case 'package-categories': return <PackageCategories userCapabilities={userCapabilities} />;
+            case 'hotels': return <Hotels userCapabilities={userCapabilities} />;
+            case 'flights': return <Flights userCapabilities={userCapabilities} />;
+            case 'departures': return <Departures userCapabilities={userCapabilities} />;
+            case 'finance': return <Finance userCapabilities={userCapabilities} />;
+            case 'logistics': return <Logistics userCapabilities={userCapabilities} />;
+            case 'marketing': return <Marketing userCapabilities={userCapabilities} />;
+            case 'hr': return <HR userCapabilities={userCapabilities} />;
+            case 'tasks': return <Tasks userCapabilities={userCapabilities} />;
+            case 'users': return <Users userCapabilities={userCapabilities} />;
+            case 'roles': return <Roles userCapabilities={userCapabilities} />;
+            case 'categories': return <Categories userCapabilities={userCapabilities} />;
+            default: return <Dashboard userCapabilities={userCapabilities} />;
+        }
+    };
 
     return (
-        <HashRouter>
-            <DataProvider>
-                <div className="flex h-screen bg-gray-100">
-                    <Sidebar userCapabilities={userCapabilities} />
+        <DataProvider>
+            <div className="flex h-screen bg-gray-100 font-sans">
+                <Sidebar 
+                    activePage={activePage} 
+                    setActivePage={setActivePage} 
+                    isMobileOpen={isMobileOpen}
+                    setIsMobileOpen={setIsMobileOpen}
+                    userCapabilities={userCapabilities}
+                />
+                
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    <Header 
+                        isMobileOpen={isMobileOpen} 
+                        setIsMobileOpen={setIsMobileOpen} 
+                        title={activePage.replace('-', ' ').toUpperCase()} 
+                    />
                     
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header user={currentUser} />
-                        
-                        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
-                            <GlobalErrorAlert />
-                            <Routes>
-                                <Route path="/" element={<Dashboard userCapabilities={userCapabilities} />} />
-                                
-                                {/* Core Modules */}
-                                <Route path="/agents" element={<Agents userCapabilities={userCapabilities} />} />
-                                <Route path="/jamaah" element={<Jamaah userCapabilities={userCapabilities} />} />
-                                
-                                {/* Products */}
-                                <Route path="/packages" element={<Packages userCapabilities={userCapabilities} />} />
-                                <Route path="/package-categories" element={<PackageCategories userCapabilities={userCapabilities} />} />
-                                <Route path="/flights" element={<Flights userCapabilities={userCapabilities} />} />
-                                <Route path="/hotels" element={<Hotels userCapabilities={userCapabilities} />} />
-                                <Route path="/departures" element={<Departures userCapabilities={userCapabilities} />} />
-
-                                {/* Modules with Sub-Routes */}
-                                <Route path="/hr/*" element={<HR userCapabilities={userCapabilities} />} />
-                                <Route path="/marketing/*" element={<Marketing userCapabilities={userCapabilities} />} />
-                                <Route path="/finance/*" element={<Finance userCapabilities={userCapabilities} />} />
-                                <Route path="/logistics/*" element={<Logistics userCapabilities={userCapabilities} />} />
-
-                                {/* Settings & System */}
-                                <Route path="/users" element={<Users userCapabilities={userCapabilities} />} />
-                                <Route path="/roles" element={<Roles userCapabilities={userCapabilities} />} />
-                                <Route path="/tasks" element={<Tasks userCapabilities={userCapabilities} />} />
-                                <Route path="/categories" element={<Categories userCapabilities={userCapabilities} />} />
-                                
-                                {/* Fallback */}
-                                <Route path="*" element={<Navigate to="/" replace />} />
-                            </Routes>
-                        </main>
-                    </div>
+                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">
+                        {renderPage()}
+                    </main>
                 </div>
-            </DataProvider>
-        </HashRouter>
+            </div>
+        </DataProvider>
     );
 };
 
-// [PERBAIKAN CRITICAL] Pastikan ID ini sama dengan di dashboard-react.php
-const container = document.getElementById('umh-app-root');
-
+// Mount App
+const container = document.getElementById('umroh-manager-app');
 if (container) {
     const root = createRoot(container);
     root.render(<App />);
-} else {
-    console.error("Target container 'umh-app-root' not found in DOM.");
 }

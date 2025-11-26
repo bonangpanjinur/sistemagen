@@ -1,32 +1,17 @@
 <?php
-// File: admin/dashboard-react.php
-// Ini adalah file "host" untuk aplikasi React Anda.
-
 if (!defined('ABSPATH')) {
     exit;
 }
 
-/**
- * Fungsi ini adalah yang dipanggil oleh umh_render_admin_page() 
- * di file umroh-manager-hybrid.php.
- */
-function umroh_manager_render_dashboard_react() {
+function umroh_manager_render_dashboard() {
     ?>
-    <div class="wrap">
-        <!-- 
-          [PERBAIKAN CRITICAL] 
-          ID harus 'umh-app-root' agar sesuai dengan src/index.jsx 
-        -->
-        <div id="umh-app-root">
-            <div style="
-                display: flex; 
-                justify-content: center; 
-                align-items: center; 
-                height: 50vh; 
-                font-family: sans-serif;
-                color: #555;
-            ">
-                <p>Memuat Sistem Umroh Manager...</p>
+    <div class="wrap" style="margin: 0; padding: 0; max-width: 100%;">
+        <!-- Container tempat React akan dimuat -->
+        <div id="umroh-manager-app">
+            <div style="padding: 20px; text-align: center; color: #666;">
+                <h2>Memuat Aplikasi Umroh Manager...</h2>
+                <p>Jika loading berhenti di sini, pastikan build React berhasil dan tidak ada error JavaScript console.</p>
+                <div class="spinner is-active" style="float:none; margin: 10px auto;"></div>
             </div>
         </div>
     </div>

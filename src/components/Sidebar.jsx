@@ -1,115 +1,88 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-    LayoutDashboard, 
-    Users, 
-    Briefcase, 
-    Package, 
-    Settings, 
-    LogOut,
-    Truck,
-    DollarSign,
-    UserCheck,
-    MapPin, 
-    Plane,
-    Database,
-    Megaphone, // Ikon untuk Marketing
-    CheckSquare, // Ikon untuk Tasks
-    Shield
+    LayoutDashboard, Users, Plane, Hotel, 
+    Briefcase, DollarSign, Settings, FileText, 
+    LogOut, Database
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, toggleSidebar }) => {
     const { user } = useData();
 
-    const handleLogout = () => {
-        // Hapus token lokal
-        localStorage.removeItem('umh_auth_token');
-        // Redirect ke logout WP atau refresh agar session WP terputus
-        // Untuk simple refresh:
-        window.location.reload();
-    };
-
-    // PERBAIKAN: Menambahkan Menu Marketing dan Tasks
+    // Menu Item Configuration
     const menuItems = [
-        { path: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-        { path: '/jamaah', icon: <Users size={20} />, label: 'Data Jamaah' },
-        { path: '/packages', icon: <Package size={20} />, label: 'Paket Umroh & Haji' },
-        { path: '/marketing', icon: <Megaphone size={20} />, label: 'Marketing' }, // Baru
-        { path: '/tasks', icon: <CheckSquare size={20} />, label: 'Tugas Tim' },   // Baru
-        { path: '/logistics', icon: <Truck size={20} />, label: 'Logistik' },
-        { path: '/finance', icon: <DollarSign size={20} />, label: 'Keuangan' },
-        { path: '/agents', icon: <UserCheck size={20} />, label: 'Kemitraan Agen' },
-        { path: '/hr', icon: <Briefcase size={20} />, label: 'HR & Karyawan' },
+        { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { path: '/jamaah', label: 'Data Jamaah', icon: <Users size={20} /> },
+        { path: '/packages', label: 'Paket Umroh', icon: <Briefcase size={20} /> },
+        { path: '/flights', label: 'Penerbangan', icon: <Plane size={20} /> },
+        { path: '/hotels', label: 'Hotel', icon: <Hotel size={20} /> },
+        { path: '/finance', label: 'Keuangan', icon: <DollarSign size={20} /> },
+        { path: '/masters', label: 'Data Master', icon: <Database size={20} /> },
+        { path: '/reports', label: 'Laporan', icon: <FileText size={20} /> },
+        { path: '/settings', label: 'Pengaturan', icon: <Settings size={20} /> },
     ];
 
-    // Menu Master Data
-    const masterDataItems = [
-        { path: '/hotels', icon: <MapPin size={20} />, label: 'Master Hotel' },
-        { path: '/flights', icon: <Plane size={20} />, label: 'Master Maskapai' },
-        { path: '/categories', icon: <Database size={20} />, label: 'Kategori Paket' },
-    ];
-
-    const adminItems = [
-        { path: '/users', icon: <Users size={20} />, label: 'Manajemen User' },
-        { path: '/roles', icon: <Shield size={20} />, label: 'Peran & Akses' }, // Tambahan
-        { path: '/settings', icon: <Settings size={20} />, label: 'Pengaturan' },
-    ];
-
-    const renderMenu = (items) => (
-        <ul className="space-y-1 mb-6">
-            {items.map((item) => (
-                <li key={item.path}>
-                    <NavLink
-                        to={item.path}
-                        className={({ isActive }) =>
-                            `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                                isActive
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'text-gray-600 hover:bg-blue-50 hover:text-blue-600'
-                            }`
-                        }
-                    >
-                        {item.icon}
-                        <span className="font-medium text-sm">{item.label}</span>
-                    </NavLink>
-                </li>
-            ))}
-        </ul>
-    );
+    // Filter menu berdasarkan role jika perlu
+    // const filteredMenu = user?.role === 'agent' ? menuItems.filter(...) : menuItems;
 
     return (
-        <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 overflow-y-auto z-40">
-            <div className="p-6 border-b border-gray-100">
-                <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
-                    <Package className="text-blue-600" fill="currentColor" size={28} />
-                    UMH Admin
-                </h1>
-                <p className="text-xs text-gray-500 mt-1">Umroh Manager Hybrid</p>
-            </div>
+        <>
+            {/* Mobile Overlay */}
+            {isOpen && (
+                <div 
+                    className="fixed inset-0 bg-gray-800 bg-opacity-50 z-20 lg:hidden"
+                    onClick={toggleSidebar}
+                ></div>
+            )}
 
-            <nav className="flex-1 p-4 pb-20">
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4">Menu Utama</div>
-                {renderMenu(menuItems)}
+            {/* Sidebar Container */}
+            <aside className={`
+                fixed top-0 left-0 z-30 h-full w-64 bg-white border-r border-gray-200 
+                transform transition-transform duration-300 ease-in-out
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'} 
+                lg:relative lg:translate-x-0
+            `}>
+                <div className="h-full flex flex-col">
+                    {/* Logo Area */}
+                    <div className="h-16 flex items-center px-6 border-b border-gray-200">
+                        <div className="flex items-center gap-2 text-blue-600">
+                            <Plane className="h-8 w-8" />
+                            <span className="text-xl font-bold tracking-tight text-gray-900">UmrohMgr</span>
+                        </div>
+                    </div>
 
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4 mt-6">Master Data</div>
-                {renderMenu(masterDataItems)}
+                    {/* Navigation Items */}
+                    <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+                        {menuItems.map((item) => (
+                            <NavLink
+                                key={item.path}
+                                to={item.path}
+                                onClick={() => window.innerWidth < 1024 && toggleSidebar()}
+                                className={({ isActive }) => `
+                                    flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+                                    ${isActive 
+                                        ? 'bg-blue-50 text-blue-700 shadow-sm' 
+                                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }
+                                `}
+                            >
+                                {item.icon}
+                                <span>{item.label}</span>
+                            </NavLink>
+                        ))}
+                    </nav>
 
-                {/* Tampilkan menu admin hanya jika user punya akses (opsional check) */}
-                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4 mt-6">Administrator</div>
-                {renderMenu(adminItems)}
-            </nav>
-
-            <div className="p-4 border-t border-gray-100 bg-white absolute bottom-0 w-full">
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 px-4 py-3 w-full text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                    <LogOut size={20} />
-                    <span className="font-medium text-sm">Keluar</span>
-                </button>
-            </div>
-        </div>
+                    {/* Footer / User Info Mobile */}
+                    <div className="p-4 border-t border-gray-200">
+                        <div className="bg-gray-50 rounded-lg p-4 mb-2">
+                            <p className="text-xs text-gray-500 font-medium">Versi Aplikasi</p>
+                            <p className="text-xs text-gray-400">v1.3.1 Hybrid</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </>
     );
 };
 

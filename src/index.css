@@ -1,65 +1,94 @@
-/* Ini adalah konten dari file src/index.css Anda sebelumnya */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Custom scrollbar */
+/* Custom scrollbar for better UX */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
 ::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
+    background: #f3f4f6;
 }
 ::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
+    background: #cbd5e1;
     border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #a1a1a1;
+    background: #94a3b8;
 }
 
-/* * ===========================================
- * PERBAIKAN UI/UX
- * Style dasar untuk form untuk mengatasi 
- * override dari CSS admin WordPress
- * ===========================================
-*/
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-800 antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight text-gray-900;
+  }
+}
+
 @layer components {
-    input[type="text"],
-    input[type="email"],
-    input[type="number"],
-    input[type="tel"],
-    input[type="password"],
-    input[type="date"],
-    input[type="datetime-local"],
-    select,
-    textarea {
-        @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm 
-               focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-               sm:text-sm;
+    /* Form Inputs Enhancement */
+    .input-field {
+        @apply block w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg shadow-sm 
+               text-gray-900 text-sm placeholder-gray-400
+               focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 
+               transition-all duration-200 ease-in-out
+               disabled:bg-gray-100 disabled:text-gray-500;
     }
 
-    /* Pastikan select multiple terlihat benar */
-    select[multiple] {
-        @apply p-2;
+    /* Labels */
+    .label {
+        @apply block text-sm font-medium text-gray-700 mb-1.5;
     }
 
-    /* Beri style pada checkbox */
-    input[type="checkbox"] {
-        @apply h-4 w-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500;
+    /* Primary Button */
+    .btn-primary {
+        @apply inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg
+               shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+               disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200;
+    }
+
+    /* Secondary Button */
+    .btn-secondary {
+        @apply inline-flex items-center justify-center px-4 py-2.5 bg-white text-gray-700 text-sm font-medium rounded-lg
+               border border-gray-300 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
+               disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200;
+    }
+
+    /* Danger Button */
+    .btn-danger {
+        @apply inline-flex items-center justify-center px-4 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg
+               shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500
+               transition-all duration-200;
+    }
+
+    /* Cards */
+    .card {
+        @apply bg-white rounded-xl border border-gray-200 shadow-sm p-6 transition-shadow duration-300 hover:shadow-md;
+    }
+
+    /* Badges */
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    }
+    
+    /* Custom Select adjustments */
+    select.input-field {
+        @apply pr-10; /* Make room for arrow */
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+        appearance: none;
     }
 }
 
-
-/* Style untuk input date */
+/* Fix for date inputs */
 input[type="date"] {
     position: relative;
-    color-scheme: light; /* Pastikan kalender muncul dalam mode terang */
+    color-scheme: light;
 }
-
-/* Sembunyikan ikon kalender default di beberapa browser */
 input[type="date"]::-webkit-calendar-picker-indicator {
     background: transparent;
     bottom: 0;

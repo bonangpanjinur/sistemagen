@@ -1,42 +1,42 @@
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
-import { Toaster } from 'react-hot-toast'; 
+import GlobalErrorAlert from './GlobalErrorAlert';
 
-const Layout = ({ children, title }) => {
+const Layout = ({ children, title = "Dashboard" }) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    return (
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900">
-            {/* Overlay Mobile */}
-            {sidebarOpen && (
-                <div 
-                    className="fixed inset-0 z-20 bg-black bg-opacity-50 lg:hidden"
-                    onClick={() => setSidebarOpen(false)}
-                ></div>
-            )}
+    const toggleSidebar = () => {
+        setSidebarOpen(!sidebarOpen);
+    };
 
-            {/* Sidebar Container */}
-            <div className={`fixed inset-y-0 left-0 z-30 w-64 transform bg-gray-900 text-white transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-                <Sidebar />
-            </div>
+    return (
+        <div className="flex h-screen bg-gray-50 overflow-hidden">
+            {/* Sidebar Navigation */}
+            <Sidebar 
+                isOpen={sidebarOpen} 
+                toggleSidebar={toggleSidebar} 
+            />
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                {/* Header Top Bar */}
                 <Header 
                     title={title} 
-                    toggleSidebar={() => setSidebarOpen(!sidebarOpen)} 
+                    toggleSidebar={toggleSidebar} 
                 />
-                
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">
-                    <div className="container mx-auto">
+
+                {/* Main Scrollable Content */}
+                <main className="flex-1 overflow-y-auto focus:outline-none p-4 sm:p-6 lg:p-8">
+                    <div className="max-w-7xl mx-auto">
+                        {/* Global Error Handler (jika ada error API global) */}
+                        <GlobalErrorAlert />
+                        
+                        {/* Page Content */}
                         {children}
                     </div>
                 </main>
             </div>
-            
-            {/* Global Notifications */}
-            <Toaster position="top-right" />
         </div>
     );
 };

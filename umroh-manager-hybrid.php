@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Umroh Manager Hybrid
  * Description: Sistem Manajemen Travel Umroh & Haji (React + WP API)
- * Version: 1.3.0
+ * Version: 1.3.1
  * Author: Bonang Panji
  */
 
@@ -46,7 +46,7 @@ function umh_register_admin_page() {
     add_menu_page(
         'Umroh Manager',
         'Umroh Manager',
-        'read', 
+        'read', // Capability minimal 'read' agar semua staff bisa akses, permission API yang akan memfilter data
         'umroh-manager',
         'umroh_manager_render_dashboard_react', // Fungsi ada di admin/dashboard-react.php
         'dashicons-palmtree',
@@ -75,7 +75,7 @@ function umh_enqueue_react_scripts($hook) {
 
     $asset_file = include(UMH_PLUGIN_DIR . 'build/index.asset.php');
 
-    // 1. Load CSS Khusus Admin (Untuk Immersive Mode) - PERBAIKAN UTAMA MASALAH 1
+    // 1. Load CSS Khusus Admin (Untuk Immersive Mode)
     wp_enqueue_style(
         'umh-admin-global',
         UMH_PLUGIN_URL . 'assets/css/admin-style.css',
@@ -92,7 +92,32 @@ function umh_enqueue_react_scripts($hook) {
         true
     );
 
-    // 3. Load React CSS
+    // 3. Inject Data Penting ke React (FIX UTAMA)
+    // Ini penting agar React tahu URL API, Nonce, dan User yang login
+    $current_user = wp_get_current_user();
+    $roles = (array) $current_user->roles;
+    $role = $roles[0] ?? 'subscriber';
+    
+    // Tentukan role aplikasi berdasarkan capability WP
+    $app_role = $role;
+    if (current_user_can('manage_options')) {
+        $app_role = 'super_admin';
+    }
+
+    wp_localize_script('umh-react-app', 'umhData', [
+        'root' => esc_url_raw(rest_url()),
+        'nonce' => wp_create_nonce('wp_rest'),
+        'adminUrl' => admin_url(), // URL untuk tombol "Kembali ke WP"
+        'user' => [
+            'id' => $current_user->ID,
+            'name' => $current_user->display_name,
+            'email' => $current_user->user_email,
+            'role' => $app_role,
+            'avatar' => get_avatar_url($current_user->ID)
+        ]
+    ]);
+
+    // 4. Load React CSS
     wp_enqueue_style(
         'umh-react-style',
         UMH_PLUGIN_URL . 'build/index.css',

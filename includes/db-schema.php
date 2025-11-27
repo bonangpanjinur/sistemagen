@@ -9,7 +9,7 @@ function umh_create_db_tables() {
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // 1. Tabel Agents (Agen & Sub-Agen)
+    // 1. Tabel Agents (Perbaikan UNIQUE dan KEY)
     $table_agents = $wpdb->prefix . 'umh_agents';
     $sql_agents = "CREATE TABLE $table_agents (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -19,9 +19,9 @@ function umh_create_db_tables() {
         phone varchar(20),
         address text,
         city varchar(50),
-        code varchar(20) UNIQUE,
+        code varchar(20),
         status varchar(20) DEFAULT 'active',
-        commission_rate decimal(10,2) DEFAULT 0,
+        commission_rate decimal(15,2) DEFAULT 0,
         parent_id mediumint(9) NULL, 
         type varchar(20) DEFAULT 'master',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
@@ -31,11 +31,11 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_agents);
 
-    // 2. Tabel Jamaah
+    // 2. Tabel Jamaah (Perbaikan sintaks longtext)
     $table_jamaah = $wpdb->prefix . 'umh_jamaah';
     $sql_jamaah = "CREATE TABLE $table_jamaah (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        registration_number varchar(50) UNIQUE,
+        registration_number varchar(50),
         full_name varchar(100) NOT NULL,
         nik varchar(20),
         passport_number varchar(20),
@@ -47,14 +47,14 @@ function umh_create_db_tables() {
         room_type varchar(20) DEFAULT 'quad',
         package_price decimal(15,2) DEFAULT 0,
         status varchar(20) DEFAULT 'registered',
-        documents longtext, -- JSON: {scan_ktp: 'url', passport: 'url', etc}
+        documents longtext,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_jamaah);
 
-    // 3. Tabel Kategori Paket (Dinamis: Furoda, Plus, Awal Tahun, dll)
+    // 3. Tabel Kategori Paket
     $table_categories = $wpdb->prefix . 'umh_package_categories';
     $sql_categories = "CREATE TABLE $table_categories (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -66,14 +66,14 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_categories);
 
-    // 4. Tabel Master Hotel
+    // 4. Tabel Master Hotel (Perbaikan default value)
     $table_hotels = $wpdb->prefix . 'umh_hotels';
     $sql_hotels = "CREATE TABLE $table_hotels (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         name varchar(100) NOT NULL,
-        city varchar(50) DEFAULT 'Makkah', -- Makkah, Madinah, Jeddah, Transit
+        city varchar(50) DEFAULT 'Makkah',
         rating varchar(5) DEFAULT '5',
-        distance int(11) DEFAULT 0, -- Dalam meter
+        distance int(11) DEFAULT 0,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
@@ -93,21 +93,22 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_flights);
 
-    // 6. Tabel Paket (Utama)
+    // 6. Tabel Paket (Perbaikan struktur JSON dan Harga Varian)
     $table_packages = $wpdb->prefix . 'umh_packages';
     $sql_packages = "CREATE TABLE $table_packages (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         name varchar(150) NOT NULL,
-        service_type varchar(20) DEFAULT 'umroh', -- umroh, haji, tour
-        category_id mediumint(9) NULL, -- Relasi ke umh_package_categories
+        service_type varchar(20) DEFAULT 'umroh',
+        category_id mediumint(9) NULL,
         duration int(11) DEFAULT 9,
-        price decimal(15,2) DEFAULT 0, -- Harga dasar (Quad)
+        price decimal(15,2) DEFAULT 0, -- Base price (Quad)
+        prices longtext, -- JSON: {quad: 25jt, triple: 27jt, double: 30jt}
         airline_id mediumint(9) NULL,
-        accommodations longtext, -- JSON: [{hotel_id: 1, city: 'Makkah'}, ...]
+        accommodations longtext,
         facilities longtext,
         excludes longtext,
-        itinerary_type varchar(20) DEFAULT 'manual', -- manual / upload
-        itinerary_data longtext, -- JSON items or file URL
+        itinerary_type varchar(20) DEFAULT 'manual',
+        itinerary_data longtext,
         status varchar(20) DEFAULT 'active',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -115,7 +116,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_packages);
 
-    // 7. Tabel HR: Employees (Data Karyawan)
+    // 7. Tabel HR: Employees
     $table_employees = $wpdb->prefix . 'umh_employees';
     $sql_employees = "CREATE TABLE $table_employees (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -130,13 +131,13 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_employees);
 
-    // 8. Tabel HR: Attendance (Absensi)
+    // 8. Tabel HR: Attendance
     $table_attendance = $wpdb->prefix . 'umh_attendance';
     $sql_attendance = "CREATE TABLE $table_attendance (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         employee_id mediumint(9) NOT NULL,
         date date NOT NULL,
-        status varchar(20) DEFAULT 'present', -- present, absent, permission
+        status varchar(20) DEFAULT 'present',
         notes text,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -144,7 +145,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_attendance);
 
-    // 9. Tabel HR: Loans (Kasbon)
+    // 9. Tabel HR: Loans
     $table_loans = $wpdb->prefix . 'umh_loans';
     $sql_loans = "CREATE TABLE $table_loans (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -152,7 +153,7 @@ function umh_create_db_tables() {
         date date NOT NULL,
         amount decimal(15,2) NOT NULL,
         description text,
-        status varchar(20) DEFAULT 'unpaid', -- unpaid, paid
+        status varchar(20) DEFAULT 'unpaid',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
@@ -160,29 +161,29 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_loans);
 
-    // 10. Tabel Finance (Pemasukan & Pengeluaran)
+    // 10. Tabel Finance
     $table_finance = $wpdb->prefix . 'umh_finance';
     $sql_finance = "CREATE TABLE $table_finance (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         date date NOT NULL,
-        type varchar(20) NOT NULL, -- income, expense
+        type varchar(20) NOT NULL,
         amount decimal(15,2) NOT NULL,
         category varchar(50),
         description text,
-        proof_url varchar(255), -- Upload bukti
+        proof_url varchar(255),
         created_by bigint(20) UNSIGNED,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_finance);
 
-    // 11. Tabel Logistik (Tracking Perlengkapan Jamaah)
+    // 11. Tabel Logistik
     $table_logistics = $wpdb->prefix . 'umh_logistics';
     $sql_logistics = "CREATE TABLE $table_logistics (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         jamaah_id mediumint(9) NOT NULL,
-        items_status longtext, -- JSON Checklist: {koper: true, ihram: false, ...}
-        handover_status varchar(20) DEFAULT 'pending', -- pending, taken, shipped
+        items_status longtext,
+        handover_status varchar(20) DEFAULT 'pending',
         taken_by varchar(100),
         date_taken date,
         shipping_address text,
@@ -194,12 +195,11 @@ function umh_create_db_tables() {
     dbDelta($sql_logistics);
 }
 
-// Hook untuk menjalankan fungsi saat plugin diaktifkan
 register_activation_hook(__FILE__, 'umh_create_db_tables');
 
-// Opsional: Hook manual jika ingin trigger update schema tanpa re-aktivasi plugin (via URL)
+// Trigger manual untuk update schema jika diperlukan via URL
 if (isset($_GET['update_umh_db']) && $_GET['update_umh_db'] == 'true' && current_user_can('manage_options')) {
     umh_create_db_tables();
-    echo "UMH Database Schema Updated!";
+    echo "UMH Database Schema Updated Successfully!";
     exit;
 }

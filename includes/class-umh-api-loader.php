@@ -3,42 +3,33 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class UMH_API_Loader {
+class UMH_Api_Loader {
 
     public function __construct() {
-        add_action('rest_api_init', [$this, 'register_all_routes']);
+        $this->load_dependencies();
     }
 
-    public function register_all_routes() {
-        // Daftar semua file API yang ada di folder includes/api/
-        $api_files = [
-            'api-agents.php',
-            'api-categories.php',
-            'api-departures.php',
-            'api-finance.php',
-            'api-flights.php',
-            'api-flight-bookings.php',
-            'api-hotel-bookings.php',
-            'api-hotels.php',
-            'api-hr.php',
-            'api-jamaah.php',
-            'api-logistics.php',
-            'api-marketing.php',
-            'api-package-categories.php',
-            'api-packages.php',
-            'api-payments.php',
-            'api-stats.php',
-            'api-tasks.php',
-            'api-users.php',
-            'api-roles.php',
-            'api-uploads.php'
-        ];
+    private function load_dependencies() {
+        // 1. Load Controller Utama (Jantung CRUD)
+        require_once UMH_PLUGIN_DIR . 'includes/class-umh-crud-controller.php';
 
-        foreach ($api_files as $file) {
-            $path = UMROH_MANAGER_PATH . 'includes/api/' . $file;
-            if (file_exists($path)) {
-                require_once $path;
-            }
-        }
+        // 2. Load Module API Utama
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-stats.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-jamaah.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-packages.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-agents.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-finance.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
+        
+        // 3. Load Module HR
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-hr.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-users.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-roles.php'; // Pastikan file ini ada atau hapus baris ini jika belum
+
+        // 4. LOAD MASTER DATA (INI YANG KEMARIN KURANG/TERLEWAT)
+        // Tanpa ini, halaman Hotel, Maskapai, Kategori akan loading terus
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-hotels.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-flights.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-package-categories.php';
     }
 }

@@ -1,38 +1,30 @@
 <?php
-/**
- * File: includes/api/api-flights.php
- *
- * Mengganti file kerangka yang kosong dengan implementasi UMH_CRUD_Controller
- * untuk mengaktifkan CRUD pada tabel umh_flights.
- */
-
 if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+    exit;
 }
 
-// 1. Definisikan Skema Data (sesuai db-schema.php)
-$flights_schema = [
-    'airline'                => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'flight_number'          => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'departure_airport_code' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'arrival_airport_code'   => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'departure_time'         => ['type' => 'string', 'format' => 'date-time', 'required' => true],
-    'arrival_time'           => ['type' => 'string', 'format' => 'date-time', 'required' => true],
-    'cost_per_seat'          => ['type' => 'number', 'required' => false],
-    'total_seats'            => ['type' => 'integer', 'required' => false, 'sanitize_callback' => 'absint'],
-];
+add_action('rest_api_init', 'umh_register_flights_routes');
 
-// 2. Definisikan Izin
-$flights_permissions = [
-    'get_items'    => ['owner', 'admin_staff'],
-    'get_item'     => ['owner', 'admin_staff'],
-    'create_item'  => ['owner', 'admin_staff'],
-    'update_item'  => ['owner', 'admin_staff'],
-    'delete_item'  => ['owner'],
-];
+function umh_register_flights_routes() {
+    $base = 'flights';
 
-// 3. Inisialisasi Controller
-// Ini secara otomatis membuat endpoint: /wp-json/umh/v1/flights
-new UMH_CRUD_Controller('flights', 'umh_flights', $flights_schema, $flights_permissions);
+    $schema = [
+        'name'      => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+        'code'      => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
+        'type'      => ['type' => 'string', 'default' => 'International'],
+        'status'    => ['type' => 'string', 'default' => 'active'],
+    ];
 
-// TODO: Buat endpoint kustom untuk 'umh_flight_bookings' jika diperlukan
+    new UMH_CRUD_Controller(
+        $base,               // Endpoint: umh/v1/flights
+        'umh_flights',       // Nama Tabel DB
+        $schema,
+        [
+            'get_items'   => ['owner', 'admin_staff'],
+            'create_item' => ['owner', 'admin_staff'],
+            'update_item' => ['owner', 'admin_staff'],
+            'delete_item' => ['owner'],
+        ],
+        ['name', 'code']
+    );
+}

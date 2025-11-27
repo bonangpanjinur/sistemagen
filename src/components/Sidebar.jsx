@@ -5,7 +5,6 @@ import {
     Users, 
     Briefcase, 
     Package, 
-    FileText, 
     Settings, 
     LogOut,
     Truck,
@@ -13,7 +12,10 @@ import {
     UserCheck,
     MapPin, 
     Plane,
-    Database
+    Database,
+    Megaphone, // Ikon untuk Marketing
+    CheckSquare, // Ikon untuk Tasks
+    Shield
 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
@@ -21,21 +23,27 @@ const Sidebar = () => {
     const { user } = useData();
 
     const handleLogout = () => {
+        // Hapus token lokal
         localStorage.removeItem('umh_auth_token');
+        // Redirect ke logout WP atau refresh agar session WP terputus
+        // Untuk simple refresh:
         window.location.reload();
     };
 
+    // PERBAIKAN: Menambahkan Menu Marketing dan Tasks
     const menuItems = [
         { path: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
         { path: '/jamaah', icon: <Users size={20} />, label: 'Data Jamaah' },
         { path: '/packages', icon: <Package size={20} />, label: 'Paket Umroh & Haji' },
+        { path: '/marketing', icon: <Megaphone size={20} />, label: 'Marketing' }, // Baru
+        { path: '/tasks', icon: <CheckSquare size={20} />, label: 'Tugas Tim' },   // Baru
         { path: '/logistics', icon: <Truck size={20} />, label: 'Logistik' },
         { path: '/finance', icon: <DollarSign size={20} />, label: 'Keuangan' },
         { path: '/agents', icon: <UserCheck size={20} />, label: 'Kemitraan Agen' },
         { path: '/hr', icon: <Briefcase size={20} />, label: 'HR & Karyawan' },
     ];
 
-    // Menu Master Data (Terpisah)
+    // Menu Master Data
     const masterDataItems = [
         { path: '/hotels', icon: <MapPin size={20} />, label: 'Master Hotel' },
         { path: '/flights', icon: <Plane size={20} />, label: 'Master Maskapai' },
@@ -44,6 +52,7 @@ const Sidebar = () => {
 
     const adminItems = [
         { path: '/users', icon: <Users size={20} />, label: 'Manajemen User' },
+        { path: '/roles', icon: <Shield size={20} />, label: 'Peran & Akses' }, // Tambahan
         { path: '/settings', icon: <Settings size={20} />, label: 'Pengaturan' },
     ];
 
@@ -70,7 +79,7 @@ const Sidebar = () => {
     );
 
     return (
-        <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 overflow-y-auto z-10">
+        <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 overflow-y-auto z-40">
             <div className="p-6 border-b border-gray-100">
                 <h1 className="text-2xl font-bold text-blue-600 flex items-center gap-2">
                     <Package className="text-blue-600" fill="currentColor" size={28} />
@@ -79,18 +88,19 @@ const Sidebar = () => {
                 <p className="text-xs text-gray-500 mt-1">Umroh Manager Hybrid</p>
             </div>
 
-            <nav className="flex-1 p-4">
+            <nav className="flex-1 p-4 pb-20">
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4">Menu Utama</div>
                 {renderMenu(menuItems)}
 
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4 mt-6">Master Data</div>
                 {renderMenu(masterDataItems)}
 
+                {/* Tampilkan menu admin hanya jika user punya akses (opsional check) */}
                 <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-4 mt-6">Administrator</div>
                 {renderMenu(adminItems)}
             </nav>
 
-            <div className="p-4 border-t border-gray-100">
+            <div className="p-4 border-t border-gray-100 bg-white absolute bottom-0 w-full">
                 <button
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 w-full text-left text-red-600 hover:bg-red-50 rounded-lg transition-colors"

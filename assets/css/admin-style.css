@@ -1,14 +1,14 @@
 /* File: assets/css/admin-style.css */
 
-/* Mode Immersive: Menyembunyikan elemen bawaan WordPress */
+/* Mode Immersive: Menyembunyikan elemen bawaan WordPress secara agresif */
 body.immersive-mode {
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important; /* Mencegah scroll ganda dengan WP */
-    background: #f3f4f6 !important; /* Warna background aplikasi */
+    background: #f3f4f6 !important; 
 }
 
-/* Sembunyikan elemen WP */
+/* Sembunyikan elemen WP Standar */
 body.immersive-mode #wpadminbar,
 body.immersive-mode #adminmenumain,
 body.immersive-mode #adminmenuback,
@@ -17,8 +17,15 @@ body.immersive-mode #wpfooter,
 body.immersive-mode .update-nag,
 body.immersive-mode .notice,
 body.immersive-mode #wpbody-content > .wrap > h1,
-body.immersive-mode .auto-fold #wpcontent {
+body.immersive-mode .auto-fold #wpcontent,
+body.immersive-mode #screen-meta,
+body.immersive-mode #screen-meta-links {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
 /* Reset layout container WP agar React bisa full screen */
@@ -38,17 +45,20 @@ body.immersive-mode #wpbody {
     padding-top: 0 !important;
 }
 
-/* Container Utama React App */
+/* Container Utama React App - Memaksa tampil di atas segalanya */
 #umh-app-root {
     width: 100vw;
     height: 100vh;
     position: fixed;
     top: 0;
     left: 0;
-    z-index: 99999; /* Pastikan di atas segalanya */
+    right: 0;
+    bottom: 0;
+    z-index: 99999; /* Pastikan di atas Admin Bar WP jika bocor */
     background: #f9fafb;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* Scrollbar Kustom yang Halus */

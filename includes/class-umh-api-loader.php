@@ -21,15 +21,28 @@ class UMH_Api_Loader {
         require_once UMH_PLUGIN_DIR . 'includes/api/api-finance.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
         
-        // 3. Load Module HR
+        // 3. Load Module Tambahan (PERBAIKAN: Menambahkan modul yang hilang)
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-marketing.php'; // Fix: Menu Marketing
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-tasks.php';     // Fix: Menu Tasks
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-uploads.php';   // Fix: Upload File
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-print.php';     // Fix: Fitur Print
+        
+        // 4. Load Module HR & Admin
         require_once UMH_PLUGIN_DIR . 'includes/api/api-hr.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-users.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-roles.php'; // Pastikan file ini ada atau hapus baris ini jika belum
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-roles.php';
 
-        // 4. LOAD MASTER DATA (INI YANG KEMARIN KURANG/TERLEWAT)
-        // Tanpa ini, halaman Hotel, Maskapai, Kategori akan loading terus
+        // 5. Load Master Data
         require_once UMH_PLUGIN_DIR . 'includes/api/api-hotels.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-flights.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-package-categories.php';
+        
+        // 6. Booking Modules (Opsional jika file ada)
+        if (file_exists(UMH_PLUGIN_DIR . 'includes/api/api-hotel-bookings.php')) {
+            require_once UMH_PLUGIN_DIR . 'includes/api/api-hotel-bookings.php';
+        }
+        if (file_exists(UMH_PLUGIN_DIR . 'includes/api/api-flight-bookings.php')) {
+            require_once UMH_PLUGIN_DIR . 'includes/api/api-flight-bookings.php';
+        }
     }
 }

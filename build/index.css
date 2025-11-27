@@ -585,14 +585,14 @@ input[type="checkbox"]:focus {
 .top-20 {
   top: 5rem;
 }
-.z-10 {
-  z-index: 10;
-}
 .z-20 {
   z-index: 20;
 }
 .z-30 {
   z-index: 30;
+}
+.z-40 {
+  z-index: 40;
 }
 .z-50 {
   z-index: 50;
@@ -656,9 +656,6 @@ input[type="checkbox"]:focus {
 }
 .inline-block {
   display: inline-block;
-}
-.inline {
-  display: inline;
 }
 .flex {
   display: flex;
@@ -1233,6 +1230,9 @@ input[type="checkbox"]:focus {
 }
 .pb-2 {
   padding-bottom: 0.5rem;
+}
+.pb-20 {
+  padding-bottom: 5rem;
 }
 .pl-3 {
   padding-left: 0.75rem;

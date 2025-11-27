@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Umroh Manager Hybrid
  * Description: Sistem Manajemen Travel Umroh & Haji (React + WP API)
- * Version: 1.2.0
+ * Version: 1.3.0
  * Author: Bonang Panji
  */
 
@@ -19,14 +19,25 @@ require_once UMH_PLUGIN_DIR . 'includes/cors.php';
 require_once UMH_PLUGIN_DIR . 'includes/utils.php';
 require_once UMH_PLUGIN_DIR . 'includes/class-umh-api-loader.php';
 
+// Load Dashboard Renderer
+require_once UMH_PLUGIN_DIR . 'admin/dashboard-react.php';
+require_once UMH_PLUGIN_DIR . 'admin/settings-page.php';
+
 // Init API Loader
 new UMH_Api_Loader();
+
+// Init Settings Page
+add_action('admin_init', function() {
+    $settings = new UMH_Settings_Page();
+    $settings->register_settings();
+});
 
 // Activation Hook
 register_activation_hook(__FILE__, 'umh_create_db_tables');
 
-// --- TAMBAHAN FORCE UPDATE DB (OPSIONAL: UNCOMMENT JIKA TABEL BELUM MUNCUL) ---
-// add_action('admin_init', 'umh_create_db_tables'); 
+// Setup CORS
+$cors = new UMH_CORS();
+$cors->add_cors_headers();
 
 // Load React App di Admin Menu
 add_action('admin_menu', 'umh_register_admin_page');
@@ -35,63 +46,57 @@ function umh_register_admin_page() {
     add_menu_page(
         'Umroh Manager',
         'Umroh Manager',
-        'read', // Capability 'read' agar semua staff yg login bisa akses (nanti dibatasi di API)
+        'read', 
         'umroh-manager',
-        'umh_render_react_app',
+        'umroh_manager_render_dashboard_react', // Fungsi ada di admin/dashboard-react.php
         'dashicons-palmtree',
         6
     );
-}
-
-function umh_render_react_app() {
-    // Inject variabel global untuk React
-    $current_user = wp_get_current_user();
-    $roles = (array) $current_user->roles;
     
-    // Mapping Role WP ke Role App
-    $app_role = 'agent'; 
-    if (in_array('administrator', $roles)) $app_role = 'owner';
-    // Logic mapping role lainnya bisa ditambahkan di sini
-
-    ?>
-    <div id="umh-app"></div>
-    <script>
-        window.umhData = {
-            root: '<?php echo esc_url_raw(rest_url()); ?>',
-            nonce: '<?php echo wp_create_nonce('wp_rest'); ?>',
-            user: {
-                id: <?php echo $current_user->ID; ?>,
-                name: '<?php echo $current_user->display_name; ?>',
-                email: '<?php echo $current_user->user_email; ?>',
-                role: '<?php echo $app_role; ?>' // Kirim role ke React
-            }
-        };
-    </script>
-    <?php
+    // Submenu Settings
+    add_submenu_page(
+        'umroh-manager',
+        'Pengaturan',
+        'Pengaturan',
+        'manage_options',
+        'umh-settings',
+        'umh_render_settings_page' // Fungsi ada di admin/settings-page.php
+    );
 }
 
 // Enqueue Scripts
 add_action('admin_enqueue_scripts', 'umh_enqueue_react_scripts');
 
 function umh_enqueue_react_scripts($hook) {
-    if ($hook !== 'toplevel_page_umroh-manager') {
+    // Hanya load di halaman plugin kita
+    if (strpos($hook, 'umroh-manager') === false) {
         return;
     }
 
     $asset_file = include(UMH_PLUGIN_DIR . 'build/index.asset.php');
 
+    // 1. Load CSS Khusus Admin (Untuk Immersive Mode) - PERBAIKAN UTAMA MASALAH 1
+    wp_enqueue_style(
+        'umh-admin-global',
+        UMH_PLUGIN_URL . 'assets/css/admin-style.css',
+        [],
+        time() // Force reload cache saat dev
+    );
+
+    // 2. Load React Script
     wp_enqueue_script(
         'umh-react-app',
         UMH_PLUGIN_URL . 'build/index.js',
-        $asset_file['dependencies'],
+        array_merge($asset_file['dependencies'], ['wp-element', 'wp-api-fetch']),
         $asset_file['version'],
         true
     );
 
+    // 3. Load React CSS
     wp_enqueue_style(
         'umh-react-style',
         UMH_PLUGIN_URL . 'build/index.css',
-        [],
+        ['umh-admin-global'],
         $asset_file['version']
     );
 }

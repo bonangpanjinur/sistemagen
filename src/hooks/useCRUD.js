@@ -1,9 +1,14 @@
 import { useState, useCallback } from 'react';
 import api from '../utils/api';
-import toast from 'react-hot-toast'; // Optional: Gunakan jika sudah install react-hot-toast
+import toast from 'react-hot-toast'; 
 
 const useCRUD = (endpoint) => {
     const [data, setData] = useState([]);
+    const [pagination, setPagination] = useState({
+        current_page: 1,
+        total_pages: 1,
+        total_items: 0
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -13,13 +18,32 @@ const useCRUD = (endpoint) => {
         setError(null);
         try {
             const response = await api.get(endpoint, { params });
-            // Sesuaikan dengan struktur return API Anda (misal response.data atau response.data.data)
-            const result = response.data || []; 
-            setData(Array.isArray(result) ? result : []);
+            
+            // PERBAIKAN UTAMA: Handle struktur response dari Controller PHP
+            // Controller mengembalikan { items: [], total_items: 10, ... }
+            
+            if (response.data && Array.isArray(response.data.items)) {
+                // Jika formatnya object dengan property items (Pagination aktif)
+                setData(response.data.items);
+                setPagination({
+                    current_page: response.data.current_page || 1,
+                    total_pages: response.data.total_pages || 1,
+                    total_items: response.data.total_items || 0
+                });
+            } else if (Array.isArray(response.data)) {
+                // Jika formatnya langsung array (tanpa pagination)
+                setData(response.data);
+            } else {
+                // Fallback jika format tidak dikenali
+                console.warn("Format data API tidak sesuai ekspektasi:", response.data);
+                setData([]); 
+            }
+
         } catch (err) {
             const errMsg = err.response?.data?.message || err.message || 'Gagal memuat data';
             setError(errMsg);
             console.error("Fetch Error:", err);
+            setData([]); // Pastikan data kosong saat error untuk mencegah layar putih
         } finally {
             setLoading(false);
         }
@@ -49,7 +73,6 @@ const useCRUD = (endpoint) => {
         setLoading(true);
         const toastId = toast.loading('Memperbarui data...');
         try {
-            // Menggunakan POST ke endpoint ID biasanya standar di WP REST API jika PUT bermasalah
             await api.post(`${endpoint}/${id}`, updatedItem); 
             await fetchData();
             toast.success('Data berhasil diperbarui!', { id: toastId });
@@ -66,19 +89,26 @@ const useCRUD = (endpoint) => {
 
     // 4. Delete Item
     const deleteItem = async (id) => {
+        if (!window.confirm('Apakah Anda yakin ingin menghapus data ini?')) return false;
+        
         setLoading(true);
         const toastId = toast.loading('Menghapus data...');
         try {
             await api.delete(`${endpoint}/${id}`);
-            // Optimistic Update: Hapus dari UI dulu biar cepat
+            
+            // Optimistic update
             setData((prev) => prev.filter((item) => item.id !== id));
+            
             toast.success('Data dihapus', { id: toastId });
+            
+            // Refetch untuk memastikan pagination update
+            fetchData(); 
             return true;
         } catch (err) {
             const errMsg = err.response?.data?.message || 'Gagal menghapus data';
             setError(errMsg);
             toast.error(errMsg, { id: toastId });
-            fetchData(); // Rollback/Refresh jika gagal
+            fetchData(); // Rollback jika gagal
             return false;
         } finally {
             setLoading(false);
@@ -87,6 +117,7 @@ const useCRUD = (endpoint) => {
 
     return {
         data,
+        pagination, // Export pagination info
         loading,
         error,
         fetchData,

@@ -7,52 +7,54 @@ export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [stats, setStats] = useState({}); // Inisialisasi object kosong agar tidak error saat destructuring
+    const [stats, setStats] = useState(null); 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [globalError, setGlobalError] = useState(null); // Tambahan untuk GlobalErrorAlert
+    const [globalError, setGlobalError] = useState(null);
 
     useEffect(() => {
         const initApp = async () => {
             setLoading(true);
             setError(null);
             try {
-                // 1. Cek data user dari window object (PHP)
+                // Load User dari global variable (disuntikkan via wp_localize_script)
                 if (window.umhData && window.umhData.user) {
                     setUser(window.umhData.user);
                 }
 
-                // 2. Setup interceptor untuk handle 401/Logout
                 setupApiErrorInterceptor(() => {
-                    setGlobalError("Sesi habis, silakan refresh halaman untuk login kembali.");
+                    setGlobalError("Sesi Anda telah berakhir. Silakan refresh halaman.");
                 });
 
-                // 3. Fetch Statistik Dashboard (Paralel agar cepat)
-                // Kita butuh: Total Stats & Upcoming Departures
+                // Fetch data awal secara paralel, gunakan .catch agar satu gagal tidak mematikan semua
                 const [statsRes, departuresRes] = await Promise.all([
-                    api.get('umh/v1/stats/totals').catch(err => ({ data: {} })), // Handle error per request agar tidak memblokir semua
+                    api.get('umh/v1/stats/totals').catch(err => ({ data: {} })), 
                     api.get('umh/v1/departures', { params: { per_page: 5, status: 'scheduled', orderby: 'departure_date', order: 'asc' } }).catch(err => ({ data: { items: [] } }))
                 ]);
 
                 const totalStats = statsRes.data || {};
-                const departures = departuresRes.data.items || [];
+                
+                // Normalisasi data departures (bisa array langsung atau object {items: []})
+                const rawDepartures = departuresRes.data;
+                const departuresList = Array.isArray(rawDepartures) 
+                    ? rawDepartures 
+                    : (rawDepartures && Array.isArray(rawDepartures.items) ? rawDepartures.items : []);
 
-                // Format data agar sesuai dengan yang diharapkan Dashboard.jsx
                 setStats({
                     total_jamaah: totalStats.total_jamaah || 0,
                     active_packages: totalStats.total_packages || 0,
                     total_revenue: totalStats.total_revenue || 0,
-                    upcoming_departures: departures.map(d => ({
+                    upcoming_departures: departuresList.map(d => ({
                         name: d.package_name,
                         date: d.departure_date,
-                        booked: d.slots_filled || d.total_seats - d.available_seats, // Hitung manual jika field booked tidak ada
-                        quota: d.total_seats
+                        booked: d.slots_filled || (d.total_seats - d.available_seats) || 0,
+                        quota: d.total_seats || 0
                     }))
                 });
 
             } catch (err) {
                 console.error("Gagal inisialisasi aplikasi:", err);
-                setError("Gagal memuat data dashboard. Periksa koneksi internet Anda.");
+                setError("Gagal memuat data utama. Periksa koneksi internet Anda.");
             } finally {
                 setLoading(false);
             }
@@ -65,7 +67,7 @@ export const DataProvider = ({ children }) => {
 
     const value = {
         user,
-        stats, // Expose stats ke komponen
+        stats, 
         loading,
         error,
         globalError,

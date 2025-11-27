@@ -1,226 +1,205 @@
 <?php
-// File: includes/db-schema.php
-// Version: 2.2 (Fix SQL Syntax for dbDelta)
-
 if (!defined('ABSPATH')) {
     exit;
 }
 
-global $umh_db_version;
-$umh_db_version = '2.2';
-
 function umh_create_db_tables() {
     global $wpdb;
-    global $umh_db_version;
-
     $charset_collate = $wpdb->get_charset_collate();
+
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // 1. Tabel Master Data
-    $table_masters = $wpdb->prefix . 'umh_master_data';
-    $sql_masters = "CREATE TABLE $table_masters (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        type varchar(50) NOT NULL,
-        name varchar(255) NOT NULL,
-        description text,
-        extra_data text,
-        status varchar(20) DEFAULT 'active',
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY type (type)
-    ) $charset_collate;";
-    dbDelta($sql_masters);
-
-    // 2. Tabel Agen
+    // 1. Tabel Agents (Agen & Sub-Agen)
     $table_agents = $wpdb->prefix . 'umh_agents';
     $sql_agents = "CREATE TABLE $table_agents (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        agent_code varchar(50) NOT NULL,
-        name varchar(255) NOT NULL,
-        ktp_number varchar(50),
+        user_id bigint(20) UNSIGNED NULL,
+        name varchar(100) NOT NULL,
+        email varchar(100),
         phone varchar(20),
-        area varchar(100),
-        join_date date,
+        address text,
+        city varchar(50),
+        code varchar(20) UNIQUE,
         status varchar(20) DEFAULT 'active',
-        bank_account varchar(100),
-        notes text,
+        commission_rate decimal(10,2) DEFAULT 0,
+        parent_id mediumint(9) NULL, 
+        type varchar(20) DEFAULT 'master',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
-        UNIQUE KEY agent_code (agent_code)
+        KEY parent_id (parent_id)
     ) $charset_collate;";
     dbDelta($sql_agents);
 
-    // 3. Tabel Paket
+    // 2. Tabel Jamaah
+    $table_jamaah = $wpdb->prefix . 'umh_jamaah';
+    $sql_jamaah = "CREATE TABLE $table_jamaah (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        registration_number varchar(50) UNIQUE,
+        full_name varchar(100) NOT NULL,
+        nik varchar(20),
+        passport_number varchar(20),
+        phone varchar(20),
+        address text,
+        city varchar(50),
+        package_id mediumint(9),
+        agent_id mediumint(9),
+        room_type varchar(20) DEFAULT 'quad',
+        package_price decimal(15,2) DEFAULT 0,
+        status varchar(20) DEFAULT 'registered',
+        documents longtext, -- JSON: {scan_ktp: 'url', passport: 'url', etc}
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_jamaah);
+
+    // 3. Tabel Kategori Paket (Dinamis: Furoda, Plus, Awal Tahun, dll)
+    $table_categories = $wpdb->prefix . 'umh_package_categories';
+    $sql_categories = "CREATE TABLE $table_categories (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        name varchar(100) NOT NULL,
+        slug varchar(100),
+        description text,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_categories);
+
+    // 4. Tabel Master Hotel
+    $table_hotels = $wpdb->prefix . 'umh_hotels';
+    $sql_hotels = "CREATE TABLE $table_hotels (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        name varchar(100) NOT NULL,
+        city varchar(50) DEFAULT 'Makkah', -- Makkah, Madinah, Jeddah, Transit
+        rating varchar(5) DEFAULT '5',
+        distance int(11) DEFAULT 0, -- Dalam meter
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_hotels);
+
+    // 5. Tabel Master Maskapai
+    $table_flights = $wpdb->prefix . 'umh_flights';
+    $sql_flights = "CREATE TABLE $table_flights (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        name varchar(100) NOT NULL,
+        code varchar(10),
+        type varchar(20) DEFAULT 'International',
+        logo_url varchar(255),
+        status varchar(20) DEFAULT 'active',
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_flights);
+
+    // 6. Tabel Paket (Utama)
     $table_packages = $wpdb->prefix . 'umh_packages';
     $sql_packages = "CREATE TABLE $table_packages (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        package_name varchar(255) NOT NULL,
-        category_id mediumint(9),
-        sub_category varchar(100),
-        duration int(3),
-        departure_city varchar(100),
-        airlines text,
-        hotels text,
-        facilities text,
-        promo_types text,
-        itinerary_data longtext,
+        name varchar(150) NOT NULL,
+        service_type varchar(20) DEFAULT 'umroh', -- umroh, haji, tour
+        category_id mediumint(9) NULL, -- Relasi ke umh_package_categories
+        duration int(11) DEFAULT 9,
+        price decimal(15,2) DEFAULT 0, -- Harga dasar (Quad)
+        airline_id mediumint(9) NULL,
+        accommodations longtext, -- JSON: [{hotel_id: 1, city: 'Makkah'}, ...]
+        facilities longtext,
+        excludes longtext,
+        itinerary_type varchar(20) DEFAULT 'manual', -- manual / upload
+        itinerary_data longtext, -- JSON items or file URL
         status varchar(20) DEFAULT 'active',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_packages);
 
-    // 4. Tabel Jadwal Paket
-    $table_pkg_dates = $wpdb->prefix . 'umh_package_dates';
-    $sql_pkg_dates = "CREATE TABLE $table_pkg_dates (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        package_id mediumint(9) NOT NULL,
-        departure_date date NOT NULL,
-        return_date date,
-        quota int(4) DEFAULT 45,
-        booked int(4) DEFAULT 0,
-        status varchar(20) DEFAULT 'available',
-        PRIMARY KEY  (id),
-        KEY package_id (package_id)
-    ) $charset_collate;";
-    dbDelta($sql_pkg_dates);
-
-    // 5. Tabel Harga Paket
-    $table_pkg_prices = $wpdb->prefix . 'umh_package_prices';
-    $sql_pkg_prices = "CREATE TABLE $table_pkg_prices (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        package_id mediumint(9) NOT NULL,
-        room_type varchar(50) NOT NULL,
-        price decimal(15,2) NOT NULL,
-        currency varchar(3) DEFAULT 'IDR',
-        PRIMARY KEY  (id),
-        KEY package_id (package_id)
-    ) $charset_collate;";
-    dbDelta($sql_pkg_prices);
-
-    // 6. Tabel Jemaah
-    $table_jamaah = $wpdb->prefix . 'umh_jamaah';
-    $sql_jamaah = "CREATE TABLE $table_jamaah (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        registration_code varchar(50),
-        registration_date date,
-        package_id mediumint(9),
-        sub_agent_id mediumint(9),
-        package_type varchar(150),
-        sub_agent_name varchar(150),
-        full_name varchar(255) NOT NULL,
-        gender varchar(10),
-        birth_place varchar(100),
-        birth_date date,
-        marital_status varchar(50),
-        occupation varchar(100),
-        ktp_number varchar(50),
-        passport_number varchar(50),
-        passport_name varchar(255),
-        passport_issued_date date,
-        passport_expiry_date date,
-        passport_issued_office varchar(100),
-        address text,
-        city varchar(100),
-        phone_number varchar(30),
-        father_name varchar(255),
-        mother_name varchar(255),
-        heir_name varchar(255),
-        heir_relation varchar(100),
-        departure_date date,
-        room_type varchar(50),
-        clothing_size varchar(10),
-        status varchar(50) DEFAULT 'active',
-        notes text,
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY sub_agent_id (sub_agent_id),
-        KEY package_id (package_id)
-    ) $charset_collate;";
-    dbDelta($sql_jamaah);
-
-    // 7. Tabel Logistik
-    $table_logistics = $wpdb->prefix . 'umh_logistics';
-    $sql_logistics = "CREATE TABLE $table_logistics (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        jamaah_id mediumint(9) NOT NULL,
-        items_taken text,
-        taken_date date,
-        taken_by varchar(255),
-        delivery_method varchar(50),
-        delivery_address text,
-        status varchar(50) DEFAULT 'Belum Diambil',
-        notes text,
-        updated_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY jamaah_id (jamaah_id)
-    ) $charset_collate;";
-    dbDelta($sql_logistics);
-
-    // 8. Tabel Keuangan
-    $table_finance = $wpdb->prefix . 'umh_finance';
-    $sql_finance = "CREATE TABLE $table_finance (
-        id mediumint(9) NOT NULL AUTO_INCREMENT,
-        transaction_type varchar(20) NOT NULL,
-        transaction_date date NOT NULL,
-        amount decimal(15,2) NOT NULL,
-        jamaah_id mediumint(9),
-        category varchar(100),
-        payment_stage varchar(50),
-        payment_method varchar(50),
-        description text,
-        pic_name varchar(150),
-        created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        KEY jamaah_id (jamaah_id)
-    ) $charset_collate;";
-    dbDelta($sql_finance);
-
-    // 9. Tabel Karyawan
+    // 7. Tabel HR: Employees (Data Karyawan)
     $table_employees = $wpdb->prefix . 'umh_employees';
     $sql_employees = "CREATE TABLE $table_employees (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        full_name varchar(255) NOT NULL,
-        position varchar(100),
-        department varchar(100),
-        salary decimal(15,2),
-        join_date date,
+        name varchar(100) NOT NULL,
+        position varchar(50),
+        phone varchar(20),
+        salary decimal(15,2) DEFAULT 0,
         status varchar(20) DEFAULT 'active',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_employees);
 
-    // 10. Tabel Kasbon
-    $table_loans = $wpdb->prefix . 'umh_employee_loans';
+    // 8. Tabel HR: Attendance (Absensi)
+    $table_attendance = $wpdb->prefix . 'umh_attendance';
+    $sql_attendance = "CREATE TABLE $table_attendance (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        employee_id mediumint(9) NOT NULL,
+        date date NOT NULL,
+        status varchar(20) DEFAULT 'present', -- present, absent, permission
+        notes text,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY employee_id (employee_id)
+    ) $charset_collate;";
+    dbDelta($sql_attendance);
+
+    // 9. Tabel HR: Loans (Kasbon)
+    $table_loans = $wpdb->prefix . 'umh_loans';
     $sql_loans = "CREATE TABLE $table_loans (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         employee_id mediumint(9) NOT NULL,
-        loan_date date NOT NULL,
+        date date NOT NULL,
         amount decimal(15,2) NOT NULL,
         description text,
-        status varchar(20) DEFAULT 'outstanding',
+        status varchar(20) DEFAULT 'unpaid', -- unpaid, paid
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY  (id),
         KEY employee_id (employee_id)
     ) $charset_collate;";
     dbDelta($sql_loans);
 
-    // 11. Tabel Roles
-    $table_roles = $wpdb->prefix . 'umh_roles';
-    $sql_roles = "CREATE TABLE $table_roles (
+    // 10. Tabel Finance (Pemasukan & Pengeluaran)
+    $table_finance = $wpdb->prefix . 'umh_finance';
+    $sql_finance = "CREATE TABLE $table_finance (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        role_key varchar(50) NOT NULL,
-        role_name varchar(100) NOT NULL,
-        capabilities text,
+        date date NOT NULL,
+        type varchar(20) NOT NULL, -- income, expense
+        amount decimal(15,2) NOT NULL,
+        category varchar(50),
+        description text,
+        proof_url varchar(255), -- Upload bukti
+        created_by bigint(20) UNSIGNED,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY  (id),
-        UNIQUE KEY role_key (role_key)
+        PRIMARY KEY  (id)
     ) $charset_collate;";
-    dbDelta($sql_roles);
+    dbDelta($sql_finance);
 
-    update_option('umh_db_version', $umh_db_version);
+    // 11. Tabel Logistik (Tracking Perlengkapan Jamaah)
+    $table_logistics = $wpdb->prefix . 'umh_logistics';
+    $sql_logistics = "CREATE TABLE $table_logistics (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        jamaah_id mediumint(9) NOT NULL,
+        items_status longtext, -- JSON Checklist: {koper: true, ihram: false, ...}
+        handover_status varchar(20) DEFAULT 'pending', -- pending, taken, shipped
+        taken_by varchar(100),
+        date_taken date,
+        shipping_address text,
+        notes text,
+        updated_at datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY jamaah_id (jamaah_id)
+    ) $charset_collate;";
+    dbDelta($sql_logistics);
 }
-add_action('plugins_loaded', 'umh_create_db_tables');
-?>
+
+// Hook untuk menjalankan fungsi saat plugin diaktifkan
+register_activation_hook(__FILE__, 'umh_create_db_tables');
+
+// Opsional: Hook manual jika ingin trigger update schema tanpa re-aktivasi plugin (via URL)
+if (isset($_GET['update_umh_db']) && $_GET['update_umh_db'] == 'true' && current_user_can('manage_options')) {
+    umh_create_db_tables();
+    echo "UMH Database Schema Updated!";
+    exit;
+}

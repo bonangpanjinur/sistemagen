@@ -9,7 +9,7 @@ function umh_create_db_tables() {
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
-    // 1. Tabel Agents (Perbaikan UNIQUE dan KEY)
+    // 1. Tabel Agents
     $table_agents = $wpdb->prefix . 'umh_agents';
     $sql_agents = "CREATE TABLE $table_agents (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -31,7 +31,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_agents);
 
-    // 2. Tabel Jamaah (Perbaikan sintaks longtext)
+    // 2. Tabel Jamaah
     $table_jamaah = $wpdb->prefix . 'umh_jamaah';
     $sql_jamaah = "CREATE TABLE $table_jamaah (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -66,7 +66,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_categories);
 
-    // 4. Tabel Master Hotel (Perbaikan default value)
+    // 4. Tabel Master Hotel
     $table_hotels = $wpdb->prefix . 'umh_hotels';
     $sql_hotels = "CREATE TABLE $table_hotels (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -93,7 +93,7 @@ function umh_create_db_tables() {
     ) $charset_collate;";
     dbDelta($sql_flights);
 
-    // 6. Tabel Paket (Perbaikan struktur JSON dan Harga Varian)
+    // 6. Tabel Paket
     $table_packages = $wpdb->prefix . 'umh_packages';
     $sql_packages = "CREATE TABLE $table_packages (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -101,8 +101,8 @@ function umh_create_db_tables() {
         service_type varchar(20) DEFAULT 'umroh',
         category_id mediumint(9) NULL,
         duration int(11) DEFAULT 9,
-        price decimal(15,2) DEFAULT 0, -- Base price (Quad)
-        prices longtext, -- JSON: {quad: 25jt, triple: 27jt, double: 30jt}
+        price decimal(15,2) DEFAULT 0,
+        prices longtext,
         airline_id mediumint(9) NULL,
         accommodations longtext,
         facilities longtext,
@@ -197,9 +197,9 @@ function umh_create_db_tables() {
 
 register_activation_hook(__FILE__, 'umh_create_db_tables');
 
-// Trigger manual untuk update schema jika diperlukan via URL
+// URL Trigger untuk perbaikan manual jika diperlukan
 if (isset($_GET['update_umh_db']) && $_GET['update_umh_db'] == 'true' && current_user_can('manage_options')) {
     umh_create_db_tables();
-    echo "UMH Database Schema Updated Successfully!";
+    echo "Database Schema Updated Successfully (No Comments Clean Version)!";
     exit;
 }

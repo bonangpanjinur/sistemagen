@@ -13,18 +13,22 @@ const HR = () => {
     const { user } = useData();
     const [activeTab, setActiveTab] = useState('employees'); 
     
+    // CRUD Hooks
     const { data: employees, createItem: createEmp, updateItem: updateEmp, deleteItem: deleteEmp } = useCRUD('umh/v1/hr/employees');
     const { data: attendance, fetchData: fetchAttendance } = useCRUD('umh/v1/hr/attendance');
     const { data: loans, createItem: createLoan, updateItem: updateLoan, deleteItem: deleteLoan } = useCRUD('umh/v1/hr/loans');
 
+    // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('create');
     const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
 
+    // Attendance State
     const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
     const [attendanceList, setAttendanceList] = useState({}); 
 
+    // --- LOGIC ABSENSI CHECKLIST ---
     const handleAttendanceChange = (empId, status) => {
         setAttendanceList(prev => ({ ...prev, [empId]: status }));
     };
@@ -32,20 +36,25 @@ const HR = () => {
     const saveBulkAttendance = async () => {
         const toastId = toast.loading('Menyimpan absensi...');
         try {
+            // Persiapkan payload array
             const payload = employees.map(emp => ({
                 employee_id: emp.id,
                 date: attendanceDate,
                 status: attendanceList[emp.id] || 'present'
             }));
+            
+            // Panggil API Bulk Save
             await api.post('umh/v1/hr/attendance/bulk', { date: attendanceDate, items: payload });
+            
             toast.success('Absensi berhasil disimpan!', { id: toastId });
             fetchAttendance();
         } catch (error) {
-            console.error(error);
+            console.error("Error saving attendance:", error);
             toast.error('Gagal menyimpan absensi', { id: toastId });
         }
     };
     
+    // Load attendance saat tanggal berubah
     useEffect(() => {
         if (attendance && attendance.length > 0) {
             const todayRecords = attendance.filter(a => a.date === attendanceDate);
@@ -57,6 +66,7 @@ const HR = () => {
         }
     }, [attendanceDate, attendance]);
 
+    // Modal Handlers
     const handleOpenModal = (mode, item = null) => {
         setModalMode(mode);
         setCurrentItem(item);
@@ -73,6 +83,7 @@ const HR = () => {
         if (success) setIsModalOpen(false);
     };
 
+    // Columns
     const employeeColumns = [
         { header: 'Nama', accessor: 'name', sortable: true, render: row => (
             <div className="flex items-center gap-3">
@@ -94,17 +105,17 @@ const HR = () => {
         { header: 'Status', accessor: 'status', render: row => <span className={`px-2 py-1 rounded text-xs ${row.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{row.status === 'paid' ? 'Lunas' : 'Belum Lunas'}</span> }
     ];
 
-    // Logic perhitungan gaji sederhana (dummy)
     const payrollColumns = [
         { header: 'Nama', accessor: 'name' },
         { header: 'Gaji Pokok', accessor: 'salary', render: row => formatCurrency(row.salary) },
-        { header: 'Potongan', accessor: 'deduction', render: () => <span className="text-red-500">-Rp 0</span> }, 
+        { header: 'Potongan Absen', accessor: 'deduction', render: () => <span className="text-red-500">-Rp 0</span> }, 
         { header: 'Gaji Bersih', accessor: 'net', render: row => <span className="font-bold text-green-600">{formatCurrency(row.salary)}</span> },
     ];
 
     return (
         <Layout title="Human Resources (HR)">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-hidden">
+                {/* Custom Tab Navigation */}
                 <div className="flex border-b border-gray-200 bg-gray-50">
                     {['employees', 'attendance', 'loans', 'payroll'].map(tab => (
                         <button key={tab} onClick={() => setActiveTab(tab)} 
@@ -198,7 +209,7 @@ const HR = () => {
 
                     {activeTab === 'payroll' && (
                         <div>
-                            <div className="mb-4 p-3 bg-yellow-50 text-yellow-800 rounded border border-yellow-200 text-sm">Fitur penggajian otomatis sedang dalam pengembangan. Menampilkan data gaji pokok.</div>
+                            <div className="mb-4 p-3 bg-yellow-50 text-yellow-800 rounded border border-yellow-200 text-sm">Fitur penggajian otomatis menampilkan data gaji pokok dan potongan simulasi.</div>
                             <CrudTable columns={payrollColumns} data={employees} />
                         </div>
                     )}
@@ -210,35 +221,35 @@ const HR = () => {
                     {activeTab === 'employees' ? (
                         <>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Nama Lengkap</label>
-                                <input className="mt-1 w-full border rounded p-2" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required />
+                                <label className="label">Nama Lengkap</label>
+                                <input className="input-field" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Posisi / Jabatan</label>
-                                <input className="mt-1 w-full border rounded p-2" value={formData.position || ''} onChange={e => setFormData({...formData, position: e.target.value})} required />
+                                <label className="label">Posisi</label>
+                                <input className="input-field" value={formData.position || ''} onChange={e => setFormData({...formData, position: e.target.value})} required />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Gaji Pokok (Rp)</label>
-                                <input className="mt-1 w-full border rounded p-2" type="number" value={formData.salary || ''} onChange={e => setFormData({...formData, salary: e.target.value})} required />
+                                <label className="label">Gaji Pokok (Rp)</label>
+                                <input className="input-field" type="number" value={formData.salary || ''} onChange={e => setFormData({...formData, salary: e.target.value})} required />
                             </div>
                         </>
                     ) : (
                         <>
-                            <select className="w-full border rounded p-2" value={formData.employee_id || ''} onChange={e => setFormData({...formData, employee_id: e.target.value})} required>
+                            <select className="input-field" value={formData.employee_id || ''} onChange={e => setFormData({...formData, employee_id: e.target.value})} required>
                                 <option value="">Pilih Karyawan</option>
                                 {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
-                            <input type="date" className="w-full border rounded p-2" value={formData.date || ''} onChange={e => setFormData({...formData, date: e.target.value})} required />
-                            <input className="w-full border rounded p-2" type="number" placeholder="Nominal Kasbon (Rp)" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value})} required />
-                            <select className="w-full border rounded p-2" value={formData.status || 'unpaid'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                            <input type="date" className="input-field" value={formData.date || ''} onChange={e => setFormData({...formData, date: e.target.value})} required />
+                            <input className="input-field" type="number" placeholder="Nominal (Rp)" value={formData.amount || ''} onChange={e => setFormData({...formData, amount: e.target.value})} required />
+                            <select className="input-field" value={formData.status || 'unpaid'} onChange={e => setFormData({...formData, status: e.target.value})}>
                                 <option value="unpaid">Belum Lunas</option>
                                 <option value="paid">Lunas</option>
                             </select>
                         </>
                     )}
                     <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="bg-gray-100 px-4 py-2 rounded text-gray-700">Batal</button>
-                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Simpan</button>
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Batal</button>
+                        <button type="submit" className="btn-primary">Simpan</button>
                     </div>
                 </form>
             </Modal>

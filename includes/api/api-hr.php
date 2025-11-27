@@ -18,17 +18,18 @@ function umh_register_hr_routes() {
     new UMH_CRUD_Controller('hr/loans', 'umh_loans', [
         'employee_id' => ['type' => 'integer', 'required' => true],
         'amount' => ['type' => 'number', 'required' => true],
+        'date' => ['type' => 'string', 'format' => 'date', 'required' => true], // Added date validation
         'status' => ['type' => 'string', 'default' => 'unpaid']
     ], ['get_items' => ['owner', 'hr_staff'], 'create_item' => ['owner']], ['employee_id']);
 
-    // 3. Attendance Routes (Standard CRUD + Bulk)
+    // 3. Attendance Routes (Standard CRUD)
     $att_ctrl = new UMH_CRUD_Controller('hr/attendance', 'umh_attendance', [
         'employee_id' => ['type' => 'integer', 'required' => true],
         'date' => ['type' => 'string', 'format' => 'date', 'required' => true],
         'status' => ['type' => 'string', 'default' => 'present']
     ], ['get_items' => ['owner', 'hr_staff'], 'create_item' => ['owner', 'hr_staff']], ['employee_id']);
 
-    // Custom Route: Bulk Attendance
+    // 4. Custom Route: Bulk Attendance Save
     register_rest_route($namespace, '/hr/attendance/bulk', [
         'methods' => 'POST',
         'callback' => 'umh_bulk_attendance_save',
@@ -44,21 +45,23 @@ function umh_bulk_attendance_save($request) {
     $date = $params['date'];
 
     if (empty($items) || !is_array($items)) {
-        return new WP_Error('invalid_data', 'Data absensi kosong', ['status' => 400]);
+        return new WP_Error('invalid_data', 'Data absensi kosong atau format salah.', ['status' => 400]);
     }
 
-    // Hapus data lama di tanggal tersebut (Reset harian) agar tidak duplikat
+    // 1. Bersihkan data lama di tanggal tersebut (agar tidak duplikat)
     $wpdb->delete($table, ['date' => $date], ['%s']);
 
-    // Insert Bulk
+    // 2. Insert data baru secara massal
+    $success_count = 0;
     foreach ($items as $item) {
-        $wpdb->insert($table, [
+        $result = $wpdb->insert($table, [
             'employee_id' => $item['employee_id'],
             'date' => $date,
             'status' => $item['status'],
             'created_at' => current_time('mysql')
         ]);
+        if ($result) $success_count++;
     }
 
-    return new WP_REST_Response(['message' => 'Absensi berhasil disimpan', 'count' => count($items)], 200);
+    return new WP_REST_Response(['message' => 'Absensi berhasil disimpan', 'count' => $success_count], 200);
 }

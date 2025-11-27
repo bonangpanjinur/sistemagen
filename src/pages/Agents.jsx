@@ -4,244 +4,179 @@ import useCRUD from '../hooks/useCRUD';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
 import Spinner from '../components/Spinner';
+import { UserPlus, MapPin, Phone, Calendar, CreditCard } from 'lucide-react';
 
 const Agents = () => {
-    // ---- Konfigurasi Kolom Tabel ----
     const columns = [
-        { header: 'ID', accessor: 'id' },
-        { header: 'Nama Agen', accessor: 'name' },
-        { header: 'Email', accessor: 'email' },
+        { header: 'ID Agen', accessor: 'agent_code', className: 'font-mono text-xs font-bold text-blue-600' },
+        { header: 'Nama Agen', accessor: 'name', className: 'font-medium' },
+        { header: 'Wilayah', accessor: 'area' },
         { header: 'No. HP', accessor: 'phone' },
+        { header: 'Bergabung', accessor: 'join_date' },
         { 
             header: 'Status', 
-            accessor: 'status', 
-            render: (item) => (
-                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    item.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                    {item.status === 'active' ? 'Aktif' : 'Tidak Aktif'}
+            accessor: 'status',
+            render: (row) => (
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {row.status === 'active' ? 'Aktif' : 'Non-Aktif'}
                 </span>
             )
         },
     ];
 
-    // ---- State Form & Modal ----
+    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/agents');
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editId, setEditId] = useState(null);
-    
-    // State awal form agar mudah di-reset
-    const initialFormState = { 
-        name: '', 
-        email: '', 
-        phone: '', 
-        address: '', 
-        status: 'active' 
+    const initialForm = {
+        agent_code: '', // Akan di-generate backend jika kosong
+        name: '',
+        ktp_number: '',
+        phone: '',
+        area: '',
+        join_date: new Date().toISOString().split('T')[0],
+        notes: '',
+        status: 'active'
     };
-    const [formData, setFormData] = useState(initialFormState);
+    const [formData, setFormData] = useState(initialForm);
 
-    // ---- Integrasi Hook CRUD ----
-    // Pastikan endpoint 'umh/v1/agents' sesuai dengan route API PHP Anda
-    const { 
-        data, 
-        loading, 
-        error, 
-        fetchData, 
-        createItem, 
-        updateItem, 
-        deleteItem 
-    } = useCRUD('umh/v1/agents');
+    useEffect(() => { fetchData(); }, [fetchData]);
 
-    // Load data saat halaman dibuka
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    // ---- Handlers ----
-    
-    const handleOpenCreate = () => {
-        setFormData(initialFormState);
-        setEditId(null);
-        setIsModalOpen(true);
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const success = editId ? await updateItem(editId, formData) : await createItem(formData);
+        if (success) {
+            setIsModalOpen(false);
+            setFormData(initialForm);
+        }
     };
 
     const handleEdit = (item) => {
-        setFormData(item); // Isi form dengan data yang dipilih
+        setFormData(item);
         setEditId(item.id);
         setIsModalOpen(true);
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('Apakah Anda yakin ingin menghapus agen ini?')) {
-            await deleteItem(id);
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        
-        let success = false;
-        if (editId) {
-            success = await updateItem(editId, formData);
-        } else {
-            success = await createItem(formData);
-        }
-
-        if (success) {
-            setIsModalOpen(false);
-            setFormData(initialFormState); // Reset form
-        }
-    };
-
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    // ---- Render UI ----
     return (
-        <Layout title="Manajemen Agen Travel">
-            
-            {/* Header Konten & Tombol Tambah */}
-            <div className="mb-6 sm:flex sm:items-center sm:justify-between">
+        <Layout title="Data Sub Agen">
+            <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-lg font-medium text-gray-900">Daftar Agen</h2>
-                    <p className="mt-1 text-sm text-gray-500">
-                        Kelola mitra agen, edit informasi kontak, dan pantau status keaktifan.
-                    </p>
+                    <h2 className="text-xl font-bold text-gray-800">Daftar Mitra & Agen</h2>
+                    <p className="text-sm text-gray-500">Kelola data perwakilan dan sub-agen</p>
                 </div>
-                <div className="mt-4 sm:mt-0">
-                    <button 
-                        onClick={handleOpenCreate}
-                        className="inline-flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                        <svg className="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                        </svg>
-                        Tambah Agen Baru
-                    </button>
-                </div>
+                <button 
+                    onClick={() => { setEditId(null); setFormData(initialForm); setIsModalOpen(true); }} 
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded shadow transition flex items-center gap-2"
+                >
+                    <UserPlus size={18} /> Tambah Agen
+                </button>
             </div>
 
-            {/* Error Banner */}
-            {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-                    <div className="flex">
-                        <div className="ml-3">
-                            <p className="text-sm text-red-700">{error}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
+            {loading ? <Spinner /> : <CrudTable columns={columns} data={data} onEdit={handleEdit} onDelete={deleteItem} />}
 
-            {/* Tabel Data / Loading Spinner */}
-            {loading ? (
-                <div className="flex justify-center items-center py-20">
-                    <Spinner />
-                </div>
-            ) : (
-                <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-                    <CrudTable 
-                        columns={columns} 
-                        data={data} 
-                        onEdit={handleEdit} 
-                        onDelete={handleDelete} 
-                    />
-                    {data.length === 0 && !loading && (
-                        <div className="text-center py-10 text-gray-500">
-                            Belum ada data agen. Silakan tambah baru.
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Modal Form */}
-            <Modal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                title={editId ? "Edit Data Agen" : "Tambah Agen Baru"}
-            >
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editId ? "Edit Data Agen" : "Registrasi Agen Baru"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Input Nama */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Nama Lengkap <span className="text-red-500">*</span></label>
-                        <input 
-                            type="text" 
-                            name="name"
-                            required
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            value={formData.name}
-                            onChange={handleInputChange}
-                            placeholder="Contoh: PT. Berkah Mulia"
-                        />
+                    <div className="bg-blue-50 p-3 rounded border border-blue-200 mb-4 text-sm text-blue-800">
+                        <strong>Info:</strong> ID Agen akan dibuat otomatis (Format: 00X-AGBTN) jika dikosongkan.
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ID Agen (Opsional)</label>
+                            <input 
+                                className="w-full border p-2 rounded bg-gray-100 text-gray-500" 
+                                value={formData.agent_code} 
+                                onChange={e => setFormData({...formData, agent_code: e.target.value})} 
+                                placeholder="Auto-Generate"
+                                disabled={!editId}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tgl Bergabung</label>
+                            <div className="relative">
+                                <Calendar size={16} className="absolute left-3 top-3 text-gray-400"/>
+                                <input 
+                                    type="date"
+                                    className="w-full border p-2 pl-10 rounded" 
+                                    value={formData.join_date} 
+                                    onChange={e => setFormData({...formData, join_date: e.target.value})} 
+                                />
+                            </div>
+                        </div>
                     </div>
                     
-                    {/* Grid Email & HP */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Lengkap (Sesuai KTP)</label>
+                        <input 
+                            className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500" 
+                            value={formData.name} 
+                            onChange={e => setFormData({...formData, name: e.target.value})} 
+                            required 
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></label>
-                            <input 
-                                type="email" 
-                                name="email"
-                                required
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                            />
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">No. KTP (NIK)</label>
+                            <div className="relative">
+                                <CreditCard size={16} className="absolute left-3 top-3 text-gray-400"/>
+                                <input 
+                                    className="w-full border p-2 pl-10 rounded" 
+                                    value={formData.ktp_number} 
+                                    onChange={e => setFormData({...formData, ktp_number: e.target.value})} 
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">No. HP / WA <span className="text-red-500">*</span></label>
+                         <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">No. HP / WA</label>
+                            <div className="relative">
+                                <Phone size={16} className="absolute left-3 top-3 text-gray-400"/>
+                                <input 
+                                    className="w-full border p-2 pl-10 rounded" 
+                                    value={formData.phone} 
+                                    onChange={e => setFormData({...formData, phone: e.target.value})} 
+                                    placeholder="08..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Wilayah / Alamat</label>
+                        <div className="relative">
+                            <MapPin size={16} className="absolute left-3 top-3 text-gray-400"/>
                             <input 
-                                type="text" 
-                                name="phone"
-                                required
-                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                value={formData.phone}
-                                onChange={handleInputChange}
+                                className="w-full border p-2 pl-10 rounded" 
+                                value={formData.area} 
+                                onChange={e => setFormData({...formData, area: e.target.value})} 
+                                placeholder="Cth: Cilegon, Serang"
                             />
                         </div>
                     </div>
 
-                    {/* Alamat */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Alamat Lengkap</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Catatan (Notes)</label>
                         <textarea 
-                            name="address"
-                            rows="3"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            value={formData.address}
-                            onChange={handleInputChange}
+                            className="w-full border p-2 rounded" 
+                            rows="2"
+                            value={formData.notes} 
+                            onChange={e => setFormData({...formData, notes: e.target.value})} 
                         ></textarea>
                     </div>
 
-                    {/* Status */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Status Keagenan</label>
-                        <select 
-                            name="status"
-                            className="mt-1 block w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                            value={formData.status}
-                            onChange={handleInputChange}
-                        >
-                            <option value="active">Aktif</option>
-                            <option value="inactive">Tidak Aktif / Suspend</option>
-                        </select>
-                    </div>
-
-                    {/* Tombol Aksi */}
-                    <div className="flex justify-end pt-4 space-x-3 border-t mt-4">
+                    <div className="pt-4 border-t flex justify-end space-x-3">
                         <button 
                             type="button"
                             onClick={() => setIsModalOpen(false)}
-                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none"
+                            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded font-medium"
                         >
                             Batal
                         </button>
                         <button 
                             type="submit"
-                            disabled={loading}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none shadow-sm disabled:opacity-50"
+                            className="bg-blue-600 text-white px-6 py-2 rounded shadow hover:bg-blue-700 transition font-medium"
                         >
-                            {loading ? 'Menyimpan...' : (editId ? 'Simpan Perubahan' : 'Simpan Data')}
+                            Simpan Data
                         </button>
                     </div>
                 </form>

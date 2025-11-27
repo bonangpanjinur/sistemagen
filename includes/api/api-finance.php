@@ -1,32 +1,44 @@
 <?php
-// File: includes/api/api-finance.php
-// Menggunakan CRUD Controller untuk mengelola Keuangan.
+if (!defined('ABSPATH')) exit;
+require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
-if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+class UMH_Finance_API extends UMH_CRUD_Controller {
+    public function __construct() {
+        $schema = [
+            'transaction_type' => ['type' => 'string', 'required' => true], // income | expense
+            'transaction_date' => ['type' => 'string', 'format' => 'date', 'required' => true],
+            'amount'           => ['type' => 'number', 'required' => true],
+            'jamaah_id'        => ['type' => 'integer'],
+            'payment_stage'    => ['type' => 'string'], // DP, Pelunasan, Cicilan
+            'payment_method'   => ['type' => 'string'], // Cash, Transfer
+            'category'         => ['type' => 'string'], // Operasional, Fee Agen, dll
+            'description'      => ['type' => 'string'],
+            'pic_name'         => ['type' => 'string'],
+        ];
+        parent::__construct('finance', 'umh_finance', $schema, ['get_items' => ['admin_staff'], 'create_item' => ['admin_staff']]);
+    }
+
+    // Override get_items untuk filter by type (income/expense)
+    public function get_items($request) {
+        global $wpdb;
+        $type = $request->get_param('transaction_type');
+        $params = [];
+        
+        $sql = "SELECT * FROM {$this->table_name} WHERE 1=1";
+        
+        if ($type) {
+            $sql .= " AND transaction_type = %s";
+            $params[] = $type;
+        }
+        
+        $sql .= " ORDER BY transaction_date DESC";
+        
+        if (!empty($params)) {
+            $sql = $wpdb->prepare($sql, $params);
+        }
+        
+        return rest_ensure_response($wpdb->get_results($sql, ARRAY_A));
+    }
 }
-
-// 1. Definisikan Skema Data (cocokkan dengan db-schema.php)
-$finance_schema = [
-    'jamaah_id'        => ['type' => 'integer', 'required' => false, 'sanitize_callback' => 'absint'],
-    'user_id'          => ['type' => 'integer', 'required' => false, 'sanitize_callback' => 'absint'], // Diisi oleh controller?
-    'category_id'      => ['type' => 'integer', 'required' => false, 'sanitize_callback' => 'absint'],
-    'transaction_type' => ['type' => 'string', 'required' => true, 'enum' => ['income', 'expense']],
-    'description'      => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
-    'amount'           => ['type' => 'number', 'required' => true],
-    'transaction_date' => ['type' => 'string', 'format' => 'date', 'required' => true],
-    'status'           => ['type' => 'string', 'required' => false, 'default' => 'completed', 'enum' => ['pending', 'completed']],
-];
-
-// 2. Definisikan Izin (Hanya Owner & Staf Keuangan)
-$finance_permissions = [
-    'get_items'    => ['owner', 'finance_staff'],
-    'get_item'     => ['owner', 'finance_staff'],
-    'create_item'  => ['owner', 'finance_staff'],
-    'update_item'  => ['owner', 'finance_staff'],
-    'delete_item'  => ['owner', 'finance_staff'],
-];
-
-// 3. Inisialisasi Controller
-// Parameter: ('endpoint_base', 'slug_tabel_db', $skema, $izin)
-new UMH_CRUD_Controller('finance', 'umh_finance', $finance_schema, $finance_permissions);
+new UMH_Finance_API();
+?>

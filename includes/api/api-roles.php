@@ -1,34 +1,32 @@
 <?php
-/**
- * File: includes/api/api-roles.php
- *
- * File BARU untuk mengelola role karyawan dinamis.
- * Menggunakan UMH_CRUD_Controller untuk CRUD pada tabel umh_roles.
- *
- * [CATATAN]: File ini sudah benar. Perbaikan pada class-umh-crud-controller.php
- * akan membuat baris 'new UMH_CRUD_Controller' di bawah ini berfungsi.
- */
+if (!defined('ABSPATH')) exit;
+require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
-if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+class UMH_Roles_API extends UMH_CRUD_Controller {
+    public function __construct() {
+        $schema = [
+            'role_key'     => ['type' => 'string', 'required' => true],
+            'role_name'    => ['type' => 'string', 'required' => true],
+            'capabilities' => ['type' => 'array'], // Array checkbox
+        ];
+        parent::__construct('roles', 'umh_roles', $schema, ['get_items' => ['administrator'], 'create_item' => ['administrator']]);
+    }
+
+    public function create_item($request) {
+        $params = $request->get_json_params();
+        $params['capabilities'] = json_encode($params['capabilities']); // Simpan sebagai JSON string
+        $request->set_body_params($params);
+        return parent::create_item($request);
+    }
+
+    public function update_item($request) {
+        $params = $request->get_json_params();
+        if (isset($params['capabilities'])) {
+            $params['capabilities'] = json_encode($params['capabilities']);
+        }
+        $request->set_body_params($params);
+        return parent::update_item($request);
+    }
 }
-
-// 1. Definisikan Skema Data
-$schema = [
-    'role_key'  => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'role_name' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-];
-
-// 2. Definisikan Izin
-$permissions = [
-    'get_items'   => ['owner', 'admin_staff', 'hr_staff'], // Bisa dilihat banyak orang
-    'get_item'    => ['owner', 'admin_staff', 'hr_staff'],
-    'create_item' => ['owner', 'hr_staff'], // Hanya owner dan HR
-    'update_item' => ['owner', 'hr_staff'],
-    'delete_item' => ['owner'], // Hanya owner
-];
-
-// 3. Inisialisasi Controller
-// Ini akan membuat endpoint: /wp-json/umh/v1/roles
-// Constructor di UMH_CRUD_Controller akan otomatis mendaftarkan rute.
-new UMH_CRUD_Controller('roles', 'umh_roles', $schema, $permissions);
+new UMH_Roles_API();
+?>

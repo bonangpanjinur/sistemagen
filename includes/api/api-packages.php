@@ -1,227 +1,137 @@
 <?php
-// File: includes/api/api-packages.php
-// Menangani CRUD Paket Umroh dengan fitur Multi-Harga (Quad/Triple/Double) & Kategori
-
-if (!defined('ABSPATH')) {
-    exit;
-}
-
+if (!defined('ABSPATH')) exit;
 require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
 class UMH_Packages_API extends UMH_CRUD_Controller {
     
-    public $table_name; // Public agar sesuai dengan parent class
-    protected $prices_table;
-    protected $categories_table;
-
     public function __construct() {
-        global $wpdb;
-        $this->table_name = $wpdb->prefix . 'umh_packages';
-        $this->prices_table = $wpdb->prefix . 'umh_package_prices';
-        $this->categories_table = $wpdb->prefix . 'umh_package_categories';
+        // Schema Validasi
+        $schema = [
+            'package_name'   => ['type' => 'string', 'required' => true],
+            'duration'       => ['type' => 'integer', 'required' => true],
+            'departure_city' => ['type' => 'string'],
+            'category_id'    => ['type' => 'integer'],
+            'sub_category'   => ['type' => 'string'],
+            
+            // JSON Fields (Array)
+            'airlines'       => ['type' => 'array'], 
+            'hotels'         => ['type' => 'array'],
+            'facilities'     => ['type' => 'array'],
+            'promo_types'    => ['type' => 'array'],
+            
+            // Complex Data
+            'dates'          => ['type' => 'array'], // Array of {date, quota}
+            'prices'         => ['type' => 'array'], // Array of {room, price}
+            
+            // Itinerary
+            'itinerary_mode' => ['type' => 'string'],
+            'itinerary_data' => ['type' => 'array'],
+            'itinerary_file_url' => ['type' => 'string'],
+            
+            'status'         => ['type' => 'string', 'default' => 'draft'],
+        ];
         
-        $this->namespace = 'umh/v1';
-        $this->rest_base = 'packages';
+        parent::__construct('packages', 'umh_packages', $schema, ['get_items' => ['admin_staff', 'marketing_staff'], 'create_item' => ['admin_staff']]);
     }
 
-    /**
-     * Override Create Item
-     * Menyimpan data paket utama dan variasi harganya
-     */
+    // Override Create untuk handle Multi-Table
     public function create_item($request) {
         global $wpdb;
-        $data = $request->get_json_params();
+        $params = $request->get_json_params();
         
-        // 1. Pisahkan data harga dari data paket utama
-        $prices = isset($data['prices']) ? $data['prices'] : [];
-        if (isset($data['prices'])) unset($data['prices']); 
-        
-        // Validasi dasar
-        if (empty($data['package_name'])) {
-            return new WP_Error('missing_title', 'Nama Paket wajib diisi', ['status' => 400]);
-        }
+        // 1. Siapkan Data Utama Paket
+        $main_data = [
+            'package_name'   => $params['package_name'],
+            'duration'       => $params['duration'],
+            'departure_city' => $params['departure_city'],
+            'category_id'    => $params['category_id'] ?? 0,
+            'sub_category'   => $params['sub_category'] ?? '',
+            'airlines'       => json_encode($params['airlines'] ?? []),
+            'hotels'         => json_encode($params['hotels'] ?? []),
+            'facilities'     => json_encode($params['facilities'] ?? []),
+            'promo_types'    => json_encode($params['promo_types'] ?? []),
+            'itinerary_mode' => $params['itinerary_mode'] ?? 'manual',
+            'itinerary_file_url' => $params['itinerary_file_url'] ?? '',
+            'itinerary_data' => json_encode($params['itinerary_data'] ?? []),
+            'status'         => $params['status'] ?? 'draft',
+            'created_at'     => current_time('mysql'),
+            'updated_at'     => current_time('mysql')
+        ];
 
-        // 2. Simpan Paket Utama
-        $data['created_at'] = current_time('mysql');
-        $data['updated_at'] = current_time('mysql');
-        
-        $inserted = $wpdb->insert($this->table_name, $data);
-        
-        if ($inserted === false) {
-             return new WP_Error('db_error', 'Gagal menyimpan paket: ' . $wpdb->last_error, ['status' => 500]);
-        }
-        
+        $inserted = $wpdb->insert($this->table_name, $main_data);
+        if (!$inserted) return new WP_Error('db_error', 'Gagal simpan paket', ['status' => 500]);
         $package_id = $wpdb->insert_id;
-        
-        // 3. Simpan Variasi Harga
-        if (!empty($prices) && is_array($prices)) {
-            foreach ($prices as $price_item) {
-                if (!empty($price_item['room_type']) && isset($price_item['price'])) {
-                    $wpdb->insert($this->prices_table, [
+
+        // 2. Simpan Tanggal Keberangkatan (Loop)
+        if (!empty($params['dates']) && is_array($params['dates'])) {
+            $tbl_dates = $wpdb->prefix . 'umh_package_dates';
+            foreach ($params['dates'] as $d) {
+                if (!empty($d['date'])) {
+                    $wpdb->insert($tbl_dates, [
                         'package_id' => $package_id,
-                        'room_type'  => sanitize_text_field($price_item['room_type']),
-                        'price'      => floatval($price_item['price']),
-                        'currency'   => !empty($price_item['currency']) ? sanitize_text_field($price_item['currency']) : 'IDR'
+                        'departure_date' => $d['date'],
+                        'quota' => $d['quota'] ?? 45,
+                        'status' => 'available'
                     ]);
                 }
             }
         }
-        
+
+        // 3. Simpan Harga (Loop)
+        if (!empty($params['prices']) && is_array($params['prices'])) {
+            $tbl_prices = $wpdb->prefix . 'umh_package_prices';
+            foreach ($params['prices'] as $p) {
+                if (!empty($p['price'])) {
+                    $wpdb->insert($tbl_prices, [
+                        'package_id' => $package_id,
+                        'room_type' => $p['room_type'],
+                        'price' => $p['price'],
+                        'currency' => $p['currency'] ?? 'IDR'
+                    ]);
+                }
+            }
+        }
+
         return $this->get_item_response($package_id);
     }
 
-    /**
-     * Override Update Item
-     */
-    public function update_item($request) {
-        global $wpdb;
-        $id = $request['id'];
-        $data = $request->get_json_params();
-        
-        $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$this->table_name} WHERE id = %d", $id));
-        if (!$existing) {
-            return new WP_Error('not_found', 'Paket tidak ditemukan', ['status' => 404]);
-        }
-
-        // 1. Pisahkan data harga
-        $prices = isset($data['prices']) ? $data['prices'] : null;
-        if (isset($data['prices'])) unset($data['prices']);
-        
-        // 2. Update Paket Utama
-        $data['updated_at'] = current_time('mysql');
-        unset($data['id']);
-
-        $wpdb->update($this->table_name, $data, ['id' => $id]);
-        
-        // 3. Update Harga (Full Refresh)
-        if ($prices !== null && is_array($prices)) {
-            $wpdb->delete($this->prices_table, ['package_id' => $id]);
-            
-            foreach ($prices as $price_item) {
-                if (!empty($price_item['room_type']) && isset($price_item['price'])) {
-                    $wpdb->insert($this->prices_table, [
-                        'package_id' => $id,
-                        'room_type'  => sanitize_text_field($price_item['room_type']),
-                        'price'      => floatval($price_item['price']),
-                        'currency'   => !empty($price_item['currency']) ? sanitize_text_field($price_item['currency']) : 'IDR'
-                    ]);
-                }
-            }
-        }
-        
-        return $this->get_item_response($id);
-    }
-
-    /**
-     * Override Delete Item
-     */
-    public function delete_item($request) {
-        global $wpdb;
-        $id = $request['id'];
-
-        $existing = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$this->table_name} WHERE id = %d", $id));
-        if (!$existing) {
-            return new WP_Error('not_found', 'Item not found', ['status' => 404]);
-        }
-
-        $wpdb->delete($this->prices_table, ['package_id' => $id]);
-        $deleted = $wpdb->delete($this->table_name, ['id' => $id]);
-
-        if ($deleted) {
-            return rest_ensure_response(['success' => true, 'id' => $id]);
-        } else {
-            return new WP_Error('db_error', 'Failed to delete item', ['status' => 500]);
-        }
-    }
-
-    /**
-     * Override Get Item (Single)
-     */
-    public function get_item($request) {
-        $id = $request['id'];
-        return $this->get_item_response($id);
-    }
-
-    /**
-     * Override Get Items (List)
-     */
-    public function get_items($request) {
-        global $wpdb;
-
-        $args = parent::get_items_query_args($request);
-        $limit = $args['limit'];
-        $offset = $args['offset'];
-        $order_by = $args['order_by'];
-        $order = $args['order'];
-        
-        $sql = "SELECT p.*, c.name as category_name 
-                FROM {$this->table_name} p
-                LEFT JOIN {$this->categories_table} c ON p.category_id = c.id";
-
-        if (!empty($args['where'])) {
-            $sql .= " WHERE 1=1 " . $args['where'];
-        }
-
-        $sql .= " ORDER BY p.{$order_by} {$order}";
-        $sql .= $wpdb->prepare(" LIMIT %d OFFSET %d", $limit, $offset);
-        
-        $packages = $wpdb->get_results($sql, ARRAY_A);
-
-        if ($packages) {
-            foreach ($packages as &$pkg) {
-                $prices = $wpdb->get_results($wpdb->prepare(
-                    "SELECT room_type, price, currency FROM {$this->prices_table} WHERE package_id = %d", 
-                    $pkg['id']
-                ), ARRAY_A);
-                $pkg['prices'] = $prices;
-            }
-        }
-
-        $count_sql = "SELECT COUNT(*) FROM {$this->table_name} p";
-        if (!empty($args['where'])) {
-            $count_sql .= " WHERE 1=1 " . $args['where'];
-        }
-        $total_items = $wpdb->get_var($count_sql);
-        $total_pages = ceil($total_items / $limit);
-
-        $response = rest_ensure_response($packages);
-        $response->header('X-WP-Total', (int) $total_items);
-        $response->header('X-WP-TotalPages', (int) $total_pages);
-
-        return $response;
-    }
-
-    /**
-     * Helper untuk response
-     */
+    // Helper untuk Ambil Data Lengkap (Join)
     private function get_item_response($id) {
         global $wpdb;
+        $pkg = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE id = %d", $id), ARRAY_A);
         
-        $sql = $wpdb->prepare(
-            "SELECT p.*, c.name as category_name 
-             FROM {$this->table_name} p
-             LEFT JOIN {$this->categories_table} c ON p.category_id = c.id
-             WHERE p.id = %d", 
-            $id
-        );
-        
-        $item = $wpdb->get_row($sql, ARRAY_A);
-        
-        if (!$item) return new WP_Error('not_found', 'Paket tidak ditemukan', ['status' => 404]);
+        // Decode JSON
+        $pkg['airlines'] = json_decode($pkg['airlines']);
+        $pkg['hotels'] = json_decode($pkg['hotels']);
+        $pkg['facilities'] = json_decode($pkg['facilities']);
+        $pkg['promo_types'] = json_decode($pkg['promo_types']);
+        $pkg['itinerary_data'] = json_decode($pkg['itinerary_data']);
 
-        $prices = $wpdb->get_results($wpdb->prepare(
-            "SELECT room_type, price, currency FROM {$this->prices_table} WHERE package_id = %d", 
-            $id
-        ), ARRAY_A);
+        // Ambil Relasi Dates
+        $pkg['dates'] = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}umh_package_dates WHERE package_id = %d", $id), ARRAY_A);
         
-        $item['prices'] = $prices;
+        // Ambil Relasi Prices
+        $pkg['prices'] = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}umh_package_prices WHERE package_id = %d", $id), ARRAY_A);
+
+        return rest_ensure_response($pkg);
+    }
+
+    // Override Get Items (List)
+    public function get_items($request) {
+        global $wpdb;
+        // Logic sederhana: Ambil semua paket lalu inject harga termurah
+        $items = $wpdb->get_results("SELECT * FROM {$this->table_name} ORDER BY created_at DESC", ARRAY_A);
         
-        return rest_ensure_response($item);
+        foreach ($items as &$item) {
+            // Inject 1 harga sebagai display "Mulai dari..."
+            $min_price = $wpdb->get_var($wpdb->prepare("SELECT MIN(price) FROM {$wpdb->prefix}umh_package_prices WHERE package_id = %d", $item['id']));
+            $item['start_from'] = $min_price;
+            
+            // Decode JSON dasar untuk UI
+            $item['promo_types'] = json_decode($item['promo_types']);
+        }
+        return rest_ensure_response($items);
     }
 }
-
-// FIX: Bungkus inisialisasi dengan hook rest_api_init
-add_action('rest_api_init', function() {
-    $umh_packages_api = new UMH_Packages_API();
-    $umh_packages_api->register_routes();
-});
+new UMH_Packages_API();
+?>

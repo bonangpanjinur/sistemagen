@@ -1,78 +1,62 @@
-/* * File: assets/css/admin-style.css
- */
+/* File: assets/css/admin-style.css */
 
-/* === BAGIAN 1: KUSTOMISASI HALAMAN LOGIN === */
-
-body.login {
-    /* Gunakan gambar background dari user */
-    background-image: url('../images/login-bg.jpg') !important;
-    background-position: center center !important;
-    background-size: cover !important;
+/* 1. Reset Dasar untuk Immersive Mode */
+body.immersive-mode {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important; /* Mencegah scroll ganda */
+    background: #f3f4f6 !important; /* Samakan dengan bg React */
 }
 
-body.login h1 a {
-    /* Gunakan logo dari user */
-    background-image: url('../images/logo-login.png'); 
-    background-size: contain;
-    background-position: center bottom;
-    width: 300px; /* Sesuaikan lebar */
-    height: 90px; /* Sesuaikan tinggi */
-    margin-bottom: 20px;
-}
-
-/* Membuat form login sedikit transparan agar menyatu */
-body.login #loginform {
-    background: rgba(255, 255, 255, 0.95);
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-}
-
-/* === BAGIAN 2: MODE IMERSIF (UNTUK ROLE NON-ADMIN) === */
-
-/* * Style ini HANYA akan aktif jika body memiliki class 'immersive-mode',
- * yang kita tambahkan via hook PHP.
- */
-
-body.immersive-mode #wpadminbar {
-    display: none !important;
-}
-
+/* 2. Sembunyikan Elemen Bawaan WordPress */
+body.immersive-mode #wpadminbar,
 body.immersive-mode #adminmenumain,
-body.immersive-mode #adminmenuwrap,
-body.immersive-mode #adminmenuback {
+body.immersive-mode #wpfooter,
+body.immersive-mode .update-nag,
+body.immersive-mode .notice,
+body.immersive-mode #wpbody-content > .wrap > h1 { /* Judul Halaman WP */
     display: none !important;
 }
 
-body.immersive-mode #wpfooter {
-    display: none !important;
-}
-
-/*
- * Paksa konten React (#wpcontent) untuk mengisi seluruh layar
- */
+/* 3. Paksa Konten Utama Full Screen */
 body.immersive-mode #wpcontent {
     margin-left: 0 !important;
-    padding-left: 0 !important;
+    padding: 0 !important;
+    height: 100vh !important;
 }
 
 body.immersive-mode #wpbody-content {
     padding-bottom: 0 !important;
 }
 
-body.immersive-mode.auto-fold #wpcontent {
-    padding-left: 0 !important; /* Override WP auto-fold padding */
+body.immersive-mode .auto-fold #wpcontent {
+    padding-left: 0 !important;
 }
 
-/* Hapus padding default di halaman plugin */
-body.immersive-mode .wrap {
-    margin: 0 !important;
-    padding: 0 !important;
-    max-width: 100% !important;
-}
-
-/* Pastikan App Root mengisi layar */
-body.immersive-mode #umh-app-root {
-    height: 100vh;
+/* 4. Pastikan Container React Mengisi Penuh */
+#umh-app-root {
     width: 100vw;
-    overflow: hidden;
+    height: 100vh;
+    position: fixed; /* Kunci posisi agar tidak kegeser */
+    top: 0;
+    left: 0;
+    z-index: 99999; /* Di atas segalanya */
+    background: #f3f4f6;
+    overflow-y: auto; /* Scroll ada di dalam app react */
+}
+
+/* 5. Styling Tambahan untuk Scrollbar Custom */
+#umh-app-root ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+#umh-app-root ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+#umh-app-root ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+#umh-app-root ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }

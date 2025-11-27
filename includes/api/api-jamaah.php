@@ -1,62 +1,51 @@
 <?php
-/**
- * File: includes/api/api-jamaah.php
- *
- * PENINGKATAN (Item 2):
- * - File ini ditulis ulang sepenuhnya (refaktor).
- * - Mengganti semua fungsi kustom (umh_get_all_jamaah, dll)
- * dengan UMH_CRUD_Controller yang standar dan stabil.
- * - Menambahkan definisi $jamaah_schema agar sesuai db-schema.php.
- * - Menambahkan $searchable_fields untuk Peningkatan 4.
- */
+if (!defined('ABSPATH')) exit;
+require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
-if (!defined('ABSPATH')) {
-    exit; // Exit if accessed directly
+class UMH_Jamaah_API extends UMH_CRUD_Controller {
+    public function __construct() {
+        // Schema LENGKAP (V2.2)
+        // Menambahkan package_id dan sub_agent_id ke schema validasi
+        $schema = [
+            'registration_code' => ['type' => 'string'],
+            'full_name'         => ['type' => 'string', 'required' => true],
+            'gender'            => ['type' => 'string'],
+            'birth_place'       => ['type' => 'string'],
+            'birth_date'        => ['type' => 'string', 'format' => 'date'],
+            'marital_status'    => ['type' => 'string'],
+            'occupation'        => ['type' => 'string'],
+            
+            'ktp_number'        => ['type' => 'string'],
+            'passport_number'   => ['type' => 'string'],
+            'passport_name'     => ['type' => 'string'],
+            'passport_issued_date' => ['type' => 'string', 'format' => 'date'],
+            'passport_expiry_date' => ['type' => 'string', 'format' => 'date'],
+            'passport_issued_office' => ['type' => 'string'],
+
+            'address'           => ['type' => 'string'],
+            'city'              => ['type' => 'string'],
+            'phone_number'      => ['type' => 'string'],
+            
+            'father_name'       => ['type' => 'string'],
+            'mother_name'       => ['type' => 'string'],
+            'heir_name'         => ['type' => 'string'],
+            'heir_relation'     => ['type' => 'string'],
+
+            // Relasi Dinamis (PENTING untuk Dropdown)
+            'package_id'        => ['type' => 'integer'], // ID Paket
+            'sub_agent_id'      => ['type' => 'integer'], // ID Agen
+            
+            'package_type'      => ['type' => 'string'], // Nama Paket (Snapshot)
+            'sub_agent_name'    => ['type' => 'string'], // Nama Agen (Snapshot)
+            'room_type'         => ['type' => 'string'],
+            'departure_date'    => ['type' => 'string', 'format' => 'date'],
+            'clothing_size'     => ['type' => 'string'],
+            
+            'status'            => ['type' => 'string', 'default' => 'active'],
+            'notes'             => ['type' => 'string'],
+        ];
+        parent::__construct('jamaah', 'umh_jamaah', $schema, ['get_items' => ['admin_staff'], 'create_item' => ['admin_staff']]);
+    }
 }
-
-// 1. Definisikan Skema Data Jemaah (sesuai db-schema.php)
-$jamaah_schema = [
-    'package_id'       => ['type' => 'integer', 'required' => true, 'sanitize_callback' => 'absint'],
-    'full_name'        => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'birth_date'       => ['type' => 'string', 'format' => 'date', 'required' => false],
-    'gender'           => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-    'address'          => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
-    'phone'            => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'email'            => ['type' => 'string', 'format' => 'email', 'required' => false, 'sanitize_callback' => 'sanitize_email'],
-    'passport_number'  => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-    'passport_expiry'  => ['type' => 'string', 'format' => 'date', 'required' => false],
-    'ktp_number'       => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-    'ktp_scan'         => ['type' => 'string', 'format' => 'uri', 'required' => false, 'sanitize_callback' => 'esc_url_raw'],
-    'passport_scan'    => ['type' => 'string', 'format' => 'uri', 'required' => false, 'sanitize_callback' => 'esc_url_raw'],
-    'room_type'        => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-    'status'           => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'total_price'      => ['type' => 'number', 'required' => true],
-    'amount_paid'      => ['type' => 'number', 'required' => false], // Di-handle oleh api-payments.php
-    'payment_status'   => ['type' => 'string', 'required' => false], // Di-handle oleh api-payments.php
-    'notes'            => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_textarea_field'],
-];
-
-// 2. Definisikan Izin
-$jamaah_permissions = [
-    'get_items'    => ['owner', 'admin_staff', 'ops_staff', 'finance_staff'],
-    'get_item'     => ['owner', 'admin_staff', 'ops_staff', 'finance_staff'],
-    'create_item'  => ['owner', 'admin_staff', 'ops_staff'],
-    'update_item'  => ['owner', 'admin_staff', 'ops_staff'],
-    'delete_item'  => ['owner', 'admin_staff'],
-];
-
-// 3. Tentukan Kolom yang Bisa Dicari
-$jamaah_searchable_fields = ['full_name', 'email', 'phone', 'passport_number', 'ktp_number'];
-
-// 4. Inisialisasi Controller
-new UMH_CRUD_Controller(
-    'jamaah', 
-    'umh_jamaah', 
-    $jamaah_schema, 
-    $jamaah_permissions,
-    $jamaah_searchable_fields
-);
-
-// Catatan:
-// - API Upload (ktp_scan, passport_scan) ditangani oleh api-uploads.php
-// - Perhitungan amount_paid dan payment_status ditangani oleh api-payments.php
+new UMH_Jamaah_API();
+?>

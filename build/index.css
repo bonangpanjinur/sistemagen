@@ -693,11 +693,11 @@ input[type="checkbox"]:focus {
 .h-24 {
   height: 6rem;
 }
-.h-32 {
-  height: 8rem;
-}
 .h-4 {
   height: 1rem;
+}
+.h-48 {
+  height: 12rem;
 }
 .h-5 {
   height: 1.25rem;
@@ -717,14 +717,8 @@ input[type="checkbox"]:focus {
 .h-screen {
   height: 100vh;
 }
-.max-h-60 {
-  max-height: 15rem;
-}
 .max-h-\[90vh\] {
   max-height: 90vh;
-}
-.min-h-screen {
-  min-height: 100vh;
 }
 .w-1\/3 {
   width: 33.333333%;
@@ -732,14 +726,14 @@ input[type="checkbox"]:focus {
 .w-10 {
   width: 2.5rem;
 }
+.w-11 {
+  width: 2.75rem;
+}
 .w-16 {
   width: 4rem;
 }
 .w-24 {
   width: 6rem;
-}
-.w-32 {
-  width: 8rem;
 }
 .w-4 {
   width: 1rem;
@@ -762,6 +756,9 @@ input[type="checkbox"]:focus {
 }
 .w-full {
   width: 100%;
+}
+.w-screen {
+  width: 100vw;
 }
 .min-w-full {
   min-width: 100%;
@@ -917,6 +914,11 @@ input[type="checkbox"]:focus {
 .overflow-x-hidden {
   overflow-x: hidden;
 }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .whitespace-nowrap {
   white-space: nowrap;
 }
@@ -1017,6 +1019,10 @@ input[type="checkbox"]:focus {
 .border-green-500 {
   --tw-border-opacity: 1;
   border-color: rgb(34 197 94 / var(--tw-border-opacity, 1));
+}
+.border-purple-100 {
+  --tw-border-opacity: 1;
+  border-color: rgb(243 232 255 / var(--tw-border-opacity, 1));
 }
 .border-purple-200 {
   --tw-border-opacity: 1;
@@ -1141,9 +1147,16 @@ input[type="checkbox"]:focus {
 .bg-opacity-50 {
   --tw-bg-opacity: 0.5;
 }
-.object-contain {
-  -o-object-fit: contain;
-     object-fit: contain;
+.bg-gradient-to-r {
+  background-image: linear-gradient(to right, var(--tw-gradient-stops));
+}
+.from-purple-600 {
+  --tw-gradient-from: #9333ea var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(147 51 234 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.to-blue-600 {
+  --tw-gradient-to: #2563eb var(--tw-gradient-to-position);
 }
 .p-1 {
   padding: 0.25rem;
@@ -1200,6 +1213,10 @@ input[type="checkbox"]:focus {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
+.py-2\.5 {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
 .py-3 {
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
@@ -1211,11 +1228,11 @@ input[type="checkbox"]:focus {
 .pb-1 {
   padding-bottom: 0.25rem;
 }
+.pb-10 {
+  padding-bottom: 2.5rem;
+}
 .pb-2 {
   padding-bottom: 0.5rem;
-}
-.pb-6 {
-  padding-bottom: 1.5rem;
 }
 .pl-3 {
   padding-left: 0.75rem;
@@ -1241,9 +1258,6 @@ input[type="checkbox"]:focus {
 .pt-4 {
   padding-top: 1rem;
 }
-.pt-6 {
-  padding-top: 1.5rem;
-}
 .text-left {
   text-align: left;
 }
@@ -1263,9 +1277,9 @@ input[type="checkbox"]:focus {
   font-size: 1.5rem;
   line-height: 2rem;
 }
-.text-4xl {
-  font-size: 2.25rem;
-  line-height: 2.5rem;
+.text-6xl {
+  font-size: 3.75rem;
+  line-height: 1;
 }
 .text-\[10px\] {
   font-size: 10px;
@@ -1309,6 +1323,10 @@ input[type="checkbox"]:focus {
 }
 .tracking-wider {
   letter-spacing: 0.05em;
+}
+.text-blue-100 {
+  --tw-text-opacity: 1;
+  color: rgb(219 234 254 / var(--tw-text-opacity, 1));
 }
 .text-blue-500 {
   --tw-text-opacity: 1;
@@ -1366,6 +1384,10 @@ input[type="checkbox"]:focus {
   --tw-text-opacity: 1;
   color: rgb(22 101 52 / var(--tw-text-opacity, 1));
 }
+.text-orange-600 {
+  --tw-text-opacity: 1;
+  color: rgb(234 88 12 / var(--tw-text-opacity, 1));
+}
 .text-orange-700 {
   --tw-text-opacity: 1;
   color: rgb(194 65 12 / var(--tw-text-opacity, 1));
@@ -1417,6 +1439,9 @@ input[type="checkbox"]:focus {
 .text-yellow-800 {
   --tw-text-opacity: 1;
   color: rgb(133 77 14 / var(--tw-text-opacity, 1));
+}
+.opacity-90 {
+  opacity: 0.9;
 }
 .shadow {
   --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
@@ -1571,6 +1596,63 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --tw-text-opacity: 1;
   color: rgb(29 78 216 / var(--tw-text-opacity, 1));
 }
+.after\:absolute::after {
+  content: var(--tw-content);
+  position: absolute;
+}
+.after\:left-\[2px\]::after {
+  content: var(--tw-content);
+  left: 2px;
+}
+.after\:top-\[2px\]::after {
+  content: var(--tw-content);
+  top: 2px;
+}
+.after\:h-5::after {
+  content: var(--tw-content);
+  height: 1.25rem;
+}
+.after\:w-5::after {
+  content: var(--tw-content);
+  width: 1.25rem;
+}
+.after\:rounded-full::after {
+  content: var(--tw-content);
+  border-radius: 9999px;
+}
+.after\:border::after {
+  content: var(--tw-content);
+  border-width: 1px;
+}
+.after\:border-gray-300::after {
+  content: var(--tw-content);
+  --tw-border-opacity: 1;
+  border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
+}
+.after\:bg-white::after {
+  content: var(--tw-content);
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+}
+.after\:transition-all::after {
+  content: var(--tw-content);
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+.after\:content-\[\'\'\]::after {
+  --tw-content: '';
+  content: var(--tw-content);
+}
+.hover\:-translate-y-1:hover {
+  --tw-translate-y: -0.25rem;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.hover\:scale-105:hover {
+  --tw-scale-x: 1.05;
+  --tw-scale-y: 1.05;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
 .hover\:bg-blue-200:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(191 219 254 / var(--tw-bg-opacity, 1));
@@ -1639,9 +1721,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   --tw-text-opacity: 1;
   color: rgb(127 29 29 / var(--tw-text-opacity, 1));
 }
-.hover\:underline:hover {
-  text-decoration-line: underline;
-}
 .hover\:shadow-md:hover {
   --tw-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   --tw-shadow-colored: 0 4px 6px -1px var(--tw-shadow-color), 0 2px 4px -2px var(--tw-shadow-color);
@@ -1696,6 +1775,28 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .disabled\:opacity-50:disabled {
   opacity: 0.5;
+}
+.peer:checked ~ .peer-checked\:bg-blue-600 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
+}
+.peer:checked ~ .peer-checked\:bg-green-600 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(22 163 74 / var(--tw-bg-opacity, 1));
+}
+.peer:checked ~ .peer-checked\:after\:translate-x-full::after {
+  content: var(--tw-content);
+  --tw-translate-x: 100%;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.peer:checked ~ .peer-checked\:after\:border-white::after {
+  content: var(--tw-content);
+  --tw-border-opacity: 1;
+  border-color: rgb(255 255 255 / var(--tw-border-opacity, 1));
+}
+.peer:focus ~ .peer-focus\:outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
 }
 @media (min-width: 640px) {
   .sm\:block {

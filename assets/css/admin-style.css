@@ -1,62 +1,68 @@
 /* File: assets/css/admin-style.css */
 
-/* 1. Reset Dasar untuk Immersive Mode */
+/* Mode Immersive: Menyembunyikan elemen bawaan WordPress */
 body.immersive-mode {
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important; /* Mencegah scroll ganda */
-    background: #f3f4f6 !important; /* Samakan dengan bg React */
+    overflow: hidden !important; /* Mencegah scroll ganda dengan WP */
+    background: #f3f4f6 !important; /* Warna background aplikasi */
 }
 
-/* 2. Sembunyikan Elemen Bawaan WordPress */
+/* Sembunyikan elemen WP */
 body.immersive-mode #wpadminbar,
 body.immersive-mode #adminmenumain,
+body.immersive-mode #adminmenuback,
+body.immersive-mode #adminmenuwrap,
 body.immersive-mode #wpfooter,
 body.immersive-mode .update-nag,
 body.immersive-mode .notice,
-body.immersive-mode #wpbody-content > .wrap > h1 { /* Judul Halaman WP */
+body.immersive-mode #wpbody-content > .wrap > h1,
+body.immersive-mode .auto-fold #wpcontent {
     display: none !important;
 }
 
-/* 3. Paksa Konten Utama Full Screen */
+/* Reset layout container WP agar React bisa full screen */
 body.immersive-mode #wpcontent {
     margin-left: 0 !important;
     padding: 0 !important;
     height: 100vh !important;
+    overflow: hidden !important;
 }
 
 body.immersive-mode #wpbody-content {
     padding-bottom: 0 !important;
+    float: none !important;
 }
 
-body.immersive-mode .auto-fold #wpcontent {
-    padding-left: 0 !important;
+body.immersive-mode #wpbody {
+    padding-top: 0 !important;
 }
 
-/* 4. Pastikan Container React Mengisi Penuh */
+/* Container Utama React App */
 #umh-app-root {
     width: 100vw;
     height: 100vh;
-    position: fixed; /* Kunci posisi agar tidak kegeser */
+    position: fixed;
     top: 0;
     left: 0;
-    z-index: 99999; /* Di atas segalanya */
-    background: #f3f4f6;
-    overflow-y: auto; /* Scroll ada di dalam app react */
+    z-index: 99999; /* Pastikan di atas segalanya */
+    background: #f9fafb;
+    display: flex;
+    flex-direction: column;
 }
 
-/* 5. Styling Tambahan untuk Scrollbar Custom */
-#umh-app-root ::-webkit-scrollbar {
+/* Scrollbar Kustom yang Halus */
+::-webkit-scrollbar {
     width: 8px;
     height: 8px;
 }
-#umh-app-root ::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
     background: #f1f1f1;
 }
-#umh-app-root ::-webkit-scrollbar-thumb {
+::-webkit-scrollbar-thumb {
     background: #c1c1c1;
     border-radius: 4px;
 }
-#umh-app-root ::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }

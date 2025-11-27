@@ -1,74 +1,93 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Layout from '../components/Layout';
-import useCRUD from '../hooks/useCRUD';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
-import Spinner from '../components/Spinner';
+import useCRUD from '../hooks/useCRUD';
+import { useData } from '../contexts/DataContext';
+import { Plus, Tag } from 'lucide-react';
 
 const PackageCategories = () => {
-    const columns = [
-        { header: 'Nama Kategori', accessor: 'name' },
-        { header: 'Slug', accessor: 'slug' },
-        { header: 'Deskripsi', accessor: 'description' },
-    ];
+    const { user } = useData();
+    const { data, loading, createItem, updateItem, deleteItem } = useCRUD('umh/v1/package-categories');
 
-    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/package-categories');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editId, setEditId] = useState(null);
-    const [formData, setFormData] = useState({
-        name: '',
-        slug: '',
-        description: ''
-    });
+    const [modalMode, setModalMode] = useState('create');
+    const [currentItem, setCurrentItem] = useState(null);
+    const [formData, setFormData] = useState({});
 
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const success = editId ? await updateItem(editId, formData) : await createItem(formData);
-        if (success) {
-            setIsModalOpen(false);
-            setFormData({ name: '', slug: '', description: '' });
-        }
-    };
-
-    const handleEdit = (item) => {
-        setFormData(item);
-        setEditId(item.id);
+    const handleOpenModal = (mode, item = null) => {
+        setModalMode(mode);
+        setCurrentItem(item);
+        setFormData(item || {});
         setIsModalOpen(true);
     };
 
-    // Auto-generate slug dari nama
-    const handleNameChange = (e) => {
-        const name = e.target.value;
-        const slug = name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-        setFormData({ ...formData, name, slug });
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        // Generate slug sederhana dari nama jika kosong
+        if (!formData.slug && formData.name) {
+            formData.slug = formData.name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+        }
+
+        const success = modalMode === 'create' 
+            ? await createItem(formData) 
+            : await updateItem(currentItem.id, formData);
+        
+        if (success) setIsModalOpen(false);
     };
 
+    const columns = [
+        { header: 'Nama Kategori', accessor: 'name', sortable: true },
+        { header: 'Slug', accessor: 'slug', render: r => <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">{r.slug}</span> },
+        { header: 'Deskripsi', accessor: 'description' },
+    ];
+
     return (
-        <Layout title="Kategori Paket">
-            <div className="flex justify-between mb-4">
-                <h2 className="text-lg font-semibold">Master Kategori</h2>
-                <button onClick={() => { setEditId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded">+ Tambah Kategori</button>
+        <Layout title="Kategori Paket (Master Data)">
+            <div className="mb-4 bg-blue-50 border border-blue-200 p-4 rounded-lg flex justify-between items-center">
+                <div>
+                    <h3 className="font-bold text-blue-800">Manajemen Kategori</h3>
+                    <p className="text-sm text-blue-600">Buat varian paket seperti: Ramadhan, Awal Tahun, Furoda, Umroh Plus.</p>
+                </div>
+                <button onClick={() => handleOpenModal('create')} className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700">
+                    <Plus size={18} /> Tambah Kategori
+                </button>
             </div>
 
-            {loading ? <Spinner /> : <CrudTable columns={columns} data={data} onEdit={handleEdit} onDelete={deleteItem} />}
+            <CrudTable
+                columns={columns}
+                data={data}
+                loading={loading}
+                onEdit={(item) => handleOpenModal('edit', item)}
+                onDelete={deleteItem}
+                userCapabilities={user?.role}
+                editCapability="manage_options"
+                deleteCapability="manage_options"
+            />
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editId ? "Edit Kategori" : "Kategori Baru"}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? 'Tambah Kategori' : 'Edit Kategori'}>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium">Nama Kategori</label>
-                        <input className="w-full border p-2 rounded" value={formData.name} onChange={handleNameChange} required placeholder="Contoh: Umroh Ramadhan" />
+                        <label className="block text-sm font-medium text-gray-700">Nama Kategori</label>
+                        <input type="text" className="mt-1 w-full border rounded p-2" 
+                            placeholder="Contoh: Umroh Ramadhan"
+                            value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Slug (URL Friendly)</label>
-                        <input className="w-full border p-2 rounded bg-gray-100" value={formData.slug} readOnly />
+                        <label className="block text-sm font-medium text-gray-700">Slug (Opsional)</label>
+                        <input type="text" className="mt-1 w-full border rounded p-2 bg-gray-50" 
+                            placeholder="umroh-ramadhan (Auto generate jika kosong)"
+                            value={formData.slug || ''} onChange={e => setFormData({...formData, slug: e.target.value})} />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium">Deskripsi</label>
-                        <textarea className="w-full border p-2 rounded" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} rows="3"></textarea>
+                        <label className="block text-sm font-medium text-gray-700">Deskripsi</label>
+                        <textarea className="mt-1 w-full border rounded p-2" rows="3"
+                            value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})}></textarea>
                     </div>
-                    <button className="w-full bg-blue-600 text-white py-2 rounded">Simpan Kategori</button>
+                    <div className="flex justify-end gap-2 pt-4">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="bg-gray-100 px-4 py-2 rounded text-gray-700">Batal</button>
+                        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button>
+                    </div>
                 </form>
             </Modal>
         </Layout>

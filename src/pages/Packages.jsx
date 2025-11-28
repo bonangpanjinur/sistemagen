@@ -3,133 +3,111 @@ import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
 import useCRUD from '../hooks/useCRUD';
-import { Plus, Trash2, Building, Plane } from 'lucide-react';
+import { Plus, Edit, Trash2, Package as IconPkg } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
 const Packages = () => {
     const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/packages');
-    // Point 7: Ambil data master Hotel & Maskapai (Flights)
-    const { data: hotels } = useCRUD('umh/v1/hotels');
-    const { data: airlines } = useCRUD('umh/v1/flights'); 
-
-    useEffect(() => { fetchData(); }, [fetchData]);
-
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('create');
     const [currentItem, setCurrentItem] = useState(null);
     
     const initialForm = {
-        name: '', airline_id: '', 
-        price_quad: 0, price_triple: 0, price_double: 0,
-        accommodations: [{ city: 'Makkah', hotel_id: '' }, { city: 'Madinah', hotel_id: '' }], // Point 3: Array Hotel
+        name: '', 
+        category_id: '', 
+        duration: 9, 
+        price: 0, 
+        hotel_makkah: '',
+        hotel_madinah: '',
+        airline: '',
+        facilities: '',
+        description: ''
     };
     const [formData, setFormData] = useState(initialForm);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
 
     const handleOpenModal = (mode, item = null) => {
         setModalMode(mode);
         setCurrentItem(item);
-        if (item) {
-            let parsedAcc = [];
-            try { parsedAcc = typeof item.accommodations === 'string' ? JSON.parse(item.accommodations) : item.accommodations; } catch(e) { parsedAcc = []; }
-            let prices = {};
-            try { prices = typeof item.prices === 'string' ? JSON.parse(item.prices) : item.prices || {}; } catch(e) {}
-
-            setFormData({
-                ...initialForm, ...item,
-                accommodations: Array.isArray(parsedAcc) && parsedAcc.length > 0 ? parsedAcc : initialForm.accommodations,
-                price_quad: prices.quad || item.price || 0,
-                price_triple: prices.triple || 0,
-                price_double: prices.double || 0,
-            });
-        } else {
-            setFormData(initialForm);
-        }
+        setFormData(item || initialForm);
         setIsModalOpen(true);
-    };
-
-    // Point 3: Logic Tambah/Hapus Hotel
-    const addHotelRow = () => setFormData(prev => ({ ...prev, accommodations: [...prev.accommodations, { city: '', hotel_id: '' }] }));
-    const removeHotelRow = (idx) => setFormData(prev => ({ ...prev, accommodations: prev.accommodations.filter((_, i) => i !== idx) }));
-    const updateHotelRow = (idx, field, val) => {
-        const newAcc = [...formData.accommodations];
-        newAcc[idx][field] = val;
-        setFormData(prev => ({ ...prev, accommodations: newAcc }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const payload = {
-            ...formData,
-            price: formData.price_quad, 
-            prices: JSON.stringify({ quad: formData.price_quad, triple: formData.price_triple, double: formData.price_double }),
-            accommodations: JSON.stringify(formData.accommodations) 
-        };
-        const success = modalMode === 'create' ? await createItem(payload) : await updateItem(currentItem.id, payload);
+        const success = modalMode === 'create' ? await createItem(formData) : await updateItem(currentItem.id, formData);
         if (success) setIsModalOpen(false);
     };
 
     const columns = [
-        { header: 'Nama Paket', accessor: 'name' },
-        { header: 'Maskapai', accessor: 'airline_id', render: r => {
-            const airline = airlines?.find(a => String(a.id) === String(r.airline_id));
-            return airline ? <span className="flex items-center gap-1"><Plane size={12}/> {airline.name}</span> : '-';
-        }},
-        { header: 'Harga Mulai', accessor: 'price', render: r => formatCurrency(r.price) },
-        { header: 'Hotel', accessor: 'accommodations', render: r => {
-            let acc = [];
-            try { acc = typeof r.accommodations === 'string' ? JSON.parse(r.accommodations) : r.accommodations; } catch(e){}
-            return <span className="text-xs badge bg-gray-100 border px-2 py-1 rounded">{Array.isArray(acc) ? acc.length + ' Hotel' : '-'}</span>
-        }}
+        { header: 'Nama Paket', accessor: 'name', className: 'font-bold' },
+        { header: 'Durasi', accessor: 'duration', render: r => r.duration + ' Hari' },
+        { header: 'Harga Dasar', accessor: 'price', render: r => formatCurrency(r.price) },
+        { header: 'Hotel', accessor: 'hotel_makkah', render: r => (
+            <div className="text-xs">
+                <div><span className="font-bold">Makkah:</span> {r.hotel_makkah || '-'}</div>
+                <div><span className="font-bold">Madinah:</span> {r.hotel_madinah || '-'}</div>
+            </div>
+        )},
+        { header: 'Maskapai', accessor: 'airline' }
     ];
 
     return (
-        <Layout title="Paket Umroh">
-            <div className="mb-4 flex justify-end"><button onClick={() => handleOpenModal('create')} className="btn-primary flex gap-2"><Plus size={18}/> Paket Baru</button></div>
+        <Layout title="Paket Umroh & Haji">
+            <div className="mb-6 flex justify-between items-center">
+                <p className="text-gray-500 text-sm">Kelola katalog paket perjalanan Anda.</p>
+                <button onClick={() => handleOpenModal('create')} className="btn-primary flex gap-2 items-center">
+                    <Plus size={18}/> Tambah Paket
+                </button>
+            </div>
+
             <CrudTable columns={columns} data={data} loading={loading} onEdit={i => handleOpenModal('edit', i)} onDelete={deleteItem} />
             
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Form Paket" size="max-w-4xl">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="label">Nama Paket</label><input className="input-field" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required /></div>
-                        {/* Point 7: Dropdown Maskapai */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode==='create' ? "Tambah Paket Baru" : "Edit Paket"} size="max-w-3xl">
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <label className="label">Nama Paket</label>
+                            <input className="input-field" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required placeholder="Contoh: Umroh Hemat 9 Hari" />
+                        </div>
+                        
                         <div>
-                            <label className="label">Maskapai (Master Data)</label>
-                            <select className="input-field" value={formData.airline_id} onChange={e=>setFormData({...formData, airline_id: e.target.value})}>
-                                <option value="">-- Pilih Maskapai --</option>
-                                {airlines?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                            </select>
+                            <label className="label">Harga Dasar (Rp)</label>
+                            <input type="number" className="input-field" value={formData.price} onChange={e=>setFormData({...formData, price: e.target.value})} required />
+                            <p className="text-xs text-gray-500 mt-1">Harga ini akan menjadi default saat buat jadwal.</p>
+                        </div>
+                        
+                        <div>
+                            <label className="label">Durasi (Hari)</label>
+                            <input type="number" className="input-field" value={formData.duration} onChange={e=>setFormData({...formData, duration: e.target.value})} />
+                        </div>
+
+                        <div>
+                            <label className="label">Hotel Makkah</label>
+                            <input className="input-field" value={formData.hotel_makkah} onChange={e=>setFormData({...formData, hotel_makkah: e.target.value})} placeholder="Nama Hotel" />
+                        </div>
+
+                        <div>
+                            <label className="label">Hotel Madinah</label>
+                            <input className="input-field" value={formData.hotel_madinah} onChange={e=>setFormData({...formData, hotel_madinah: e.target.value})} placeholder="Nama Hotel" />
+                        </div>
+                        
+                        <div>
+                            <label className="label">Maskapai Penerbangan</label>
+                            <input className="input-field" value={formData.airline} onChange={e=>setFormData({...formData, airline: e.target.value})} placeholder="Contoh: Garuda Indonesia" />
+                        </div>
+
+                        <div className="col-span-2">
+                            <label className="label">Fasilitas / Keterangan</label>
+                            <textarea className="input-field" rows="3" value={formData.facilities} onChange={e=>setFormData({...formData, facilities: e.target.value})} placeholder="Bus AC, Makan 3x, dll..."></textarea>
                         </div>
                     </div>
                     
-                    <div className="bg-gray-50 p-4 rounded border">
-                        <div className="flex justify-between mb-2">
-                            <h4 className="font-bold text-sm">Akomodasi Hotel (Point 3)</h4>
-                            <button type="button" onClick={addHotelRow} className="text-xs bg-blue-600 text-white px-2 py-1 rounded">+ Tambah Hotel</button>
-                        </div>
-                        {formData.accommodations.map((row, idx) => (
-                            <div key={idx} className="flex gap-2 items-end mb-2">
-                                <div className="w-1/3">
-                                    <input className="input-field py-1 text-sm" value={row.city} onChange={e=>updateHotelRow(idx, 'city', e.target.value)} placeholder="Kota (Contoh: Dubai)" />
-                                </div>
-                                <div className="flex-1">
-                                    {/* Point 7: Dropdown Hotel */}
-                                    <select className="input-field py-1 text-sm" value={row.hotel_id} onChange={e=>updateHotelRow(idx, 'hotel_id', e.target.value)}>
-                                        <option value="">-- Pilih Hotel --</option>
-                                        {hotels?.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                                    </select>
-                                </div>
-                                <button type="button" onClick={() => removeHotelRow(idx)} className="text-red-500"><Trash2 size={16}/></button>
-                            </div>
-                        ))}
+                    <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                        <button type="button" onClick={()=>setIsModalOpen(false)} className="btn-secondary">Batal</button>
+                        <button type="submit" className="btn-primary">Simpan Paket</button>
                     </div>
-
-                    <div className="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded">
-                        <div><label className="label text-xs">Harga Quad</label><input type="number" className="input-field" value={formData.price_quad} onChange={e=>setFormData({...formData, price_quad: e.target.value})} /></div>
-                        <div><label className="label text-xs">Harga Triple</label><input type="number" className="input-field" value={formData.price_triple} onChange={e=>setFormData({...formData, price_triple: e.target.value})} /></div>
-                        <div><label className="label text-xs">Harga Double</label><input type="number" className="input-field" value={formData.price_double} onChange={e=>setFormData({...formData, price_double: e.target.value})} /></div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 border-t pt-4"><button type="button" onClick={()=>setIsModalOpen(false)} className="btn-secondary">Batal</button><button type="submit" className="btn-primary">Simpan</button></div>
                 </form>
             </Modal>
         </Layout>

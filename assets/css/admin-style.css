@@ -1,78 +1,60 @@
-/* File: assets/css/admin-style.css */
-
-/* Mode Immersive: Menyembunyikan elemen bawaan WordPress secara agresif */
-body.immersive-mode {
+/* Mode Immersive Ekstrim: Hapus semua elemen WordPress */
+body.umroh-manager-page {
     margin: 0 !important;
     padding: 0 !important;
-    overflow: hidden !important; /* Mencegah scroll ganda dengan WP */
-    background: #f3f4f6 !important; 
+    height: 100vh !important;
+    overflow: hidden !important;
+    background: #f3f4f6 !important;
 }
 
 /* Sembunyikan elemen WP Standar */
-body.immersive-mode #wpadminbar,
-body.immersive-mode #adminmenumain,
-body.immersive-mode #adminmenuback,
-body.immersive-mode #adminmenuwrap,
-body.immersive-mode #wpfooter,
-body.immersive-mode .update-nag,
-body.immersive-mode .notice,
-body.immersive-mode #wpbody-content > .wrap > h1,
-body.immersive-mode .auto-fold #wpcontent,
-body.immersive-mode #screen-meta,
-body.immersive-mode #screen-meta-links {
+body.umroh-manager-page #wpadminbar,
+body.umroh-manager-page #adminmenumain,
+body.umroh-manager-page #adminmenuback,
+body.umroh-manager-page #adminmenuwrap,
+body.umroh-manager-page #wpfooter,
+body.umroh-manager-page .update-nag,
+body.umroh-manager-page .notice,
+body.umroh-manager-page #wpbody-content > .wrap > h1,
+body.umroh-manager-page .auto-fold #wpcontent,
+body.umroh-manager-page #screen-meta,
+body.umroh-manager-page #screen-meta-links {
     display: none !important;
     visibility: hidden !important;
     height: 0 !important;
     width: 0 !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    z-index: -1 !important;
 }
 
-/* Reset layout container WP agar React bisa full screen */
-body.immersive-mode #wpcontent {
+/* Reset layout container WP */
+body.umroh-manager-page #wpcontent {
     margin-left: 0 !important;
     padding: 0 !important;
     height: 100vh !important;
     overflow: hidden !important;
 }
 
-body.immersive-mode #wpbody-content {
+body.umroh-manager-page #wpbody-content {
     padding-bottom: 0 !important;
     float: none !important;
 }
 
-body.immersive-mode #wpbody {
+body.umroh-manager-page #wpbody {
     padding-top: 0 !important;
 }
 
-/* Container Utama React App - Memaksa tampil di atas segalanya */
+/* Container Utama React App - Full Screen Absolute */
 #umh-app-root {
-    width: 100vw;
-    height: 100vh;
     position: fixed;
     top: 0;
     left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 99999; /* Pastikan di atas Admin Bar WP jika bocor */
-    background: #f9fafb;
+    width: 100vw;
+    height: 100vh;
+    z-index: 999999; /* Di atas segalanya */
+    background: #f3f4f6;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-}
-
-/* Scrollbar Kustom yang Halus */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
 }

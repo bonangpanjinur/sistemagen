@@ -1,7 +1,6 @@
 <?php
 /**
  * File: admin/dashboard-react.php
- * Menampilkan container untuk aplikasi React
  */
 
 if (!defined('ABSPATH')) {
@@ -9,41 +8,18 @@ if (!defined('ABSPATH')) {
 }
 
 function umroh_manager_render_dashboard_react() {
+    // Tambahkan class khusus ke body agar CSS immersive aktif
+    echo '<script>document.body.classList.add("umroh-manager-page");</script>';
     ?>
-    <div class="wrap" style="margin: 0; padding: 0; max-width: 100%;">
-        <!-- 
-            FIX: Container ID diubah menjadi 'umh-app-root' agar sesuai dengan src/index.jsx
-        -->
-        <div id="umh-app-root" class="umh-app-container">
-            <div style="display: flex; justify-content: center; align-items: center; height: 80vh;">
-                <p>Memuat Sistem Manajemen Umroh...</p>
+    <div class="wrap" style="margin: 0; padding: 0;">
+        <div id="umh-app-root">
+            <div style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #f3f4f6;">
+                <div style="text-align: center;">
+                    <h3 style="margin-bottom: 10px; font-family: sans-serif; color: #4b5563;">Memuat Sistem...</h3>
+                    <div class="spinner"></div>
+                </div>
             </div>
         </div>
     </div>
-    
-    <style>
-        /* Reset beberapa style bawaan WP agar tampilan immersive lebih rapi */
-        #wpcontent {
-            padding-left: 0 !important;
-        }
-        .auto-fold #wpcontent {
-            padding-left: 0 !important;
-        }
-        #wpbody-content {
-            padding-bottom: 0 !important;
-        }
-        .umh-app-container {
-            min-height: calc(100vh - 32px); /* Mengurangi tinggi Admin Bar WP */
-            background-color: #f3f4f6;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
-        
-        /* Fix untuk mobile view WP Admin */
-        @media screen and (max-width: 782px) {
-            .umh-app-container {
-                min-height: calc(100vh - 46px);
-            }
-        }
-    </style>
     <?php
 }

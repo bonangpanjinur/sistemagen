@@ -1,74 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../utils/api';
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { api } from '../utils/api';
 
-const DataContext = createContext();
+export const DataContext = createContext();
 
 export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
-    const [currentUser, setCurrentUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState(null);
+    const [user, setUser] = useState(null);
 
-    // Fungsi untuk memuat data awal
-    const initData = async () => {
+    // Load initial data jika diperlukan
+    const loadInitialData = async () => {
         setLoading(true);
         try {
-            // Cek apakah settings dari WP tersedia
-            if (!window.umrohManagerSettings) {
-                console.warn('umrohManagerSettings not found, using mock/dev mode or fallback');
-            }
-
-            // Panggil API User Me
-            // Kita gunakan try-catch terpisah untuk user agar app tidak crash total jika user gagal load
-            try {
-                const userResponse = await api.get('/user/me');
-                if (userResponse.data && userResponse.data.success) {
-                    setCurrentUser(userResponse.data.data);
-                } else {
-                    // Fallback jika API response structure berbeda
-                    console.log("User data not standard format:", userResponse);
-                    setCurrentUser(userResponse.data || { name: 'Admin', role: 'administrator' });
-                }
-            } catch (userErr) {
-                console.error("Error fetching user:", userErr);
-                setError("Gagal memuat data pengguna.");
-                // Tetap set user null atau default agar menu tetap bisa muncul (opsional)
-            }
-
+            // Contoh: Load current user atau stats dasar
+            // const userData = await api.get('users/me');
+            // setUser(userData);
         } catch (err) {
-            console.error("Critical Init Error:", err);
-            setError(err.message);
+            console.error("Gagal memuat data awal:", err);
+            // Jangan set global error jika hanya data optional
         } finally {
-            // PENTING: Loading HARUS dimatikan apapun yang terjadi
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        initData();
+        loadInitialData();
     }, []);
 
-    const refreshStats = async () => {
-        try {
-            const response = await api.get('/stats/dashboard');
-            if (response.data.success) {
-                setStats(response.data.data);
-            }
-        } catch (error) {
-            console.error("Error fetching stats:", error);
-        }
-    };
-
     const value = {
-        currentUser,
         loading,
+        setLoading,
         error,
+        setError,
         stats,
-        refreshStats,
-        isAuthenticated: !!currentUser,
-        isAdmin: currentUser?.roles?.includes('administrator') || true // Default true for debugging if needed
+        setStats,
+        user,
+        setUser
     };
 
     return (

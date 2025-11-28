@@ -1,52 +1,62 @@
-import axios from 'axios';
+// Mengambil data dari variabel global yang di-localize oleh WordPress
+const umhData = window.umhData || window.umh_data || {};
 
-// 1. Ambil setting dari WordPress (jika ada)
-const settings = window.umrohManagerSettings || {};
+const API_ROOT = umhData.root || '/wp-json/umh/v1/';
+const NONCE = umhData.nonce || '';
 
-// 2. Fungsi Cerdas untuk menentukan Base URL API
-const getBaseURL = () => {
-    // A. Jika setting dari PHP tersedia (Skenario Ideal)
-    if (settings.root) {
-        return settings.root + 'umroh-manager/v1';
-    }
-
-    // B. Jika setting hilang, lakukan deteksi otomatis berdasarkan URL Browser
-    // Ini memperbaiki masalah 404 jika WP diinstall di subfolder (misal: localhost/folder-project)
-    const currentPath = window.location.pathname; // misal: /sistemagen/wp-admin/admin.php
+/**
+ * Melakukan request API ke backend WordPress
+ * @param {string} endpoint - Endpoint API (misal: 'agents')
+ * @param {object} options - Opsi fetch (method, body, dll)
+ */
+export const apiRequest = async (endpoint, options = {}) => {
+    const url = `${API_ROOT}${endpoint}`;
     
-    if (currentPath.includes('/wp-admin/')) {
-        // Ambil path sebelum /wp-admin/ (misal: /sistemagen/)
-        const rootPath = currentPath.split('/wp-admin/')[0];
-        // Susun URL lengkap
-        return `${window.location.origin}${rootPath}/wp-json/umroh-manager/v1`;
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': NONCE,
+    };
+
+    const config = {
+        ...options,
+        headers: {
+            ...defaultHeaders,
+            ...options.headers,
+        },
+    };
+
+    if (config.body && typeof config.body === 'object') {
+        config.body = JSON.stringify(config.body);
     }
 
-    // C. Fallback terakhir
-    return '/wp-json/umroh-manager/v1';
+    try {
+        const response = await fetch(url, config);
+        
+        // Handle 401/403 (Unauthorized/Forbidden)
+        if (response.status === 401 || response.status === 403) {
+            console.error('Sesi berakhir atau tidak memiliki izin.');
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Terjadi kesalahan pada server');
+        }
+
+        return data;
+    } catch (error) {
+        console.error('API Request Error:', error);
+        throw error;
+    }
 };
 
-const api = axios.create({
-    baseURL: getBaseURL(),
-    headers: {
-        'Content-Type': 'application/json',
-        'X-WP-Nonce': settings.nonce || '' // Nonce tetap kosong jika setting tidak ada, tapi URL sudah benar
-    }
-});
+// Helper methods untuk CRUD
+export const api = {
+    get: (endpoint) => apiRequest(endpoint, { method: 'GET' }),
+    post: (endpoint, data) => apiRequest(endpoint, { method: 'POST', body: data }),
+    put: (endpoint, data) => apiRequest(endpoint, { method: 'PUT', body: data }),
+    delete: (endpoint) => apiRequest(endpoint, { method: 'DELETE' }),
+};
 
-// 3. Interceptor
-api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response) {
-            // Debugging: Bantu cek URL mana yang salah
-            console.error(`Gagal akses API di: ${error.config.baseURL}/${error.config.url}`, error.response.status);
-            
-            if (error.response.status === 401 || error.response.status === 403) {
-                console.error("Izin ditolak. Cek Nonce atau Login.");
-            }
-        }
-        return Promise.reject(error);
-    }
-);
-
+// Tambahkan default export untuk menangani import api from '...'
 export default api;

@@ -8,17 +8,17 @@ $namespace = 'umh/v1';
 $base = 'packages';
 
 $schema = [
-    'name'            => ['type' => 'string', 'required' => true],
-    'service_type'    => ['type' => 'string', 'default' => 'umroh'], 
+    'name'            => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
     'category_id'     => ['type' => 'integer', 'required' => false], 
     'duration'        => ['type' => 'integer', 'default' => 9],
     'status'          => ['type' => 'string', 'default' => 'active'],
     'price'           => ['type' => 'number', 'default' => 0], 
-    'prices'          => ['type' => 'object', 'required' => false, 'default' => []], 
-    'airline_id'      => ['type' => 'integer', 'required' => false], 
-    'accommodations'  => ['type' => 'array', 'required' => false, 'default' => []],
+    // Sinkronisasi dengan DB Schema
+    'hotel_makkah'    => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'], 
+    'hotel_madinah'   => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'], 
+    'airline'         => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'], 
     'facilities'      => ['type' => 'string', 'required' => false], 
-    'excludes'        => ['type' => 'string', 'required' => false], 
+    'description'     => ['type' => 'string', 'required' => false], 
 ];
 
 $permissions = [
@@ -29,7 +29,7 @@ $permissions = [
     'delete_item'  => ['owner', 'admin_staff'],
 ];
 
-$search_fields = ['name', 'service_type'];
+$search_fields = ['name', 'hotel_makkah', 'hotel_madinah', 'airline'];
 
 new UMH_CRUD_Controller(
     $base,               

@@ -3,11 +3,18 @@ import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
 import useCRUD from '../hooks/useCRUD';
-import { Plus, Edit, Trash2, Package as IconPkg } from 'lucide-react';
+import { Plus, Package as IconPkg, Building, Plane } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
 const Packages = () => {
+    // 1. Data Paket Utama
     const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/packages');
+    
+    // 2. Data Master untuk Dropdown
+    const { data: hotels } = useCRUD('umh/v1/hotels');
+    const { data: flights } = useCRUD('umh/v1/flights');
+    const { data: categories } = useCRUD('umh/v1/package-categories');
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('create');
     const [currentItem, setCurrentItem] = useState(null);
@@ -25,7 +32,17 @@ const Packages = () => {
     };
     const [formData, setFormData] = useState(initialForm);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    // Load data master saat komponen dimuat
+    useEffect(() => { 
+        fetchData();
+        // Hotels & Flights akan auto-load karena useCRUD fetch otomatis di init, 
+        // tapi jika tidak, kita bisa panggil manual methodnya jika kita destructure fetchData dari hooknya.
+        // Asumsi: useCRUD melakukan fetch otomatis di useEffect internalnya.
+    }, [fetchData]);
+
+    // Filter Hotel berdasarkan Kota (Opsional, untuk memudahkan)
+    const makkahHotels = hotels ? hotels.filter(h => h.city === 'Makkah' || !h.city) : [];
+    const madinahHotels = hotels ? hotels.filter(h => h.city === 'Madinah' || !h.city) : [];
 
     const handleOpenModal = (mode, item = null) => {
         setModalMode(mode);
@@ -45,12 +62,12 @@ const Packages = () => {
         { header: 'Durasi', accessor: 'duration', render: r => r.duration + ' Hari' },
         { header: 'Harga Dasar', accessor: 'price', render: r => formatCurrency(r.price) },
         { header: 'Hotel', accessor: 'hotel_makkah', render: r => (
-            <div className="text-xs">
-                <div><span className="font-bold">Makkah:</span> {r.hotel_makkah || '-'}</div>
-                <div><span className="font-bold">Madinah:</span> {r.hotel_madinah || '-'}</div>
+            <div className="text-xs space-y-1">
+                <div className="flex items-center gap-1"><Building size={10} className="text-gray-400"/> <span className="font-semibold text-gray-700">Makkah:</span> {r.hotel_makkah || '-'}</div>
+                <div className="flex items-center gap-1"><Building size={10} className="text-gray-400"/> <span className="font-semibold text-gray-700">Madinah:</span> {r.hotel_madinah || '-'}</div>
             </div>
         )},
-        { header: 'Maskapai', accessor: 'airline' }
+        { header: 'Maskapai', accessor: 'airline', render: r => r.airline ? <div className="flex items-center gap-1"><Plane size={12}/> {r.airline}</div> : '-' }
     ];
 
     return (
@@ -73,29 +90,56 @@ const Packages = () => {
                         </div>
                         
                         <div>
-                            <label className="label">Harga Dasar (Rp)</label>
-                            <input type="number" className="input-field" value={formData.price} onChange={e=>setFormData({...formData, price: e.target.value})} required />
-                            <p className="text-xs text-gray-500 mt-1">Harga ini akan menjadi default saat buat jadwal.</p>
+                            <label className="label">Kategori</label>
+                            <select className="input-field" value={formData.category_id} onChange={e=>setFormData({...formData, category_id: e.target.value})}>
+                                <option value="">-- Pilih Kategori --</option>
+                                {categories?.map(cat => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                ))}
+                            </select>
                         </div>
-                        
+
                         <div>
                             <label className="label">Durasi (Hari)</label>
                             <input type="number" className="input-field" value={formData.duration} onChange={e=>setFormData({...formData, duration: e.target.value})} />
                         </div>
 
-                        <div>
-                            <label className="label">Hotel Makkah</label>
-                            <input className="input-field" value={formData.hotel_makkah} onChange={e=>setFormData({...formData, hotel_makkah: e.target.value})} placeholder="Nama Hotel" />
+                        <div className="col-span-2">
+                            <label className="label">Harga Dasar (Rp)</label>
+                            <input type="number" className="input-field text-lg font-semibold" value={formData.price} onChange={e=>setFormData({...formData, price: e.target.value})} required />
+                            <p className="text-xs text-gray-500 mt-1">Harga ini akan menjadi default saat buat jadwal keberangkatan.</p>
                         </div>
 
-                        <div>
-                            <label className="label">Hotel Madinah</label>
-                            <input className="input-field" value={formData.hotel_madinah} onChange={e=>setFormData({...formData, hotel_madinah: e.target.value})} placeholder="Nama Hotel" />
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 col-span-2 md:col-span-1">
+                            <label className="label text-blue-800 flex items-center gap-2"><Building size={14}/> Hotel Makkah</label>
+                            <select className="input-field" value={formData.hotel_makkah} onChange={e=>setFormData({...formData, hotel_makkah: e.target.value})}>
+                                <option value="">-- Pilih Hotel Makkah --</option>
+                                {makkahHotels.map(h => (
+                                    <option key={h.id} value={h.name}>{h.name} ({h.rating}*)</option>
+                                ))}
+                                <option value="custom" disabled>--- Atau ketik manual jika belum ada di master ---</option>
+                            </select>
+                             {/* Fallback input manual jika perlu, tapi sekarang kita pakai select */}
+                        </div>
+
+                        <div className="bg-green-50 p-3 rounded-lg border border-green-100 col-span-2 md:col-span-1">
+                            <label className="label text-green-800 flex items-center gap-2"><Building size={14}/> Hotel Madinah</label>
+                            <select className="input-field" value={formData.hotel_madinah} onChange={e=>setFormData({...formData, hotel_madinah: e.target.value})}>
+                                <option value="">-- Pilih Hotel Madinah --</option>
+                                {madinahHotels.map(h => (
+                                    <option key={h.id} value={h.name}>{h.name} ({h.rating}*)</option>
+                                ))}
+                            </select>
                         </div>
                         
-                        <div>
-                            <label className="label">Maskapai Penerbangan</label>
-                            <input className="input-field" value={formData.airline} onChange={e=>setFormData({...formData, airline: e.target.value})} placeholder="Contoh: Garuda Indonesia" />
+                        <div className="col-span-2">
+                            <label className="label flex items-center gap-2"><Plane size={14}/> Maskapai Penerbangan</label>
+                            <select className="input-field" value={formData.airline} onChange={e=>setFormData({...formData, airline: e.target.value})}>
+                                <option value="">-- Pilih Maskapai --</option>
+                                {flights?.map(f => (
+                                    <option key={f.id} value={f.name}>{f.name} ({f.code})</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-span-2">

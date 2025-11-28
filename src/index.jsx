@@ -7,7 +7,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import { Toaster } from 'react-hot-toast';
 import { DataProvider, useData } from './contexts/DataContext';
-import { hasAccess } from './utils/menuConfig';
+import { MENUS } from './utils/menuConfig'; // Import menu untuk lookup title
 
 // Import Pages
 import Dashboard from './pages/Dashboard';
@@ -45,10 +45,18 @@ const AppContent = () => {
         setIsSidebarOpen(false);
     };
 
+    // Helper untuk mendapatkan Judul Halaman berdasarkan current page
+    const getPageTitle = (path) => {
+        // Cari di config menu
+        for (const group of MENUS) {
+            const item = group.items.find(i => i.path === path);
+            if (item) return item.label;
+        }
+        // Fallback title formatter jika tidak ketemu di menu
+        return path.charAt(0).toUpperCase() + path.slice(1).replace('-', ' ');
+    };
+
     const renderPage = () => {
-        // Daftar pemetaan page ke komponen dan role yang dibutuhkan
-        // Kita gunakan mapping sederhana berdasarkan menuConfig
-        
         // Jika loading user data, tampilkan spinner
         if (loading) return <div className="flex items-center justify-center h-full text-gray-500">Memuat data pengguna...</div>;
 
@@ -93,7 +101,7 @@ const AppContent = () => {
             <div className="flex-1 flex flex-col overflow-hidden w-full relative">
                 <Header 
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-                    title={currentPage.charAt(0).toUpperCase() + currentPage.slice(1).replace('-', ' ')} 
+                    title={getPageTitle(currentPage)} 
                 />
                 
                 <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">

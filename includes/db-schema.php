@@ -45,19 +45,21 @@ function umh_create_db_tables() {
     $table_flights = $wpdb->prefix . 'umh_flights';
     $sql_flights = "CREATE TABLE $table_flights (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        airline_name varchar(100) NOT NULL,
-        flight_number varchar(20),
+        name varchar(100) NOT NULL,
+        code varchar(20),
         origin varchar(50),
         destination varchar(50),
-        departure_time time,
-        arrival_time time,
+        transit varchar(50), /* Kolom Transit */
+        contact_info varchar(100),
+        type varchar(20) DEFAULT 'International',
+        status varchar(20) DEFAULT 'active',
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_flights);
 
     // ==========================================
-    // 2. PRODUK & LAYANAN
+    // 2. PRODUK & LAYANAN (PACKAGES)
     // ==========================================
 
     // 2.1 PACKAGES
@@ -95,7 +97,7 @@ function umh_create_db_tables() {
     dbDelta($sql_departures);
 
     // ==========================================
-    // 3. SDM & MITRA
+    // 3. SUMBER DAYA MANUSIA (HR & AGENTS)
     // ==========================================
 
     // 3.1 EMPLOYEES (HR)
@@ -127,7 +129,7 @@ function umh_create_db_tables() {
         address text,
         type varchar(20) DEFAULT 'master', /* master, sub */
         parent_id mediumint(9) NULL, /* Untuk Sub Agent */
-        commission_rate decimal(5,2) DEFAULT 0,
+        commission_nominal decimal(15,2) DEFAULT 0, /* Komisi Nominal (Rupiah) */
         status varchar(20) DEFAULT 'active',
         bank_account varchar(50),
         bank_name varchar(50),
@@ -137,7 +139,7 @@ function umh_create_db_tables() {
     dbDelta($sql_agents);
 
     // ==========================================
-    // 4. JEMAAH & MARKETING
+    // 4. CRM & PEMASARAN
     // ==========================================
 
     // 4.1 LEADS (Calon Jemaah)
@@ -178,6 +180,8 @@ function umh_create_db_tables() {
     $sql_jamaah = "CREATE TABLE $table_jamaah (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
         name varchar(150) NOT NULL,
+        full_name varchar(150) NOT NULL, /* Field tambahan untuk konsistensi */
+        registration_number varchar(50),
         nik varchar(20),
         passport_number varchar(20),
         passport_expiry date,
@@ -192,13 +196,20 @@ function umh_create_db_tables() {
         status varchar(20) DEFAULT 'registered', /* registered, dp, lunas, berangkat, pulang, batal */
         mahram_id mediumint(9) NULL,
         user_id bigint(20) UNSIGNED NULL, /* Link ke WP User jika jemaah login */
+        package_price decimal(15,2) DEFAULT 0,
+        
+        /* KOLOM DOKUMEN */
+        scan_ktp varchar(255) NULL,
+        scan_kk varchar(255) NULL,
+        scan_passport varchar(255) NULL,
+        
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_jamaah);
 
     // ==========================================
-    // 5. KEUANGAN & PEMBAYARAN
+    // 5. KEUANGAN (FINANCE & PAYMENTS)
     // ==========================================
 
     // 5.1 FINANCE (Arus Kas Umum)
@@ -210,17 +221,18 @@ function umh_create_db_tables() {
         category varchar(50),
         amount decimal(15,2) NOT NULL DEFAULT 0,
         description text,
-        jamaah_id mediumint(9) NULL,
-        agent_id mediumint(9) NULL,
-        employee_id mediumint(9) NULL,
+        jamaah_id mediumint(9) NULL,   /* Relasi Jemaah */
+        agent_id mediumint(9) NULL,    /* Relasi Agen */
+        employee_id mediumint(9) NULL, /* Relasi Karyawan */
+        campaign_id mediumint(9) NULL, /* Relasi Kampanye Iklan */
         payment_method varchar(20) DEFAULT 'transfer',
-        proof_file varchar(255) NULL,
+        proof_file varchar(255) NULL,  /* Bukti Upload */
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_finance);
 
-    // 5.2 PAYMENTS (Detail Pembayaran Jemaah)
+    // 5.2 PAYMENTS (Detail Pembayaran Jemaah / Invoice)
     $table_payments = $wpdb->prefix . 'umh_payments';
     $sql_payments = "CREATE TABLE $table_payments (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -238,7 +250,7 @@ function umh_create_db_tables() {
     dbDelta($sql_payments);
 
     // ==========================================
-    // 6. OPERASIONAL
+    // 6. OPERASIONAL LAINNYA
     // ==========================================
 
     // 6.1 LOGISTICS (Perlengkapan)
@@ -283,6 +295,25 @@ function umh_create_db_tables() {
         PRIMARY KEY  (id)
     ) $charset_collate;";
     dbDelta($sql_logs);
+
+    // ==========================================
+    // 7. MANAJEMEN FILE (UPLOADS)
+    // ==========================================
+    
+    // 7.1 UPLOADS (Tabel Custom untuk File Management)
+    $table_uploads = $wpdb->prefix . 'umh_uploads';
+    $sql_uploads = "CREATE TABLE $table_uploads (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        user_id bigint(20) UNSIGNED,
+        jamaah_id mediumint(9) NULL,
+        attachment_id bigint(20) UNSIGNED, /* ID Media WordPress */
+        file_url text,
+        file_type varchar(50),
+        upload_type varchar(50), /* ktp, passport, proof_payment, dll */
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id)
+    ) $charset_collate;";
+    dbDelta($sql_uploads);
 }
 
 register_activation_hook(dirname(__DIR__) . '/umroh-manager-hybrid.php', 'umh_create_db_tables');

@@ -11,14 +11,15 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
             'category'         => ['type' => 'string'],
             'description'      => ['type' => 'string'],
             'jamaah_id'        => ['type' => 'integer'],
-            'agent_id'         => ['type' => 'integer'],   // Point 1: Relasi Agen
-            'employee_id'      => ['type' => 'integer'],   // Point 1: Relasi Karyawan
+            'agent_id'         => ['type' => 'integer'],
+            'employee_id'      => ['type' => 'integer'],
+            'campaign_id'      => ['type' => 'integer'], // BARU: Relasi ke Kampanye
             'payment_method'   => ['type' => 'string'],
         ];
         parent::__construct('finance', 'umh_finance', $schema, ['get_items' => ['admin_staff', 'finance_staff', 'owner'], 'create_item' => ['admin_staff', 'finance_staff', 'owner']]);
     }
 
-    // Override get_items untuk JOIN agar nama agen/karyawan muncul
+    // Override get_items untuk JOIN yang lebih lengkap
     public function get_items($request) {
         global $wpdb;
         $type = $request->get_param('transaction_type');
@@ -30,15 +31,17 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
             $params[] = $type;
         }
         
-        // Point 1: JOIN ke tabel Jamaah, Agen, dan Karyawan
+        // UPDATE: Tambahkan JOIN ke tabel Marketing
         $sql = "SELECT f.*, 
                 j.full_name as jamaah_name,
                 a.name as agent_name,
-                e.name as employee_name
+                e.name as employee_name,
+                c.title as campaign_name
                 FROM {$this->table_name} f
                 LEFT JOIN {$wpdb->prefix}umh_jamaah j ON f.jamaah_id = j.id
                 LEFT JOIN {$wpdb->prefix}umh_agents a ON f.agent_id = a.id
                 LEFT JOIN {$wpdb->prefix}umh_employees e ON f.employee_id = e.id
+                LEFT JOIN {$wpdb->prefix}umh_marketing c ON f.campaign_id = c.id
                 $where
                 ORDER BY f.date DESC"; 
         

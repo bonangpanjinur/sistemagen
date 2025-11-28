@@ -1,52 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
+import SearchInput from '../components/SearchInput';
+import Pagination from '../components/Pagination';
 import useCRUD from '../hooks/useCRUD';
-import { useData } from '../contexts/DataContext';
-import { Plus, User, FileText, CreditCard } from 'lucide-react';
+import api from '../utils/api'; // Penting untuk upload
+import { Plus, Upload, CreditCard, Phone, Package, ExternalLink, User } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
+import toast from 'react-hot-toast';
 
 const Jamaah = () => {
-    const { user } = useData();
-    // Fetch data packages & agents untuk dropdown
-    const { data: packages } = useCRUD('packages');
-    const { data: agents } = useCRUD('agents');
-    
-    // Fetch data jamaah (yang sekarang sudah include info pembayaran dari API baru)
-    const { data, loading, createItem, updateItem, deleteItem } = useCRUD('jamaah');
+    // 1. Data Utama Jemaah
+    const { 
+        data, 
+        loading, 
+        pagination,
+        fetchData, 
+        deleteItem,
+        changePage,
+        changeLimit 
+    } = useCRUD('umh/v1/jamaah');
+
+    // 2. Data Master Paket untuk Dropdown
+    const { data: packages } = useCRUD('umh/v1/packages');
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('create');
-    const [currentItem, setCurrentItem] = useState(null);
     const [formData, setFormData] = useState({});
+    
+    // State khusus Upload
+    const [uploading, setUploading] = useState(false);
+    const [files, setFiles] = useState({ ktp: null, kk: null, passport: null });
 
-    const handleOpenModal = (mode, item = null) => {
-        setModalMode(mode);
-        setCurrentItem(item);
-        setFormData(item || { 
-            full_name: '', 
-            nik: '', 
-            phone: '', 
-            package_id: '',
-            package_price: 0, // Harga deal bisa beda dari harga paket asli
-            status: 'registered'
-        });
-        setIsModalOpen(true);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // Handle Pencarian
+    const handleSearch = (q) => {
+        fetchData(1, pagination.limit, q);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const success = modalMode === 'create' 
-            ? await createItem(formData) 
-            : await updateItem(currentItem.id, formData);
-        if (success) setIsModalOpen(false);
+    // Handle File Input
+    const handleFileChange = (type, file) => {
+        setFiles(prev => ({ ...prev, [type]: file }));
     };
 
-    // Saat paket dipilih, otomatis isi harga default
+    // Handle Perubahan Paket (Auto-fill harga)
     const handlePackageChange = (e) => {
         const pkgId = e.target.value;
-        const selectedPkg = packages.find(p => String(p.id) === String(pkgId));
+        const selectedPkg = packages?.find(p => String(p.id) === String(pkgId));
         setFormData(prev => ({
             ...prev,
             package_id: pkgId,
@@ -54,167 +58,253 @@ const Jamaah = () => {
         }));
     };
 
-    const columns = [
-        { header: 'Nama Lengkap', accessor: 'full_name', sortable: true },
-        { header: 'Paket', accessor: 'package_name' },
-        { 
-            header: 'Harga Paket', 
-            accessor: 'package_price',
-            render: (row) => formatCurrency(row.package_price)
-        },
-        {
-            header: 'Sudah Bayar',
-            accessor: 'total_paid',
-            render: (row) => (
-                <span className="text-green-600 font-medium">
-                    {formatCurrency(row.total_paid)}
-                </span>
-            )
-        },
-        {
-            header: 'Status Bayar',
-            accessor: 'payment_status_label',
-            render: (row) => {
-                let color = 'bg-gray-100 text-gray-600';
-                if (row.payment_status_label === 'Lunas') color = 'bg-green-100 text-green-700';
-                if (row.payment_status_label === 'Dicicil') color = 'bg-yellow-100 text-yellow-700';
-                if (row.payment_status_label === 'Belum Bayar') color = 'bg-red-100 text-red-700';
-                
-                return (
-                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${color}`}>
-                        {row.payment_status_label}
-                    </span>
-                );
+    // Submit Data + Upload
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        try {
+            let savedId = formData.id;
+            let apiPath = 'umh/v1/jamaah';
+            
+            // 1. Simpan Data Teks
+            if (modalMode === 'create') {
+                const res = await api.post(apiPath, formData);
+                savedId = res.id;
+            } else {
+                await api.post(`${apiPath}/${savedId}`, formData);
             }
-        },
-        { 
-            header: 'Status', 
-            accessor: 'status',
-            render: (row) => (
-                <span className={`px-2 py-1 rounded text-xs capitalize ${row.status === 'berangkat' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100'}`}>
-                    {row.status}
-                </span>
-            )
+
+            if (!savedId) throw new Error("Gagal menyimpan data dasar.");
+
+            // 2. Upload Dokumen (Jika ada file dipilih)
+            const uploadPromises = [];
+            if (files.ktp) uploadPromises.push(api.upload(files.ktp, 'scan_ktp', savedId));
+            if (files.kk) uploadPromises.push(api.upload(files.kk, 'scan_kk', savedId));
+            if (files.passport) uploadPromises.push(api.upload(files.passport, 'scan_passport', savedId));
+
+            if (uploadPromises.length > 0) {
+                setUploading(true);
+                await Promise.all(uploadPromises);
+                toast.success('Data dan dokumen berhasil disimpan!');
+            } else {
+                toast.success('Data berhasil disimpan!');
+            }
+
+            // Reset & Refresh
+            setIsModalOpen(false);
+            setFiles({ ktp: null, kk: null, passport: null });
+            fetchData();
+        } catch (err) {
+            console.error(err);
+            toast.error(err.message || 'Terjadi kesalahan.');
+        } finally {
+            setUploading(false);
         }
+    };
+
+    const openModal = (mode, item = null) => {
+        setModalMode(mode);
+        if (item) {
+            setFormData(item);
+        } else {
+            setFormData({ 
+                full_name: '', nik: '', phone: '', 
+                package_id: '', package_price: 0, status: 'registered',
+                gender: 'L', city: ''
+            });
+        }
+        setFiles({ ktp: null, kk: null, passport: null });
+        setIsModalOpen(true);
+    };
+
+    const columns = [
+        { header: 'Jemaah', accessor: 'full_name', render: r => (
+            <div>
+                <div className="font-bold text-gray-900">{r.full_name}</div>
+                <div className="text-xs text-gray-500 flex items-center gap-1">
+                    <Phone size={10}/> {r.phone || '-'}
+                </div>
+                <div className="text-xs text-blue-600 mt-1">{r.package_name || 'Belum pilih paket'}</div>
+            </div>
+        )},
+        { 
+            header: 'Pembayaran (Progress)', 
+            accessor: 'payment_percentage', 
+            width: '200px',
+            render: r => (
+                <div className="w-full max-w-[180px]">
+                    <div className="flex justify-between text-xs mb-1">
+                        <span className="font-semibold text-gray-700">{formatCurrency(r.total_paid)}</span>
+                        <span className="text-gray-500">{r.payment_percentage || 0}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div 
+                            className={`h-2 rounded-full transition-all duration-500 ${
+                                (r.payment_percentage || 0) >= 100 ? 'bg-green-500' : 
+                                (r.payment_percentage || 0) > 0 ? 'bg-blue-500' : 'bg-gray-300'
+                            }`} 
+                            style={{ width: `${r.payment_percentage || 0}%` }}
+                        ></div>
+                    </div>
+                    <div className="text-[10px] text-gray-400 mt-1">
+                        Tagihan: {formatCurrency(r.package_price)}
+                    </div>
+                </div>
+            )
+        },
+        { header: 'Perlengkapan', accessor: 'logistics_status', render: r => (
+            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border flex items-center gap-1 w-fit ${
+                r.logistics_status === 'taken' 
+                    ? 'bg-green-50 text-green-700 border-green-200' 
+                    : 'bg-orange-50 text-orange-700 border-orange-200'
+            }`}>
+                <Package size={10} />
+                {r.logistics_status === 'taken' ? 'Lengkap' : 'Belum'}
+            </span>
+        )},
+        { header: 'Status', accessor: 'status', render: r => (
+             <span className={`px-2 py-1 rounded text-[10px] font-semibold uppercase ${
+                r.status === 'registered' ? 'bg-blue-100 text-blue-700' : 
+                r.status === 'lunas' ? 'bg-green-100 text-green-700' : 
+                r.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+            }`}>
+                {r.status}
+            </span>
+        )},
+        { header: 'Dokumen', accessor: 'id', render: r => (
+            <div className="flex gap-1">
+                <DocumentBadge label="KTP" url={r.scan_ktp} />
+                <DocumentBadge label="Paspor" url={r.scan_passport} />
+            </div>
+        )}
     ];
 
     return (
         <Layout title="Manajemen Jemaah">
-            <div className="flex justify-between mb-4">
-                <div className="text-sm text-gray-500 pt-2">
-                    Total Jemaah: <b>{data.length}</b>
+            {/* Toolbar */}
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="w-full md:w-1/3">
+                    <SearchInput 
+                        placeholder="Cari nama, NIK, atau HP..." 
+                        onSearch={handleSearch} 
+                    />
                 </div>
-                <button 
-                    onClick={() => handleOpenModal('create')}
-                    className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700"
-                >
-                    <Plus size={18} /> Tambah Jemaah
+                <button onClick={() => openModal('create')} className="btn-primary flex items-center gap-2">
+                    <Plus size={18}/> Tambah Jemaah
                 </button>
             </div>
 
-            <CrudTable
-                columns={columns}
-                data={data}
-                loading={loading}
-                onEdit={(item) => handleOpenModal('edit', item)}
-                onDelete={deleteItem}
-                userCapabilities={user?.role}
-            />
-
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={modalMode === 'create' ? 'Tambah Jemaah Baru' : 'Edit Data Jemaah'}
-            >
+            {/* Table */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+                <CrudTable 
+                    columns={columns} 
+                    data={data} 
+                    loading={loading} 
+                    onDelete={deleteItem} 
+                    onEdit={(item) => openModal('edit', item)} 
+                />
+                <Pagination 
+                    pagination={pagination}
+                    onPageChange={changePage}
+                    onLimitChange={changeLimit}
+                />
+            </div>
+            
+            {/* Modal Form */}
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Registrasi Jemaah Baru" : "Edit Data Jemaah"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Nama Lengkap (Sesuai Paspor)</label>
-                        <input 
-                            type="text" 
-                            className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                            value={formData.full_name || ''}
-                            onChange={(e) => setFormData({...formData, full_name: e.target.value})}
-                            required
-                        />
+                    {/* Identitas */}
+                    <div className="bg-gray-50 p-2 rounded border-b mb-2">
+                        <h4 className="font-bold text-sm text-gray-700 flex items-center gap-2"><User size={14}/> Identitas Diri</h4>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="label">Nama Lengkap (Sesuai KTP/Paspor)</label>
+                            <input className="input-field" value={formData.full_name || ''} onChange={e => setFormData({...formData, full_name: e.target.value})} required placeholder="Nama Lengkap" />
+                        </div>
+                        <div><label className="label">NIK (KTP)</label><input className="input-field" value={formData.nik || ''} onChange={e => setFormData({...formData, nik: e.target.value})} /></div>
+                        <div><label className="label">No. HP / WA</label><input className="input-field" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} /></div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">NIK / No. KTP</label>
-                            <input 
-                                type="text" 
-                                className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                                value={formData.nik || ''}
-                                onChange={(e) => setFormData({...formData, nik: e.target.value})}
-                            />
+                            <label className="label">Jenis Kelamin</label>
+                            <select className="input-field" value={formData.gender || 'L'} onChange={e => setFormData({...formData, gender: e.target.value})}>
+                                <option value="L">Laki-laki</option>
+                                <option value="P">Perempuan</option>
+                            </select>
+                        </div>
+                        <div><label className="label">Kota Domisili</label><input className="input-field" value={formData.city || ''} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
+                    </div>
+
+                    {/* Paket & Harga */}
+                    <div className="bg-blue-50 p-3 rounded border border-blue-100 mt-4 mb-2">
+                        <h4 className="font-bold text-sm text-blue-800 flex items-center gap-2"><CreditCard size={14}/> Paket & Harga</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="label">Pilih Paket</label>
+                            <select className="input-field" value={formData.package_id || ''} onChange={handlePackageChange}>
+                                <option value="">-- Pilih Paket Umrah/Haji --</option>
+                                {packages && packages.map(pkg => (
+                                    <option key={pkg.id} value={pkg.id}>{pkg.name} - {formatCurrency(pkg.price)}</option>
+                                ))}
+                            </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">No. WhatsApp</label>
-                            <input 
-                                type="text" 
-                                className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                                value={formData.phone || ''}
-                                onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                            />
+                            <label className="label">Harga Deal (Rp)</label>
+                            <input type="number" className="input-field font-semibold" value={formData.package_price || 0} onChange={e => setFormData({...formData, package_price: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="label">Status Keberangkatan</label>
+                            <select className="input-field" value={formData.status || 'registered'} onChange={e => setFormData({...formData, status: e.target.value})}>
+                                <option value="registered">Terdaftar</option>
+                                <option value="documents_collected">Dokumen Lengkap</option>
+                                <option value="visa_issued">Visa Terbit</option>
+                                <option value="ready">Siap Berangkat</option>
+                                <option value="completed">Selesai/Pulang</option>
+                                <option value="cancelled">Batal</option>
+                            </select>
                         </div>
                     </div>
 
-                    <div className="bg-blue-50 p-4 rounded border border-blue-100">
-                        <h4 className="text-sm font-bold text-blue-800 mb-2 flex items-center gap-2">
-                            <CreditCard size={14}/> Detail Paket & Harga
-                        </h4>
-                        <div className="space-y-3">
+                    {/* Upload Dokumen */}
+                    <div className="bg-gray-100 p-3 rounded border border-gray-200 mt-4">
+                        <h4 className="font-bold text-sm text-gray-700 flex items-center gap-2 mb-2"><Upload size={14}/> Upload Dokumen</h4>
+                        <div className="grid grid-cols-3 gap-2">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Pilih Paket</label>
-                                <select 
-                                    className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                                    value={formData.package_id || ''}
-                                    onChange={handlePackageChange}
-                                >
-                                    <option value="">-- Pilih Paket Umrah/Haji --</option>
-                                    {packages && packages.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name} - {formatCurrency(p.price)}</option>
-                                    ))}
-                                </select>
+                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">KTP</span>
+                                <input type="file" className="text-xs w-full" onChange={e => handleFileChange('ktp', e.target.files[0])} />
                             </div>
-
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">
-                                    Harga Deal (Rp) <span className="text-xs text-gray-500 font-normal">*Bisa diedit jika ada diskon</span>
-                                </label>
-                                <input 
-                                    type="number" 
-                                    className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border font-bold"
-                                    value={formData.package_price || 0}
-                                    onChange={(e) => setFormData({...formData, package_price: e.target.value})}
-                                />
+                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">KK</span>
+                                <input type="file" className="text-xs w-full" onChange={e => handleFileChange('kk', e.target.files[0])} />
+                            </div>
+                            <div>
+                                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-1">Paspor</span>
+                                <input type="file" className="text-xs w-full" onChange={e => handleFileChange('passport', e.target.files[0])} />
                             </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Status Keberangkatan</label>
-                        <select 
-                            className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                            value={formData.status || 'registered'}
-                            onChange={(e) => setFormData({...formData, status: e.target.value})}
-                        >
-                            <option value="registered">Terdaftar (Registered)</option>
-                            <option value="documents_collected">Dokumen Lengkap</option>
-                            <option value="visa_issued">Visa Terbit</option>
-                            <option value="ready">Siap Berangkat</option>
-                            <option value="completed">Selesai/Pulang</option>
-                            <option value="cancelled">Batal</option>
-                        </select>
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200">Batal</button>
-                        <button type="submit" className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700">Simpan Data</button>
+                    <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Batal</button>
+                        <button type="submit" className="btn-primary w-32" disabled={uploading}>
+                            {uploading ? 'Mengupload...' : 'Simpan Data'}
+                        </button>
                     </div>
                 </form>
             </Modal>
         </Layout>
+    );
+};
+
+// Komponen Kecil untuk Badge Dokumen
+const DocumentBadge = ({ label, url }) => {
+    if (!url) return null;
+    return (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="p-1 rounded bg-white border border-gray-200 text-blue-600 text-[10px] hover:bg-blue-50 font-medium flex items-center gap-1 shadow-sm" title="Lihat Dokumen">
+            <ExternalLink size={8} /> {label}
+        </a>
     );
 };
 

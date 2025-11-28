@@ -1,41 +1,24 @@
-import React, { useState } from 'react';
-import Sidebar from './Sidebar';
-import Header from './Header';
+import React, { useEffect } from 'react';
 import GlobalErrorAlert from './GlobalErrorAlert';
 
-const Layout = ({ children, title = "Dashboard" }) => {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+const Layout = ({ children, title }) => {
+    // Efek samping: Update title browser tab jika diperlukan
+    useEffect(() => {
+        if (title) {
+            document.title = `${title} - Umroh Manager`;
+        }
+    }, [title]);
 
-    const toggleSidebar = () => {
-        setSidebarOpen(!sidebarOpen);
-    };
-
+    // Layout ini sekarang "dumb", hanya sebagai wrapper konten.
+    // Sidebar dan Header sudah ditangani di level App (index.jsx) untuk mencegah duplikasi.
     return (
-        <div className="flex h-screen bg-gray-50 overflow-hidden">
-            {/* Sidebar Navigation */}
-            <Sidebar 
-                isOpen={sidebarOpen} 
-                toggleSidebar={toggleSidebar} 
-            />
-
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                {/* Header Top Bar */}
-                <Header 
-                    title={title} 
-                    toggleSidebar={toggleSidebar} 
-                />
-
-                {/* Main Scrollable Content */}
-                <main className="flex-1 overflow-y-auto focus:outline-none p-4 sm:p-6 lg:p-8">
-                    <div className="max-w-7xl mx-auto">
-                        {/* Global Error Handler (jika ada error API global) */}
-                        <GlobalErrorAlert />
-                        
-                        {/* Page Content */}
-                        {children}
-                    </div>
-                </main>
+        <div className="max-w-7xl mx-auto">
+            {/* Global Error Handler tetap di sini agar muncul di atas konten */}
+            <GlobalErrorAlert />
+            
+            {/* Konten Halaman */}
+            <div className="animate-fade-in">
+                {children}
             </div>
         </div>
     );

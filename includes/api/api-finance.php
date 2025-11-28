@@ -10,16 +10,15 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
             'amount'           => ['type' => 'number', 'required' => true],
             'category'         => ['type' => 'string'],
             'description'      => ['type' => 'string'],
-            // Relasi ID (Opsional tergantung kategori)
             'jamaah_id'        => ['type' => 'integer'],
-            'agent_id'         => ['type' => 'integer'],   // Relasi Agen
-            'employee_id'      => ['type' => 'integer'],   // Relasi Karyawan
+            'agent_id'         => ['type' => 'integer'],   // Point 1: Relasi Agen
+            'employee_id'      => ['type' => 'integer'],   // Point 1: Relasi Karyawan
             'payment_method'   => ['type' => 'string'],
         ];
         parent::__construct('finance', 'umh_finance', $schema, ['get_items' => ['admin_staff', 'finance_staff', 'owner'], 'create_item' => ['admin_staff', 'finance_staff', 'owner']]);
     }
 
-    // Override get_items untuk JOIN table Agen & Karyawan
+    // Override get_items untuk JOIN agar nama agen/karyawan muncul
     public function get_items($request) {
         global $wpdb;
         $type = $request->get_param('transaction_type');
@@ -27,11 +26,11 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
         $params = [];
 
         if ($type) {
-            $where .= " AND f.type = %s"; // Menggunakan alias 'f'
+            $where .= " AND f.type = %s"; 
             $params[] = $type;
         }
         
-        // JOIN ke tabel Jamaah, Agen, dan Karyawan
+        // Point 1: JOIN ke tabel Jamaah, Agen, dan Karyawan
         $sql = "SELECT f.*, 
                 j.full_name as jamaah_name,
                 a.name as agent_name,
@@ -41,13 +40,14 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
                 LEFT JOIN {$wpdb->prefix}umh_agents a ON f.agent_id = a.id
                 LEFT JOIN {$wpdb->prefix}umh_employees e ON f.employee_id = e.id
                 $where
-                ORDER BY f.date DESC"; // Pastikan kolom date di DB adalah 'date' atau 'transaction_date'
+                ORDER BY f.date DESC"; 
         
         if (!empty($params)) {
             $sql = $wpdb->prepare($sql, $params);
         }
         
-        return rest_ensure_response($wpdb->get_results($sql, ARRAY_A));
+        $results = $wpdb->get_results($sql, ARRAY_A);
+        return rest_ensure_response($results);
     }
 }
 new UMH_Finance_API();

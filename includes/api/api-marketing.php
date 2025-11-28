@@ -1,30 +1,32 @@
 <?php
 if (!defined('ABSPATH')) exit;
-// Pastikan path require benar sesuai struktur folder
 require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 
 class UMH_Marketing_API extends UMH_CRUD_Controller {
     
     public function __construct() {
-        // Schema untuk KAMPANYE IKLAN (Tabel: umh_marketing)
+        // 1. Schema untuk Kampanye Iklan (Marketing Campaigns)
         $schema = [
             'title'      => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
             'platform'   => ['type' => 'string', 'default' => 'ig', 'sanitize_callback' => 'sanitize_text_field'],
             'budget'     => ['type' => 'number', 'default' => 0],
+            'ad_link'    => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'esc_url_raw'], // Point 5: Link Iklan
             'start_date' => ['type' => 'string', 'format' => 'date'],
             'end_date'   => ['type' => 'string', 'format' => 'date'],
             'status'     => ['type' => 'string', 'default' => 'active', 'sanitize_callback' => 'sanitize_text_field']
         ];
 
-        // Init Controller untuk Kampanye
+        // Init Controller untuk tabel umh_marketing
         parent::__construct('marketing', 'umh_marketing', $schema, ['get_items' => ['admin_staff', 'marketing_staff']]);
         
-        // Register route tambahan khusus untuk Leads
+        // 2. Register Route Tambahan untuk Leads (Prospek)
         add_action('rest_api_init', [$this, 'register_leads_routes']);
     }
 
+    /**
+     * Mendaftarkan route API khusus untuk Leads
+     */
     public function register_leads_routes() {
-        // Leads Routes
         register_rest_route('umh/v1', '/leads', [
             [
                 'methods' => WP_REST_Server::READABLE,
@@ -46,7 +48,6 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
     }
 
     public function check_permission_leads($request) {
-        // Gunakan helper permission dari utils jika ada, atau default logic
         if (function_exists('umh_check_api_permission')) {
             $checker = umh_check_api_permission(['owner', 'admin_staff', 'marketing_staff']);
             return call_user_func($checker, $request);
@@ -54,13 +55,19 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
         return current_user_can('read');
     }
 
-    // --- LEADS HANDLERS ---
-
+    /**
+     * Mengambil data Leads
+     */
     public function get_leads($request) {
         global $wpdb;
         $table_leads = $wpdb->prefix . 'umh_leads';
         $table_users = $wpdb->prefix . 'umh_users';
         
+        // Cek apakah tabel leads ada, jika tidak return kosong (safety)
+        if ($wpdb->get_var("SHOW TABLES LIKE '$table_leads'") != $table_leads) {
+            return rest_ensure_response([]);
+        }
+
         $sql = "SELECT l.*, u.full_name as assigned_to_name 
                 FROM $table_leads l 
                 LEFT JOIN $table_users u ON l.assigned_to = u.id 
@@ -75,6 +82,9 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
         return rest_ensure_response($wpdb->get_results($sql, ARRAY_A));
     }
 
+    /**
+     * Membuat Lead Baru
+     */
     public function create_lead($request) {
         global $wpdb;
         $table_leads = $wpdb->prefix . 'umh_leads';
@@ -84,27 +94,16 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
             return new WP_Error('missing_fields', 'Nama dan No. WhatsApp wajib diisi', ['status' => 400]);
         }
 
-        // ASSIGNMENT LOGIC:
-        // 1. Jika dikirim dari frontend, pakai itu.
-        // 2. Jika tidak, pakai user yang sedang login (Current User ID dari tabel umh_users)
         $assigned_to = null;
         if (!empty($params['assigned_to'])) {
             $assigned_to = intval($params['assigned_to']);
-        } else {
-            // Coba ambil current user dari token (utils.php)
-            if (function_exists('umh_get_current_user_context')) {
-                $context = umh_get_current_user_context($request);
-                if (!is_wp_error($context)) {
-                    $assigned_to = $context['user_id'];
-                }
-            }
         }
 
         $data = [
             'name'        => sanitize_text_field($params['name']),
             'phone'       => sanitize_text_field($params['phone']),
             'source'      => sanitize_text_field($params['source'] ?? 'walk_in'),
-            'status'      => sanitize_text_field($params['status'] ?? 'new'),
+            'status'      => sanitize_text_field($params['status'] ?? 'new'), // new, contacted, interested, closed
             'notes'       => sanitize_textarea_field($params['notes'] ?? ''),
             'assigned_to' => $assigned_to,
             'created_at'  => current_time('mysql'),
@@ -120,6 +119,9 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
         return rest_ensure_response(['success' => true, 'id' => $wpdb->insert_id, 'message' => 'Lead berhasil disimpan']);
     }
 
+    /**
+     * Handle Update & Delete Lead
+     */
     public function handle_single_lead($request) {
         global $wpdb;
         $table_leads = $wpdb->prefix . 'umh_leads';
@@ -134,7 +136,6 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
 
         if ($method === 'PUT' || $method === 'PATCH') {
             $data = [];
-            // White list field yang boleh diupdate
             $fields = ['name', 'phone', 'source', 'status', 'notes', 'assigned_to'];
             foreach ($fields as $field) {
                 if (isset($params[$field])) {
@@ -146,10 +147,9 @@ class UMH_Marketing_API extends UMH_CRUD_Controller {
                 $data['updated_at'] = current_time('mysql');
                 $wpdb->update($table_leads, $data, ['id' => $id]);
             }
-            return rest_ensure_response(['success' => true]);
+            return rest_ensure_response(['success' => true, 'message' => 'Lead diperbarui']);
         }
     }
 }
 
-// Instansiasi langsung (Jangan dibungkus hook rest_api_init lagi)
 new UMH_Marketing_API();

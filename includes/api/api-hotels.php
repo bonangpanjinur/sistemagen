@@ -1,27 +1,27 @@
 <?php
-if (!defined('ABSPATH')) {
-    exit;
+if (!defined('ABSPATH')) exit;
+require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
+
+class UMH_Hotels_API extends UMH_CRUD_Controller {
+    public function __construct() {
+        $schema = [
+            'name'        => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+            // Point 6: Pastikan type string biasa, bukan enum, agar bisa input kota custom
+            'city'        => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+            'distance'    => ['type' => 'integer', 'description' => 'Jarak ke Masjid (meter)'],
+            'rating'      => ['type' => 'string', 'default' => '5'],
+            'address'     => ['type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+            'map_url'     => ['type' => 'string', 'sanitize_callback' => 'esc_url_raw'],
+            'description' => ['type' => 'string', 'sanitize_callback' => 'sanitize_textarea_field'],
+            'images'      => ['type' => 'string', 'description' => 'JSON array of image URLs']
+        ];
+
+        parent::__construct('hotels', 'umh_hotels', $schema, [
+            'get_items' => ['public'], // Public access for packages display
+            'create_item' => ['admin_staff', 'marketing_staff'],
+            'update_item' => ['admin_staff', 'marketing_staff'],
+            'delete_item' => ['admin_staff']
+        ]);
+    }
 }
-
-// PERBAIKAN: Jangan bungkus new UMH_CRUD_Controller dalam add_action('rest_api_init', ...);
-// Karena file ini di-include oleh Loader, dan class Controller akan mendaftarkan hook-nya sendiri.
-
-$schema = [
-    'name'      => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'city'      => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-    'rating'    => ['type' => 'string', 'default' => '5', 'sanitize_callback' => 'sanitize_text_field'],
-    'distance'  => ['type' => 'integer', 'default' => 0],
-];
-
-new UMH_CRUD_Controller(
-    'hotels',            // Endpoint base: umh/v1/hotels
-    'umh_hotels',        // Nama Tabel DB
-    $schema,             // Schema Validasi
-    [                    // Permissions
-        'get_items'   => ['owner', 'admin_staff'],
-        'create_item' => ['owner', 'admin_staff'],
-        'update_item' => ['owner', 'admin_staff'],
-        'delete_item' => ['owner'],
-    ],
-    ['name', 'city']     // Kolom Search
-);
+new UMH_Hotels_API();

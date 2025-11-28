@@ -1,116 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import api from '../utils/api';
 import CrudTable from '../components/CrudTable';
-import Modal from '../components/Modal';
-import useCRUD from '../hooks/useCRUD';
-import { Plus, Megaphone, Users, Phone, Calendar } from 'lucide-react';
 
 const Marketing = () => {
-    const [activeTab, setActiveTab] = useState('leads'); // leads | campaigns
-
-    // Hooks untuk kedua endpoint
-    const leads = useCRUD('umh/v1/marketing/leads');
-    const campaigns = useCRUD('umh/v1/marketing/campaigns');
-
-    // Fetch data saat tab berubah
-    useEffect(() => {
-        if (activeTab === 'leads') leads.fetchData();
-        else campaigns.fetchData();
-    }, [activeTab]);
-
-    // State Modal
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [formData, setFormData] = useState({});
-
-    // Kolom Tabel Leads
-    const leadColumns = [
-        { header: 'Nama Calon Jemaah', accessor: 'name', className: 'font-bold' },
-        { header: 'WhatsApp', accessor: 'phone', render: r => <div className="flex items-center gap-1 text-green-600"><Phone size={14}/> {r.phone}</div> },
-        { header: 'Sumber', accessor: 'source', render: r => <span className="badge bg-gray-100">{r.source}</span> },
-        { header: 'Status', accessor: 'status', render: r => {
-            const colors = { new: 'bg-blue-100 text-blue-700', contacted: 'bg-yellow-100 text-yellow-700', closed: 'bg-green-100 text-green-700' };
-            return <span className={`badge text-xs uppercase ${colors[r.status] || 'bg-gray-100'}`}>{r.status}</span>
-        }},
-        { header: 'Follow Up', accessor: 'follow_up_date', render: r => r.follow_up_date || '-' }
+    // Kita gunakan CrudTable untuk kemudahan, karena ini master data leads
+    const columns = [
+        { header: 'Nama Prospek', accessor: 'name' },
+        { header: 'No. WA', accessor: 'phone' },
+        { header: 'Sumber', accessor: 'source', render: (val) => <span className="bg-gray-200 px-2 py-1 rounded text-xs">{val}</span> },
+        { 
+            header: 'Minat', 
+            accessor: 'interest_level', 
+            render: (val) => {
+                const colors = { hot: 'bg-red-100 text-red-800', warm: 'bg-yellow-100 text-yellow-800', cold: 'bg-blue-100 text-blue-800' };
+                return <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${colors[val]}`}>{val}</span>;
+            }
+        },
+        { header: 'Status', accessor: 'status' },
+        { header: 'Follow Up', accessor: 'next_follow_up' },
     ];
 
-    // Kolom Tabel Campaigns
-    const campaignColumns = [
-        { header: 'Judul Kampanye', accessor: 'title', className: 'font-bold' },
-        { header: 'Platform', accessor: 'platform', render: r => <span className="uppercase badge bg-purple-50 text-purple-700">{r.platform}</span> },
-        { header: 'Budget', accessor: 'budget' },
-        { header: 'Status', accessor: 'status' }
+    const fields = [
+        { name: 'name', label: 'Nama Calon Jemaah', type: 'text', required: true },
+        { name: 'phone', label: 'No. WhatsApp', type: 'text', required: true },
+        { name: 'source', label: 'Sumber Info', type: 'select', options: [{value:'ig', label:'Instagram'}, {value:'fb', label:'Facebook Ads'}, {value:'wa', label:'WhatsApp'}, {value:'walkin', label:'Datang Langsung'}] },
+        { name: 'interest_level', label: 'Tingkat Minat', type: 'select', options: [{value:'cold', label:'Cold (Tanya-tanya)'}, {value:'warm', label:'Warm (Tertarik)'}, {value:'hot', label:'Hot (Siap Bayar)'}] },
+        { name: 'status', label: 'Status', type: 'select', options: [{value:'new', label:'Baru'}, {value:'contacted', label:'Sudah Dihubungi'}, {value:'converted', label:'Closing (Booking)'}, {value:'lost', label:'Batal'}] },
+        { name: 'next_follow_up', label: 'Jadwal Follow Up', type: 'date' },
+        { name: 'notes', label: 'Catatan', type: 'textarea' },
     ];
-
-    const handleSave = async (e) => {
-        e.preventDefault();
-        const apiHook = activeTab === 'leads' ? leads : campaigns;
-        if (await apiHook.createItem(formData)) {
-            setIsModalOpen(false);
-        }
-    };
 
     return (
-        <Layout title="Marketing & Leads">
-            {/* Tab Navigation */}
-            <div className="flex space-x-4 border-b border-gray-200 mb-6">
-                <button 
-                    className={`pb-3 px-4 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'leads' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                    onClick={() => setActiveTab('leads')}
-                >
-                    <Users size={18}/> Data Calon Jemaah (Leads)
-                </button>
-                <button 
-                    className={`pb-3 px-4 font-medium text-sm flex items-center gap-2 border-b-2 transition-colors ${activeTab === 'campaigns' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-                    onClick={() => setActiveTab('campaigns')}
-                >
-                    <Megaphone size={18}/> Kampanye Iklan
-                </button>
+        <Layout title="Marketing Pipeline (Leads)">
+            <div className="bg-white p-6 rounded shadow">
+                <div className="mb-4 bg-purple-50 p-4 border-l-4 border-purple-500 text-purple-800 text-sm">
+                    <p><strong>Database Calon Jemaah:</strong> Catat semua orang yang menghubungi travel Anda di sini. Jangan biarkan prospek hilang tanpa di-follow up.</p>
+                </div>
+                <CrudTable 
+                    endpoint="/umh/v1/marketing/leads"
+                    columns={columns}
+                    formFields={fields}
+                    title="Daftar Prospek"
+                />
             </div>
-
-            <div className="flex justify-end mb-4">
-                <button onClick={() => { setFormData({}); setIsModalOpen(true); }} className="btn-primary flex items-center gap-2">
-                    <Plus size={18} /> Tambah {activeTab === 'leads' ? 'Prospek' : 'Kampanye'}
-                </button>
-            </div>
-
-            {activeTab === 'leads' ? (
-                <CrudTable columns={leadColumns} data={leads.data} loading={leads.loading} onDelete={leads.deleteItem} />
-            ) : (
-                <CrudTable columns={campaignColumns} data={campaigns.data} loading={campaigns.loading} onDelete={campaigns.deleteItem} />
-            )}
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={activeTab === 'leads' ? "Input Calon Jemaah" : "Buat Kampanye Baru"}>
-                <form onSubmit={handleSave} className="space-y-4">
-                    {activeTab === 'leads' ? (
-                        <>
-                            <div><label className="label">Nama Lengkap</label><input className="input-field" onChange={e => setFormData({...formData, name: e.target.value})} required /></div>
-                            <div><label className="label">No. WhatsApp</label><input className="input-field" onChange={e => setFormData({...formData, phone: e.target.value})} required /></div>
-                            <div>
-                                <label className="label">Sumber Datang</label>
-                                <select className="input-field" onChange={e => setFormData({...formData, source: e.target.value})}>
-                                    <option value="walk_in">Datang Langsung</option>
-                                    <option value="ig">Instagram</option>
-                                    <option value="fb">Facebook</option>
-                                    <option value="referral">Referensi Teman</option>
-                                </select>
-                            </div>
-                            <div><label className="label">Rencana Follow Up</label><input type="date" className="input-field" onChange={e => setFormData({...formData, follow_up_date: e.target.value})} /></div>
-                            <div><label className="label">Catatan</label><textarea className="input-field" rows="2" onChange={e => setFormData({...formData, notes: e.target.value})}></textarea></div>
-                        </>
-                    ) : (
-                        <>
-                            <div><label className="label">Judul Kampanye</label><input className="input-field" onChange={e => setFormData({...formData, title: e.target.value})} required /></div>
-                            <div><label className="label">Platform</label><input className="input-field" onChange={e => setFormData({...formData, platform: e.target.value})} placeholder="FB Ads / IG Ads / Spanduk" /></div>
-                            <div><label className="label">Budget</label><input type="number" className="input-field" onChange={e => setFormData({...formData, budget: e.target.value})} /></div>
-                        </>
-                    )}
-                    <div className="flex justify-end pt-4">
-                        <button className="btn-primary">Simpan</button>
-                    </div>
-                </form>
-            </Modal>
         </Layout>
     );
 };
+
 export default Marketing;

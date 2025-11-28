@@ -3,49 +3,49 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class UMH_Api_Loader {
-
-    public function __construct() {
-        $this->load_dependencies();
+class UMH_API_Loader {
+    public function init() {
+        add_action('rest_api_init', array($this, 'register_routes'));
     }
 
-    private function load_dependencies() {
-        // 1. Load Controller Utama (Jantung CRUD)
-        require_once UMH_PLUGIN_DIR . 'includes/class-umh-crud-controller.php';
-
-        // 2. Load Module API Utama
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-stats.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-jamaah.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-packages.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-agents.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-finance.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-bookings.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-departures.php'; // <--- PASTIKAN INI ADA
-
-        
-        // 3. Load Module Tambahan (PERBAIKAN: Menambahkan modul yang hilang)
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-marketing.php'; // Fix: Menu Marketing
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-tasks.php';     // Fix: Menu Tasks
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-uploads.php';   // Fix: Upload File
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-print.php';     // Fix: Fitur Print
-        
-        // 4. Load Module HR & Admin
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-hr.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-users.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-roles.php';
-
-        // 5. Load Master Data
+    public function register_routes() {
+        // --- 1. CORE & MASTER DATA ---
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-masters.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-hotels.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-flights.php';
-        require_once UMH_PLUGIN_DIR . 'includes/api/api-package-categories.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-packages.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-departures.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-bookings.php'; // Booking & Commission logic
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-payments.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-jamaah.php'; // CRM
         
-        // 6. Booking Modules (Opsional jika file ada)
-        if (file_exists(UMH_PLUGIN_DIR . 'includes/api/api-hotel-bookings.php')) {
-            require_once UMH_PLUGIN_DIR . 'includes/api/api-hotel-bookings.php';
-        }
-        if (file_exists(UMH_PLUGIN_DIR . 'includes/api/api-flight-bookings.php')) {
-            require_once UMH_PLUGIN_DIR . 'includes/api/api-flight-bookings.php';
-        }
+        // --- 2. OPERASIONAL ---
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-rooming.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
+        
+        // --- 3. HR & AGENTS ---
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-hr.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-agents.php';
+
+        // --- 4. MISC (TASKS & MARKETING) ---
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-misc.php';
+
+        // --- REGISTER INSTANCES ---
+        (new UMH_API_Masters())->register_routes();
+        (new UMH_API_Hotels())->register_routes();
+        (new UMH_API_Packages())->register_routes();
+        (new UMH_API_Departures())->register_routes();
+        (new UMH_API_Bookings())->register_routes();
+        (new UMH_API_Payments())->register_routes();
+        (new UMH_API_Jamaah())->register_routes();
+        (new UMH_API_Rooming())->register_routes();
+        (new UMH_API_Logistics())->register_routes();
+        (new UMH_API_HR())->register_routes();
+        (new UMH_API_Agents())->register_routes();
+        (new UMH_API_Misc())->register_routes();
+
+        // --- LEGACY (Jika masih dipakai, uncomment sesuai kebutuhan) ---
+        // require_once UMH_PLUGIN_DIR . 'includes/api/api-flights.php';
+        // require_once UMH_PLUGIN_DIR . 'includes/api/api-users.php';
+        // require_once UMH_PLUGIN_DIR . 'includes/api/api-roles.php';
     }
 }

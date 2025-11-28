@@ -1,290 +1,291 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
+import api from '../utils/api';
+import Spinner from '../components/Spinner';
+import Alert from '../components/Alert';
 import CrudTable from '../components/CrudTable';
-import Modal from '../components/Modal';
-import SearchInput from '../components/SearchInput';
-import Pagination from '../components/Pagination';
-import useCRUD from '../hooks/useCRUD';
-import { useData } from '../contexts/DataContext';
-import { Plus, Users, Briefcase, DollarSign, UserCheck } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { 
+    UsersIcon, MapPinIcon, QrCodeIcon, ClockIcon, 
+    IdentificationIcon, CheckCircleIcon 
+} from '@heroicons/react/24/outline';
 
 const HR = () => {
-    const { user } = useData();
-    const { 
-        data, 
-        loading, 
-        pagination, 
-        fetchData, 
-        createItem, 
-        updateItem, 
-        deleteItem,
-        changePage,
-        changeLimit
-    } = useCRUD('umh/v1/hr');
+    const [activeTab, setActiveTab] = useState('attendance'); // attendance | employees | offices
+    const [loading, setLoading] = useState(false);
+    const [msg, setMsg] = useState(null);
+
+    // --- STATE UNTUK ABSENSI ---
+    const [todayLogs, setTodayLogs] = useState([]);
+    const [geoLoc, setGeoLoc] = useState({ lat: null, lng: null, error: null });
+    const [isCheckingIn, setIsCheckingIn] = useState(false);
+    const [scanMode, setScanMode] = useState(false); // Untuk simulasi scan QR
+    const [qrInput, setQrInput] = useState(''); // Token hasil scan
+
+    useEffect(() => {
+        if (activeTab === 'attendance') fetchLogs();
+    }, [activeTab]);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/umh/v1/hr/attendance');
+            setTodayLogs(res.data);
+        } catch (err) { console.error(err); } 
+        finally { setLoading(false); }
+    };
+
+    // --- LOGIC GPS ---
+    const getLocation = () => {
+        if (!navigator.geolocation) {
+            setGeoLoc({ ...geoLoc, error: "Browser tidak support GPS" });
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setGeoLoc({ 
+                    lat: position.coords.latitude, 
+                    lng: position.coords.longitude, 
+                    error: null 
+                });
+            },
+            (error) => {
+                setGeoLoc({ ...geoLoc, error: "Gagal mengambil lokasi. Pastikan GPS aktif." });
+            }
+        );
+    };
+
+    // --- LOGIC SUBMIT ABSEN ---
+    const handleAttendance = async (type) => {
+        if (!geoLoc.lat) {
+            alert("Sedang mengambil lokasi... Silakan tunggu sebentar.");
+            getLocation();
+            return;
+        }
+
+        setIsCheckingIn(true);
+        try {
+            const payload = {
+                latitude: geoLoc.lat,
+                longitude: geoLoc.lng,
+                type: type, // 'remote_gps' or 'office_qr'
+                qr_token: type === 'office_qr' ? qrInput : null
+            };
+
+            const res = await api.post('/umh/v1/hr/attendance/submit', payload);
+            setMsg({ type: 'success', text: res.data.message });
+            fetchLogs(); // Refresh tabel
+            setScanMode(false); // Tutup modal scan
+        } catch (err) {
+            setMsg({ type: 'error', text: err.response?.data?.message || 'Gagal absen' });
+        } finally {
+            setIsCheckingIn(false);
+        }
+    };
+
+    // --- CONFIG CRUD (KARYAWAN & KANTOR) ---
     
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [formData, setFormData] = useState({});
-    const [isEdit, setIsEdit] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
-
-    // Statistik Sederhana (Client-side calculation dari data yang di-load)
-    // Catatan: Idealnya statistik ini diambil dari endpoint khusus API jika datanya ribuan
-    const stats = useMemo(() => {
-        if (!data) return { total: 0, active: 0, expense: 0 };
-        return {
-            total: pagination?.total_items || data.length,
-            active: data.filter(d => d.status === 'active').length,
-            expense: data.reduce((acc, curr) => acc + (parseFloat(curr.salary) || 0), 0)
-        };
-    }, [data, pagination]);
-
-    const handleSearch = (q) => {
-        setSearchQuery(q);
-        fetchData(1, pagination.limit, q);
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const success = isEdit 
-            ? await updateItem(formData.id, formData) 
-            : await createItem(formData);
-            
-        if (success) {
-            setIsModalOpen(false);
-            toast.success(isEdit ? 'Data karyawan diperbarui' : 'Karyawan baru ditambahkan');
-            fetchData(); // Refresh data
-        }
-    };
-
-    const handleDelete = async (id) => {
-        if (user.role !== 'administrator' && user.role !== 'owner') {
-            return toast.error('Hanya Admin/Owner yang bisa menghapus karyawan.');
-        }
-        if (window.confirm('Yakin hapus data karyawan ini? Tindakan ini tidak bisa dibatalkan.')) {
-            await deleteItem(id);
-        }
-    };
-
-    const openModal = (item = null) => {
-        if (item) {
-            setFormData(item);
-            setIsEdit(true);
-        } else {
-            setFormData({ status: 'active', joined_date: new Date().toISOString().split('T')[0] });
-            setIsEdit(false);
-        }
-        setIsModalOpen(true);
-    };
-
-    const columns = [
-        { 
-            header: 'Nama Karyawan', 
-            accessor: 'name', 
-            render: (r) => (
-                <div>
-                    <div className="font-bold text-gray-900">{r.name}</div>
-                    <div className="text-xs text-gray-500">{r.email}</div>
-                </div>
-            )
-        },
-        { 
-            header: 'Posisi & Kontak', 
-            accessor: 'position', 
-            render: (r) => (
-                <div>
-                    <div className="text-sm font-medium">{r.position || '-'}</div>
-                    <div className="text-xs text-gray-500">{r.phone || '-'}</div>
-                </div>
-            )
-        },
-        { 
-            header: 'Gaji Pokok', 
-            accessor: 'salary', 
-            className: 'text-right',
-            render: r => formatCurrency(r.salary) 
-        },
-        { 
-            header: 'Bergabung', 
-            accessor: 'joined_date', 
-            render: r => formatDate(r.joined_date) 
-        },
-        { 
-            header: 'Status', 
-            accessor: 'status', 
-            render: r => (
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    r.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                }`}>
-                    {r.status === 'active' ? 'Aktif' : 'Tidak Aktif'}
-                </span>
-            ) 
-        }
+    // Tab Karyawan
+    const employeeColumns = [
+        { header: 'Nama Staff', accessor: 'display_name' },
+        { header: 'Email', accessor: 'user_email' },
+        { header: 'Jabatan', accessor: 'position' },
+        { header: 'Gaji Pokok', accessor: 'basic_salary', render: (val) => val ? `Rp ${parseInt(val).toLocaleString()}` : '-' },
+    ];
+    // Note: Untuk form, user_id harusnya dropdown list user WP. Di sini text input dulu utk demo.
+    const employeeFields = [
+        { name: 'user_id', label: 'User ID (WP)', type: 'number', required: true, placeholder: 'ID User WordPress' },
+        { name: 'position', label: 'Jabatan', type: 'text', required: true },
+        { name: 'basic_salary', label: 'Gaji Pokok', type: 'number' },
+        { name: 'allowance_transport', label: 'Tunjangan Transport', type: 'number' },
+        { name: 'allowance_meal', label: 'Tunjangan Makan', type: 'number' },
     ];
 
-    // Komponen Kartu Statistik
-    const StatCard = ({ icon: Icon, label, value, color }) => (
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 flex items-center gap-4">
-            <div className={`p-3 rounded-full ${color}`}>
-                <Icon size={24} className="text-white" />
-            </div>
-            <div>
-                <p className="text-sm text-gray-500">{label}</p>
-                <h3 className="text-xl font-bold text-gray-800">{value}</h3>
-            </div>
-        </div>
-    );
+    // Tab Kantor
+    const officeColumns = [
+        { header: 'Nama Kantor', accessor: 'name' },
+        { header: 'Koordinat', accessor: 'latitude', render: (val, row) => `${val}, ${row.longitude}` },
+        { header: 'Radius', accessor: 'radius_meter', render: (val) => `${val}m` },
+        { 
+            header: 'QR Code', 
+            accessor: 'qr_token',
+            render: (val, row) => (
+                <button 
+                    onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${val}`, '_blank')}
+                    className="text-blue-600 underline text-xs flex items-center gap-1"
+                >
+                    <QrCodeIcon className="h-4 w-4"/> Lihat QR
+                </button>
+            )
+        }
+    ];
+    const officeFields = [
+        { name: 'name', label: 'Nama Kantor', type: 'text', required: true },
+        { name: 'latitude', label: 'Latitude', type: 'text', placeholder: '-6.200000' },
+        { name: 'longitude', label: 'Longitude', type: 'text', placeholder: '106.816666' },
+        { name: 'radius_meter', label: 'Radius Toleransi (Meter)', type: 'number', defaultValue: 50 },
+    ];
 
     return (
-        <Layout title="Manajemen SDM (HR)">
-            {/* Statistik Ringkas */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <StatCard 
-                    icon={Users} 
-                    label="Total Karyawan" 
-                    value={stats.total} 
-                    color="bg-blue-500" 
-                />
-                <StatCard 
-                    icon={UserCheck} 
-                    label="Karyawan Aktif" 
-                    value={stats.active} 
-                    color="bg-green-500" 
-                />
-                <StatCard 
-                    icon={DollarSign} 
-                    label="Est. Gaji Bulanan" 
-                    value={formatCurrency(stats.expense)} 
-                    color="bg-purple-500" 
-                />
-            </div>
-
-            {/* Toolbar: Search & Add */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="w-full md:w-1/3">
-                    <SearchInput 
-                        placeholder="Cari nama atau posisi..." 
-                        onSearch={handleSearch} 
-                    />
-                </div>
-                <button onClick={() => openModal()} className="btn-primary flex items-center gap-2">
-                    <Plus size={18}/> Tambah Karyawan
-                </button>
-            </div>
-
-            {/* Tabel Data */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                <CrudTable 
-                    columns={columns} 
-                    data={data} 
-                    loading={loading} 
-                    onEdit={openModal}
-                    onDelete={(item) => handleDelete(item.id)}
-                />
+        <Layout title="HR & Absensi Cerdas">
+            <div className="bg-white rounded shadow min-h-[500px]">
                 
-                {/* Pagination */}
-                <Pagination 
-                    pagination={pagination}
-                    onPageChange={changePage}
-                    onLimitChange={changeLimit}
-                />
-            </div>
+                {/* TABS */}
+                <div className="flex border-b overflow-x-auto">
+                    <button onClick={() => setActiveTab('attendance')} className={`px-6 py-4 font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'attendance' ? 'border-b-2 border-green-500 text-green-700' : 'text-gray-500'}`}>
+                        <ClockIcon className="h-5 w-5"/> Absensi Hari Ini
+                    </button>
+                    <button onClick={() => setActiveTab('employees')} className={`px-6 py-4 font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'employees' ? 'border-b-2 border-blue-500 text-blue-700' : 'text-gray-500'}`}>
+                        <UsersIcon className="h-5 w-5"/> Data Karyawan
+                    </button>
+                    <button onClick={() => setActiveTab('offices')} className={`px-6 py-4 font-bold flex items-center gap-2 whitespace-nowrap ${activeTab === 'offices' ? 'border-b-2 border-purple-500 text-purple-700' : 'text-gray-500'}`}>
+                        <MapPinIcon className="h-5 w-5"/> Lokasi Kantor & QR
+                    </button>
+                </div>
 
-            {/* Modal Form */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEdit ? "Edit Data Karyawan" : "Tambah Karyawan Baru"}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="col-span-1 md:col-span-2">
-                            <label className="label">Nama Lengkap</label>
-                            <input 
-                                className="input-field" 
-                                value={formData.name || ''} 
-                                onChange={e => setFormData({...formData, name: e.target.value})} 
-                                placeholder="Contoh: Ahmad Fauzi"
-                                required 
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="label">Email</label>
-                            <input 
-                                type="email"
-                                className="input-field" 
-                                value={formData.email || ''} 
-                                onChange={e => setFormData({...formData, email: e.target.value})} 
-                                placeholder="email@perusahaan.com"
-                            />
-                        </div>
-                        
-                        <div>
-                            <label className="label">No. Telepon / WA</label>
-                            <input 
-                                className="input-field" 
-                                value={formData.phone || ''} 
-                                onChange={e => setFormData({...formData, phone: e.target.value})} 
-                                placeholder="0812..."
-                            />
-                        </div>
+                <div className="p-6">
+                    {msg && <Alert type={msg.type} message={msg.text} />}
 
+                    {/* === TAB 1: ABSENSI === */}
+                    {activeTab === 'attendance' && (
                         <div>
-                            <label className="label">Posisi / Jabatan</label>
-                            <input 
-                                className="input-field" 
-                                value={formData.position || ''} 
-                                onChange={e => setFormData({...formData, position: e.target.value})} 
-                                placeholder="Contoh: Staff Keuangan"
+                            {/* Panel Absen Diri Sendiri */}
+                            <div className="bg-gray-50 p-4 rounded-lg border mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                                <div>
+                                    <h3 className="font-bold text-gray-800">Halo, Staff! Belum absen hari ini?</h3>
+                                    <p className="text-sm text-gray-500">
+                                        Lokasi Anda: {geoLoc.lat ? `${geoLoc.lat}, ${geoLoc.lng}` : (geoLoc.error || 'Mengambil lokasi...')}
+                                    </p>
+                                    {!geoLoc.lat && (
+                                        <button onClick={getLocation} className="text-xs text-blue-600 underline mt-1">Refresh Lokasi GPS</button>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => setScanMode(true)}
+                                        className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 flex items-center gap-2"
+                                    >
+                                        <QrCodeIcon className="h-5 w-5"/> Scan QR Kantor
+                                    </button>
+                                    <button 
+                                        onClick={() => handleAttendance('remote_gps')}
+                                        className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 flex items-center gap-2"
+                                    >
+                                        <MapPinIcon className="h-5 w-5"/> Absen Remote
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Tabel Log */}
+                            <h4 className="font-bold mb-3 text-gray-600">Log Kehadiran Hari Ini</h4>
+                            {loading ? <Spinner /> : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full border-collapse text-sm">
+                                        <thead>
+                                            <tr className="bg-gray-100 border-b text-left">
+                                                <th className="p-3">Nama Staff</th>
+                                                <th className="p-3">Masuk</th>
+                                                <th className="p-3">Pulang</th>
+                                                <th className="p-3">Tipe</th>
+                                                <th className="p-3">Catatan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {todayLogs.map(log => (
+                                                <tr key={log.id} className="border-b">
+                                                    <td className="p-3 font-medium">{log.display_name}</td>
+                                                    <td className="p-3 text-green-700 font-bold">
+                                                        {log.check_in_time ? log.check_in_time.split(' ')[1] : '-'}
+                                                    </td>
+                                                    <td className="p-3 text-red-700 font-bold">
+                                                        {log.check_out_time ? log.check_out_time.split(' ')[1] : '-'}
+                                                    </td>
+                                                    <td className="p-3">
+                                                        <span className={`px-2 py-1 rounded text-xs ${log.type === 'office_qr' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                            {log.type === 'office_qr' ? 'Kantor' : 'Remote'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-3 text-gray-500 text-xs">{log.notes}</td>
+                                                </tr>
+                                            ))}
+                                            {todayLogs.length === 0 && <tr><td colSpan="5" className="p-4 text-center text-gray-400">Belum ada data absen hari ini.</td></tr>}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* === TAB 2: KARYAWAN === */}
+                    {activeTab === 'employees' && (
+                        <CrudTable 
+                            endpoint="/umh/v1/hr/employees"
+                            columns={employeeColumns}
+                            formFields={employeeFields}
+                            title="Database Karyawan"
+                        />
+                    )}
+
+                    {/* === TAB 3: KANTOR === */}
+                    {activeTab === 'offices' && (
+                        <div>
+                            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4 text-sm text-yellow-800">
+                                <p className="font-bold">Cara Kerja Absen QR:</p>
+                                <ul className="list-disc ml-4 mt-1">
+                                    <li>Tambahkan lokasi kantor beserta koordinat Latitude & Longitude yang akurat.</li>
+                                    <li>Klik "Lihat QR" pada tabel, lalu cetak QR Code tersebut dan tempel di dinding kantor.</li>
+                                    <li>Karyawan hanya bisa absen jika scan QR tersebut DAN posisi GPS mereka berada dalam radius yang ditentukan.</li>
+                                </ul>
+                            </div>
+                            <CrudTable 
+                                endpoint="/umh/v1/hr/offices"
+                                columns={officeColumns}
+                                formFields={officeFields}
+                                title="Lokasi Kantor"
                             />
                         </div>
+                    )}
+                </div>
 
-                        <div>
-                            <label className="label">Tanggal Bergabung</label>
-                            <input 
-                                type="date"
-                                className="input-field" 
-                                value={formData.joined_date || ''} 
-                                onChange={e => setFormData({...formData, joined_date: e.target.value})} 
-                            />
-                        </div>
+                {/* MODAL SIMULASI SCAN QR */}
+                {scanMode && (
+                    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+                        <div className="bg-white p-6 rounded-lg w-96 text-center">
+                            <h3 className="text-lg font-bold mb-4">Scan QR Code Kantor</h3>
+                            <div className="bg-gray-100 p-4 rounded mb-4 border-2 border-dashed border-gray-300">
+                                <QrCodeIcon className="h-20 w-20 mx-auto text-gray-400 mb-2"/>
+                                <p className="text-xs text-gray-500">Kamera Scanner Aktif...</p>
+                            </div>
+                            
+                            {/* Input Simulasi Scanner */}
+                            <div className="mb-4">
+                                <label className="block text-xs text-left font-bold text-gray-500 mb-1">Simulasi Hasil Scan (Isi Token QR):</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border p-2 rounded text-sm"
+                                    placeholder="Masukkan Token dari Data Kantor..."
+                                    value={qrInput}
+                                    onChange={(e) => setQrInput(e.target.value)}
+                                />
+                            </div>
 
-                        <div>
-                            <label className="label">Gaji Pokok (Rp)</label>
-                            <input 
-                                type="number"
-                                className="input-field" 
-                                value={formData.salary || ''} 
-                                onChange={e => setFormData({...formData, salary: e.target.value})} 
-                                placeholder="0"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="label">Status Kepegawaian</label>
-                            <select 
-                                className="input-field" 
-                                value={formData.status || 'active'} 
-                                onChange={e => setFormData({...formData, status: e.target.value})}
+                            <button 
+                                onClick={() => handleAttendance('office_qr')}
+                                disabled={isCheckingIn}
+                                className="w-full bg-blue-600 text-white py-2 rounded font-bold hover:bg-blue-700 mb-2"
                             >
-                                <option value="active">Aktif</option>
-                                <option value="inactive">Tidak Aktif / Resign</option>
-                                <option value="probation">Masa Percobaan</option>
-                                <option value="leave">Cuti</option>
-                            </select>
+                                {isCheckingIn ? 'Memvalidasi...' : 'Verifikasi & Absen'}
+                            </button>
+                            <button 
+                                onClick={() => setScanMode(false)}
+                                className="w-full bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300"
+                            >
+                                Batal
+                            </button>
                         </div>
                     </div>
+                )}
 
-                    <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-100">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
-                            Batal
-                        </button>
-                        <button type="submit" className="btn-primary w-32">
-                            Simpan
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+            </div>
         </Layout>
     );
 };

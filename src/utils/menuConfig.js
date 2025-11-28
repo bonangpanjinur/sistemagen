@@ -43,9 +43,9 @@ export const menuItems = [
     submenu: [
       { path: '/packages', label: 'Katalog Paket', icon: BriefcaseIcon },
       { path: '/departures', label: 'Jadwal Keberangkatan', icon: CalendarIcon },
-      { path: '/package-categories', label: 'Kategori Paket', icon: TagIcon },
-      { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon },
       { path: '/hotels', label: 'Data Hotel', icon: BuildingOfficeIcon },
+      { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon }, // Opsional (Legacy)
+      { path: '/package-categories', label: 'Kategori Paket', icon: TagIcon },
     ]
   },
 
@@ -57,6 +57,7 @@ export const menuItems = [
     label: 'Operasional', 
     icon: ClipboardDocumentCheckIcon,
     submenu: [
+      { path: '/rooming', label: 'Rooming List', icon: BuildingOfficeIcon },
       { path: '/tasks', label: 'Manajemen Tugas', icon: ClipboardDocumentCheckIcon },
       { path: '/logistics', label: 'Logistik & Perlengkapan', icon: TruckIcon },
     ]
@@ -67,8 +68,8 @@ export const menuItems = [
     label: 'Keuangan', 
     icon: CurrencyDollarIcon,
     submenu: [
-      { path: '/finance', label: 'Laporan Keuangan', icon: ChartBarIcon },
-      { path: '/finance/expenses', label: 'Pengeluaran', icon: BanknotesIcon },
+      { path: '/finance', label: 'Kasir & Pembayaran', icon: BanknotesIcon },
+      // { path: '/finance/expenses', label: 'Pengeluaran', icon: ChartBarIcon }, // Future Update
     ]
   },
 
@@ -86,8 +87,8 @@ export const menuItems = [
     label: 'Marketing & Agen', 
     icon: MegaphoneIcon,
     submenu: [
-      { path: '/marketing', label: 'Leads & Prospek', icon: FunnelIcon },
       { path: '/agents', label: 'Kemitraan Agen', icon: UserCircleIcon },
+      { path: '/marketing', label: 'Leads & Prospek', icon: FunnelIcon },
     ]
   },
 

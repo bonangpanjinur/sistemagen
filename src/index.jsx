@@ -3,28 +3,38 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 
-// Import Layout (Optional wrapper if needed globally, but usually inside pages)
-// Pages Imports
+// Import Pages
 import Dashboard from './pages/Dashboard';
-import CreateBooking from './pages/CreateBooking'; // Modul Booking Baru
+// Modul Transaksi
+import CreateBooking from './pages/CreateBooking'; 
+import Bookings from './pages/Bookings';
+// Modul Produk & Inventory
 import Packages from './pages/Packages';
 import Departures from './pages/Departures';
 import PackageCategories from './pages/PackageCategories';
 import Flights from './pages/Flights';
 import Hotels from './pages/Hotels';
+// Modul CRM
 import Jamaah from './pages/Jamaah';
+// Modul Operasional
 import Tasks from './pages/Tasks';
 import Logistics from './pages/Logistics';
+import RoomingList from './pages/RoomingList';
+// Modul Keuangan
 import Finance from './pages/Finance';
+// Modul HR
 import HR from './pages/HR';
+import Payroll from './pages/Payroll'; // Import Baru
+// Modul Marketing & Agen
 import Marketing from './pages/Marketing';
 import Agents from './pages/Agents';
+// Modul Master Data
 import Masters from './pages/Masters';
 import Users from './pages/Users';
 import Roles from './pages/Roles';
 import Settings from './pages/Settings';
 
-// Komponen Placeholder untuk halaman yang belum dibuat filenya
+// Placeholder
 const UnderConstruction = ({ title }) => (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
         <div className="text-center p-8 bg-white rounded shadow-lg">
@@ -45,8 +55,7 @@ const App = () => {
                 
                 {/* === MODUL 1: TRANSAKSI === */}
                 <Route path="/bookings/create" element={<CreateBooking />} />
-                {/* List Data Booking belum ada filenya, pakai placeholder dulu */}
-                <Route path="/bookings" element={<UnderConstruction title="Data Transaksi Booking" />} />
+                <Route path="/bookings" element={<Bookings />} />
 
                 {/* === MODUL 2: PRODUK & INVENTORY === */}
                 <Route path="/packages" element={<Packages />} />
@@ -59,15 +68,16 @@ const App = () => {
                 <Route path="/jamaah" element={<Jamaah />} />
 
                 {/* === MODUL 4: OPERASIONAL === */}
+                <Route path="/rooming" element={<RoomingList />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/logistics" element={<Logistics />} />
 
                 {/* === MODUL 5: KEUANGAN === */}
                 <Route path="/finance" element={<Finance />} />
-                <Route path="/finance/expenses" element={<Finance />} /> {/* Bisa dipisah nanti jika butuh view beda */}
-
+                
                 {/* === MODUL 6: HR & KARYAWAN === */}
                 <Route path="/hr" element={<HR />} />
+                <Route path="/hr/payroll" element={<Payroll />} /> {/* Route Baru */}
 
                 {/* === MODUL 7: MARKETING & AGEN === */}
                 <Route path="/marketing" element={<Marketing />} />

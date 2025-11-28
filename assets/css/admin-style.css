@@ -1,93 +1,69 @@
-/* * ADMIN STYLE - UMROH MANAGER HYBRID
- * Menyembunyikan elemen WordPress standar untuk tampilan aplikasi full
- */
+/* FULL SCREEN TAKEOVER STYLES 
+   Hanya aktif jika body memiliki class .umh-fullscreen-mode 
+   Class ini disuntikkan oleh PHP di file utama.
+*/
 
-/* 1. Reset Dasar & Font */
-body.umroh-manager-page {
-    margin: 0 !important;
-    padding: 0 !important;
-    height: 100vh !important;
+body.umh-fullscreen-mode {
+    /* Mencegah scroll ganda dengan scrollbar WordPress */
     overflow: hidden !important;
-    background: #f3f4f6 !important; /* Cool Gray 50 */
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    background-color: #f3f4f6; /* Sesuaikan dengan background React App Anda */
 }
 
-/* 2. Sembunyikan Elemen WordPress (Admin Bar, Menu, Footer, Notices) */
-body.umroh-manager-page #wpadminbar,
-body.umroh-manager-page #adminmenumain,
-body.umroh-manager-page #adminmenuback,
-body.umroh-manager-page #adminmenuwrap,
-body.umroh-manager-page #wpfooter,
-body.umroh-manager-page .update-nag,
-body.umroh-manager-page .notice,
-body.umroh-manager-page #wpbody-content > .wrap > h1,
-body.umroh-manager-page .auto-fold #wpcontent,
-body.umroh-manager-page #screen-meta,
-body.umroh-manager-page #screen-meta-links {
+/* Sembunyikan Elemen Native WordPress */
+body.umh-fullscreen-mode #adminmenumain,     /* Sidebar Menu Kiri */
+body.umh-fullscreen-mode #wpadminbar,        /* Top Bar Hitam */
+body.umh-fullscreen-mode #wpfooter,          /* Footer "Thank you for creating with WP" */
+body.umh-fullscreen-mode .update-nag,        /* Notifikasi Update */
+body.umh-fullscreen-mode .notice,            /* Notifikasi Plugin Lain */
+body.umh-fullscreen-mode #screen-meta-links, /* Tombol Screen Options */
+body.umh-fullscreen-mode .wrap > h1          /* Judul Halaman Default WP */
+{
     display: none !important;
-    visibility: hidden !important;
-    height: 0 !important;
-    width: 0 !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-    z-index: -9999 !important;
 }
 
-/* 3. Reset Container WordPress agar Full Width */
-body.umroh-manager-page #wpcontent {
-    margin-left: 0 !important;
-    padding: 0 !important;
-    height: 100vh !important;
-    overflow: hidden !important;
-    background: #f3f4f6 !important;
+/* Reset Layout WordPress */
+body.umh-fullscreen-mode #wpcontent {
+    margin-left: 0 !important; /* Hapus margin kiri bekas sidebar */
+    padding-left: 0 !important;
+    padding-top: 0 !important;
+    height: 100vh;
 }
 
-body.umroh-manager-page #wpbody-content {
+body.umh-fullscreen-mode.wp-admin {
+    padding-top: 0 !important; /* Hapus padding atas bekas admin bar */
+}
+
+body.umh-fullscreen-mode #wpbody-content {
     padding-bottom: 0 !important;
     float: none !important;
 }
 
-body.umroh-manager-page #wpbody {
-    padding-top: 0 !important;
+body.umh-fullscreen-mode .auto-fold #wpcontent {
+    padding-left: 0 !important;
 }
 
-/* 4. Container Utama Aplikasi React */
-#umh-app-root {
+/* REACT ROOT CONTAINER 
+   Pastikan div root aplikasi React mengisi penuh layar
+*/
+#umroh-manager-root {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 999999; /* Pastikan di atas layer WP apapun */
-    background: #f3f4f6;
+    z-index: 99999; /* Pastikan di atas segalanya */
+    overflow-y: auto; /* React menghandle scroll di dalam sini */
+    background-color: #f3f4f6;
     display: flex;
     flex-direction: column;
-    overflow: hidden; /* Scroll ditangani di dalam Layout React */
 }
 
-/* 5. Loading Spinner (Saat React dimuat) */
-.umh-loading-container {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    width: 100vw;
-    background: #fff;
-    color: #4b5563;
-}
-
-.umh-spinner {
-    width: 40px;
-    height: 40px;
-    border: 4px solid #e5e7eb;
-    border-top: 4px solid #2563eb; /* Blue 600 */
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 16px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+/* Perbaikan untuk tampilan mobile WordPress */
+@media screen and (max-width: 782px) {
+    body.umh-fullscreen-mode.wp-admin {
+        margin-top: 0 !important;
+    }
+    body.umh-fullscreen-mode #wpbody {
+        padding-top: 0 !important;
+    }
 }

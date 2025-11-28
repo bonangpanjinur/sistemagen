@@ -16,41 +16,49 @@ class UMH_Stats_API extends UMH_CRUD_Controller {
         register_rest_route('umh/v1', '/stats/dashboard', [
             'methods' => 'GET',
             'callback' => [$this, 'get_dashboard_stats'],
-            'permission_callback' => [$this, 'check_permission'], // Ini memanggil method di parent class
+            'permission_callback' => [$this, 'check_permission'], 
+        ]);
+
+        // Route untuk ringkasan total (digunakan di DataContext.jsx)
+        register_rest_route('umh/v1', '/stats/totals', [
+            'methods' => 'GET',
+            'callback' => [$this, 'get_totals_stats'],
+            'permission_callback' => [$this, 'check_permission'],
         ]);
     }
 
     public function get_dashboard_stats($request) {
+        return $this->get_totals_stats($request);
+    }
+
+    public function get_totals_stats($request) {
         global $wpdb;
         
         // 1. Ringkasan Jemaah
         $total_jamaah = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}umh_jamaah WHERE status != 'cancelled' AND status != 'deleted'");
-        $new_jamaah_month = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}umh_jamaah WHERE MONTH(created_at) = MONTH(CURRENT_DATE()) AND YEAR(created_at) = YEAR(CURRENT_DATE())");
+        
+        // 2. Total Paket Aktif
+        $total_packages = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}umh_packages WHERE status = 'active'");
 
-        // 2. Ringkasan Keuangan (Bulan Ini)
-        $income_month = $wpdb->get_var("SELECT SUM(amount) FROM {$wpdb->prefix}umh_finance WHERE transaction_type = 'income' AND MONTH(transaction_date) = MONTH(CURRENT_DATE())");
-        $expense_month = $wpdb->get_var("SELECT SUM(amount) FROM {$wpdb->prefix}umh_finance WHERE transaction_type = 'expense' AND MONTH(transaction_date) = MONTH(CURRENT_DATE())");
+        // 3. Ringkasan Keuangan (Total Pemasukan)
+        $total_revenue = $wpdb->get_var("SELECT SUM(amount) FROM {$wpdb->prefix}umh_finance WHERE type = 'income'");
 
-        // 3. Keberangkatan Terdekat
-        // Perbaikan query: Handle jika tabel dates kosong
-        $upcoming_sql = "SELECT p.package_name, d.departure_date, d.quota, d.booked, 
-                         (d.quota - d.booked) as available_seats
-                         FROM {$wpdb->prefix}umh_package_dates d
+        // 4. Keberangkatan Terdekat (FIX: Menggunakan tabel umh_departures yang benar)
+        $upcoming_sql = "SELECT p.name as package_name, d.departure_date, d.total_seats, d.available_seats,
+                         (d.total_seats - d.available_seats) as slots_filled
+                         FROM {$wpdb->prefix}umh_departures d
                          JOIN {$wpdb->prefix}umh_packages p ON d.package_id = p.id
                          WHERE d.departure_date >= CURRENT_DATE()
+                         AND d.status = 'scheduled'
                          ORDER BY d.departure_date ASC
                          LIMIT 5";
+                         
         $upcoming_departures = $wpdb->get_results($upcoming_sql, ARRAY_A);
-
-        // 4. Logistik
-        $logistics_pending = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}umh_logistics WHERE status = 'Belum Diambil'");
 
         return rest_ensure_response([
             'total_jamaah' => (int)$total_jamaah,
-            'new_jamaah_month' => (int)$new_jamaah_month,
-            'income_month' => (float)$income_month,
-            'expense_month' => (float)$expense_month,
-            'logistics_pending' => (int)$logistics_pending,
+            'total_packages' => (int)$total_packages,
+            'total_revenue' => (float)$total_revenue,
             'upcoming_departures' => $upcoming_departures ?: []
         ]);
     }

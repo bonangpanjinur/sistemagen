@@ -12,10 +12,9 @@ function umroh_manager_render_dashboard_react() {
     ?>
     <div class="wrap" style="margin: 0; padding: 0; max-width: 100%;">
         <!-- 
-            Container ID ini harus sama dengan yang dicari oleh ReactDOM.createRoot 
-            di src/index.jsx 
+            FIX: Container ID diubah menjadi 'umh-app-root' agar sesuai dengan src/index.jsx
         -->
-        <div id="umroh-manager-root" class="umh-app-container">
+        <div id="umh-app-root" class="umh-app-container">
             <div style="display: flex; justify-content: center; align-items: center; height: 80vh;">
                 <p>Memuat Sistem Manajemen Umroh...</p>
             </div>

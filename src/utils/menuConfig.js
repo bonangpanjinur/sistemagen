@@ -20,7 +20,8 @@ import {
   ServerIcon,
   LockClosedIcon,
   Cog6ToothIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  DocumentCheckIcon
 } from '@heroicons/react/24/outline';
 
 export const menuItems = [
@@ -44,8 +45,8 @@ export const menuItems = [
       { path: '/packages', label: 'Katalog Paket', icon: BriefcaseIcon },
       { path: '/departures', label: 'Jadwal Keberangkatan', icon: CalendarIcon },
       { path: '/hotels', label: 'Data Hotel', icon: BuildingOfficeIcon },
-      { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon }, // Opsional (Legacy)
       { path: '/package-categories', label: 'Kategori Paket', icon: TagIcon },
+      // { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon }, // Optional
     ]
   },
 
@@ -57,9 +58,10 @@ export const menuItems = [
     label: 'Operasional', 
     icon: ClipboardDocumentCheckIcon,
     submenu: [
+      { path: '/manifest', label: 'Manifest & Dokumen', icon: DocumentCheckIcon },
       { path: '/rooming', label: 'Rooming List', icon: BuildingOfficeIcon },
-      { path: '/tasks', label: 'Manajemen Tugas', icon: ClipboardDocumentCheckIcon },
       { path: '/logistics', label: 'Logistik & Perlengkapan', icon: TruckIcon },
+      { path: '/tasks', label: 'Manajemen Tugas', icon: ClipboardDocumentCheckIcon },
     ]
   },
 
@@ -68,8 +70,7 @@ export const menuItems = [
     label: 'Keuangan', 
     icon: CurrencyDollarIcon,
     submenu: [
-      { path: '/finance', label: 'Kasir & Pembayaran', icon: BanknotesIcon },
-      // { path: '/finance/expenses', label: 'Pengeluaran', icon: ChartBarIcon }, // Future Update
+      { path: '/finance', label: 'Pusat Keuangan', icon: BanknotesIcon },
     ]
   },
 
@@ -79,6 +80,7 @@ export const menuItems = [
     icon: IdentificationIcon,
     submenu: [
       { path: '/hr', label: 'Data Karyawan & Absensi', icon: IdentificationIcon },
+      { path: '/hr/payroll', label: 'Payroll & Kasbon', icon: DocumentCurrencyDollarIcon || ChartBarIcon },
     ]
   },
 

@@ -20,6 +20,8 @@ class UMH_Api_Loader {
         require_once UMH_PLUGIN_DIR . 'includes/api/api-agents.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-finance.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-departures.php'; // <--- PASTIKAN INI ADA
+
         
         // 3. Load Module Tambahan (PERBAIKAN: Menambahkan modul yang hilang)
         require_once UMH_PLUGIN_DIR . 'includes/api/api-marketing.php'; // Fix: Menu Marketing

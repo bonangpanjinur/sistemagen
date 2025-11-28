@@ -952,9 +952,6 @@ select.input-field {
 .w-px {
   width: 1px;
 }
-.w-screen {
-  width: 100vw;
-}
 .min-w-0 {
   min-width: 0px;
 }
@@ -1105,6 +1102,9 @@ select.input-field {
 }
 .overflow-y-auto {
   overflow-y: auto;
+}
+.overflow-x-hidden {
+  overflow-x: hidden;
 }
 .truncate {
   overflow: hidden;
@@ -1488,10 +1488,6 @@ select.input-field {
 .text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
-}
-.text-6xl {
-  font-size: 3.75rem;
-  line-height: 1;
 }
 .text-\[10px\] {
   font-size: 10px;
@@ -1999,6 +1995,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 
   .md\:flex-row {
     flex-direction: row;
+  }
+
+  .md\:p-6 {
+    padding: 1.5rem;
   }
 
   .md\:pb-0 {

@@ -1,96 +1,52 @@
-/**
- * Utility untuk menangani request ke WordPress REST API
- * Menggunakan global variable 'umhData' yang di-inject dari PHP
- */
+import axios from 'axios';
 
-// Pastikan object global tersedia untuk mencegah error saat build/test
-const umhConfig = window.umhData || {
-    root: '',
-    nonce: '',
-    user: null
-};
+// 1. Ambil setting dari WordPress (jika ada)
+const settings = window.umrohManagerSettings || {};
 
-/**
- * Helper untuk melakukan fetch dengan Header WP Nonce otomatis
- */
-const apiFetch = async (endpoint, options = {}) => {
-    const { root, nonce } = umhConfig;
-    
-    // Hapus slash di awal endpoint jika ada, agar url rapi
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
-    const url = `${root}umh/v1/${cleanEndpoint.replace('umh/v1/', '')}`; // Normalisasi path
-
-    const headers = {
-        'X-WP-Nonce': nonce, // KUNCI KEAMANAN
-        ...options.headers,
-    };
-
-    // Jangan set Content-Type jika body adalah FormData (untuk upload)
-    if (!(options.body instanceof FormData)) {
-        headers['Content-Type'] = 'application/json';
+// 2. Fungsi Cerdas untuk menentukan Base URL API
+const getBaseURL = () => {
+    // A. Jika setting dari PHP tersedia (Skenario Ideal)
+    if (settings.root) {
+        return settings.root + 'umroh-manager/v1';
     }
 
-    const config = {
-        ...options,
-        headers,
-    };
+    // B. Jika setting hilang, lakukan deteksi otomatis berdasarkan URL Browser
+    // Ini memperbaiki masalah 404 jika WP diinstall di subfolder (misal: localhost/folder-project)
+    const currentPath = window.location.pathname; // misal: /sistemagen/wp-admin/admin.php
+    
+    if (currentPath.includes('/wp-admin/')) {
+        // Ambil path sebelum /wp-admin/ (misal: /sistemagen/)
+        const rootPath = currentPath.split('/wp-admin/')[0];
+        // Susun URL lengkap
+        return `${window.location.origin}${rootPath}/wp-json/umroh-manager/v1`;
+    }
 
-    try {
-        const response = await fetch(url, config);
-        const data = await response.json();
+    // C. Fallback terakhir
+    return '/wp-json/umroh-manager/v1';
+};
 
-        if (!response.ok) {
-            throw new Error(data.message || data.code || 'Terjadi kesalahan pada server.');
+const api = axios.create({
+    baseURL: getBaseURL(),
+    headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': settings.nonce || '' // Nonce tetap kosong jika setting tidak ada, tapi URL sudah benar
+    }
+});
+
+// 3. Interceptor
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response) {
+            // Debugging: Bantu cek URL mana yang salah
+            console.error(`Gagal akses API di: ${error.config.baseURL}/${error.config.url}`, error.response.status);
+            
+            if (error.response.status === 401 || error.response.status === 403) {
+                console.error("Izin ditolak. Cek Nonce atau Login.");
+            }
         }
-
-        return data;
-    } catch (error) {
-        console.error(`API Error [${endpoint}]:`, error);
-        throw error;
+        return Promise.reject(error);
     }
-};
+);
 
-export const setupApiErrorInterceptor = (callback) => {
-    // Implementasi sederhana untuk menangkap error 401/403 global jika diperlukan
-    // Saat ini apiFetch melempar error yang bisa ditangkap di component
-};
-
-export default {
-    // GET Requests
-    get: (endpoint, params = {}) => {
-        const queryString = new URLSearchParams(params.params).toString();
-        const url = queryString ? `${endpoint}?${queryString}` : endpoint;
-        return apiFetch(url, { method: 'GET' });
-    },
-    
-    // POST Requests (Create)
-    post: (endpoint, body) => apiFetch(endpoint, {
-        method: 'POST',
-        body: body instanceof FormData ? body : JSON.stringify(body)
-    }),
-    
-    // PUT Requests (Update)
-    put: (endpoint, body) => apiFetch(endpoint, {
-        method: 'PUT',
-        body: JSON.stringify(body)
-    }),
-    
-    // DELETE Requests
-    delete: (endpoint) => apiFetch(endpoint, { method: 'DELETE' }),
-    
-    // Helper Khusus Upload
-    upload: async (file, type, jamaahId = null) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (type) formData.append('upload_type', type);
-        if (jamaahId) formData.append('jamaah_id', jamaahId);
-
-        return apiFetch('uploads', {
-            method: 'POST',
-            body: formData
-        });
-    },
-
-    // Getter untuk info user saat ini
-    getCurrentUser: () => umhConfig.user
-};
+export default api;

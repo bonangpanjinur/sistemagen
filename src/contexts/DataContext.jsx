@@ -1,77 +1,74 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api, { setupApiErrorInterceptor } from '../utils/api';
+import api from '../utils/api';
 
 const DataContext = createContext();
 
 export const useData = () => useContext(DataContext);
 
 export const DataProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [stats, setStats] = useState(null); 
+    const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [globalError, setGlobalError] = useState(null);
+    const [stats, setStats] = useState(null);
+
+    // Fungsi untuk memuat data awal
+    const initData = async () => {
+        setLoading(true);
+        try {
+            // Cek apakah settings dari WP tersedia
+            if (!window.umrohManagerSettings) {
+                console.warn('umrohManagerSettings not found, using mock/dev mode or fallback');
+            }
+
+            // Panggil API User Me
+            // Kita gunakan try-catch terpisah untuk user agar app tidak crash total jika user gagal load
+            try {
+                const userResponse = await api.get('/user/me');
+                if (userResponse.data && userResponse.data.success) {
+                    setCurrentUser(userResponse.data.data);
+                } else {
+                    // Fallback jika API response structure berbeda
+                    console.log("User data not standard format:", userResponse);
+                    setCurrentUser(userResponse.data || { name: 'Admin', role: 'administrator' });
+                }
+            } catch (userErr) {
+                console.error("Error fetching user:", userErr);
+                setError("Gagal memuat data pengguna.");
+                // Tetap set user null atau default agar menu tetap bisa muncul (opsional)
+            }
+
+        } catch (err) {
+            console.error("Critical Init Error:", err);
+            setError(err.message);
+        } finally {
+            // PENTING: Loading HARUS dimatikan apapun yang terjadi
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const initApp = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // Load User dari global variable (disuntikkan via wp_localize_script)
-                if (window.umhData && window.umhData.user) {
-                    setUser(window.umhData.user);
-                }
-
-                setupApiErrorInterceptor(() => {
-                    setGlobalError("Sesi Anda telah berakhir. Silakan refresh halaman.");
-                });
-
-                // Fetch data awal secara paralel, gunakan .catch agar satu gagal tidak mematikan semua
-                const [statsRes, departuresRes] = await Promise.all([
-                    api.get('umh/v1/stats/totals').catch(err => ({ data: {} })), 
-                    api.get('umh/v1/departures', { params: { per_page: 5, status: 'scheduled', orderby: 'departure_date', order: 'asc' } }).catch(err => ({ data: { items: [] } }))
-                ]);
-
-                const totalStats = statsRes.data || {};
-                
-                // Normalisasi data departures (bisa array langsung atau object {items: []})
-                const rawDepartures = departuresRes.data;
-                const departuresList = Array.isArray(rawDepartures) 
-                    ? rawDepartures 
-                    : (rawDepartures && Array.isArray(rawDepartures.items) ? rawDepartures.items : []);
-
-                setStats({
-                    total_jamaah: totalStats.total_jamaah || 0,
-                    active_packages: totalStats.total_packages || 0,
-                    total_revenue: totalStats.total_revenue || 0,
-                    upcoming_departures: departuresList.map(d => ({
-                        name: d.package_name,
-                        date: d.departure_date,
-                        booked: d.slots_filled || (d.total_seats - d.available_seats) || 0,
-                        quota: d.total_seats || 0
-                    }))
-                });
-
-            } catch (err) {
-                console.error("Gagal inisialisasi aplikasi:", err);
-                setError("Gagal memuat data utama. Periksa koneksi internet Anda.");
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        initApp();
+        initData();
     }, []);
 
-    const clearGlobalError = () => setGlobalError(null);
+    const refreshStats = async () => {
+        try {
+            const response = await api.get('/stats/dashboard');
+            if (response.data.success) {
+                setStats(response.data.data);
+            }
+        } catch (error) {
+            console.error("Error fetching stats:", error);
+        }
+    };
 
     const value = {
-        user,
-        stats, 
+        currentUser,
         loading,
         error,
-        globalError,
-        clearGlobalError
+        stats,
+        refreshStats,
+        isAuthenticated: !!currentUser,
+        isAdmin: currentUser?.roles?.includes('administrator') || true // Default true for debugging if needed
     };
 
     return (
@@ -80,5 +77,3 @@ export const DataProvider = ({ children }) => {
         </DataContext.Provider>
     );
 };
-
-export default DataContext;

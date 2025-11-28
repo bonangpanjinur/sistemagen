@@ -1,109 +1,91 @@
-import { 
-  HomeIcon, 
-  UsersIcon, 
-  CalendarIcon, 
-  BriefcaseIcon, 
-  CurrencyDollarIcon, 
-  ClipboardDocumentListIcon, 
-  PlusCircleIcon,
-  BanknotesIcon,
-  TagIcon,
-  PaperAirplaneIcon,
-  BuildingOfficeIcon,
-  ClipboardDocumentCheckIcon,
-  TruckIcon,
-  ChartBarIcon,
-  IdentificationIcon,
-  MegaphoneIcon,
-  FunnelIcon,
-  UserCircleIcon,
-  ServerIcon,
-  LockClosedIcon,
-  Cog6ToothIcon,
-  DocumentTextIcon,
-  DocumentCheckIcon
-} from '@heroicons/react/24/outline';
+import {
+    LayoutDashboard,
+    Users,
+    Calendar,
+    Plane,
+    Hotel,
+    FileText,
+    Settings,
+    Briefcase,
+    DollarSign,
+    ClipboardList,
+    UserCheck,
+    Megaphone,
+    Package
+} from 'lucide-react';
 
+// Pastikan export default atau named export konsisten. 
+// Di sini kita gunakan named export 'menuItems' agar mudah diimport.
 export const menuItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
-  
-  // MODUL 1: TRANSAKSI (Core Business)
-  { 
-    label: 'Transaksi', 
-    icon: ClipboardDocumentListIcon,
-    submenu: [
-      { path: '/bookings/create', label: 'Buat Booking Baru', icon: PlusCircleIcon },
-      { path: '/bookings', label: 'Data Transaksi', icon: DocumentTextIcon },
-    ]
-  },
-
-  // MODUL 2: PRODUK & INVENTORY
-  { 
-    label: 'Produk Paket', 
-    icon: BriefcaseIcon,
-    submenu: [
-      { path: '/packages', label: 'Katalog Paket', icon: BriefcaseIcon },
-      { path: '/departures', label: 'Jadwal Keberangkatan', icon: CalendarIcon },
-      { path: '/hotels', label: 'Data Hotel', icon: BuildingOfficeIcon },
-      { path: '/package-categories', label: 'Kategori Paket', icon: TagIcon },
-      // { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon }, // Optional
-    ]
-  },
-
-  // MODUL 3: CRM (JEMAAH)
-  { path: '/jamaah', label: 'Data Jemaah (CRM)', icon: UsersIcon },
-
-  // MODUL 4: OPERASIONAL
-  { 
-    label: 'Operasional', 
-    icon: ClipboardDocumentCheckIcon,
-    submenu: [
-      { path: '/manifest', label: 'Manifest & Dokumen', icon: DocumentCheckIcon },
-      { path: '/rooming', label: 'Rooming List', icon: BuildingOfficeIcon },
-      { path: '/logistics', label: 'Logistik & Perlengkapan', icon: TruckIcon },
-      { path: '/tasks', label: 'Manajemen Tugas', icon: ClipboardDocumentCheckIcon },
-    ]
-  },
-
-  // MODUL 5: KEUANGAN
-  { 
-    label: 'Keuangan', 
-    icon: CurrencyDollarIcon,
-    submenu: [
-      { path: '/finance', label: 'Pusat Keuangan', icon: BanknotesIcon },
-    ]
-  },
-
-  // MODUL 6: HR & KARYAWAN
-  { 
-    label: 'HR & Kepegawaian', 
-    icon: IdentificationIcon,
-    submenu: [
-      { path: '/hr', label: 'Data Karyawan & Absensi', icon: IdentificationIcon },
-      { path: '/hr/payroll', label: 'Payroll & Kasbon', icon: DocumentCurrencyDollarIcon || ChartBarIcon },
-    ]
-  },
-
-  // MODUL 7: MARKETING & AGEN
-  { 
-    label: 'Marketing & Agen', 
-    icon: MegaphoneIcon,
-    submenu: [
-      { path: '/agents', label: 'Kemitraan Agen', icon: UserCircleIcon },
-      { path: '/marketing', label: 'Leads & Prospek', icon: FunnelIcon },
-    ]
-  },
-
-  // MODUL 8: SYSTEM & MASTER DATA
-  { 
-    label: 'Master Data', 
-    icon: ServerIcon,
-    submenu: [
-      { path: '/masters', label: 'Master Umum', icon: ServerIcon },
-      { path: '/users', label: 'Pengguna Sistem', icon: UsersIcon },
-      { path: '/roles', label: 'Hak Akses (Role)', icon: LockClosedIcon },
-    ]
-  },
-
-  { path: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon },
+    {
+        title: 'Dashboard',
+        path: '/dashboard',
+        icon: LayoutDashboard
+    },
+    {
+        title: 'Data Jamaah',
+        path: '/jamaah',
+        icon: Users
+    },
+    {
+        title: 'Pemesanan',
+        path: '/bookings',
+        icon: ClipboardList
+    },
+    {
+        title: 'Paket Umroh',
+        path: '/packages',
+        icon: Package
+    },
+    {
+        title: 'Keberangkatan',
+        path: '/departures',
+        icon: Calendar
+    },
+    {
+        title: 'Penerbangan',
+        path: '/flights',
+        icon: Plane
+    },
+    {
+        title: 'Hotel',
+        path: '/hotels',
+        icon: Hotel
+    },
+    {
+        title: 'Manajemen Agen',
+        path: '/agents',
+        icon: UserCheck
+    },
+    {
+        title: 'Keuangan',
+        path: '/finance',
+        icon: DollarSign
+    },
+    {
+        title: 'Manifest',
+        path: '/manifest',
+        icon: FileText
+    },
+    {
+        title: 'Marketing',
+        path: '/marketing',
+        icon: Megaphone
+    },
+    {
+        title: 'Master Data',
+        path: '/masters',
+        icon: Briefcase
+    },
+    {
+        title: 'Pengaturan',
+        path: '/settings',
+        icon: Settings
+    }
 ];
+
+// Helper untuk mencari judul berdasarkan path (opsional)
+export const getPageTitle = (path) => {
+    const item = menuItems.find(item => item.path === path);
+    return item ? item.title : 'Sistem Agen Umroh';
+};

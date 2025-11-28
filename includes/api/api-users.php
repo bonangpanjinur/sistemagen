@@ -17,7 +17,9 @@ class UMH_Users_API {
     }
 
     private function setup_crud() {
+        // Menambahkan 'username' ke skema agar bisa disimpan ke database
         $schema = [
+            'username'    => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
             'email'       => ['type' => 'string', 'required' => true, 'format' => 'email', 'sanitize_callback' => 'sanitize_email'],
             'full_name'   => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
             'role'        => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
@@ -40,7 +42,7 @@ class UMH_Users_API {
             'umh_users',        // Table
             $schema,       
             $permissions,  
-            ['full_name', 'email', 'phone'] // Searchable
+            ['full_name', 'email', 'phone', 'username'] // Searchable
         );
     }
 
@@ -75,17 +77,21 @@ class UMH_Users_API {
         $table_name = $wpdb->prefix . 'umh_users';
         
         $params = $request->get_json_params();
-        $email = sanitize_email($params['email']);
+        $email = sanitize_email($params['email']); // Bisa email atau username
         $password = $params['password'];
 
         if (empty($email) || empty($password)) {
-            return new WP_Error('missing_credentials', 'Email dan password wajib diisi.', ['status' => 400]);
+            return new WP_Error('missing_credentials', 'Email/Username dan password wajib diisi.', ['status' => 400]);
         }
 
-        $user = $wpdb->get_row($wpdb->prepare("SELECT * FROM $table_name WHERE email = %s", $email));
+        // Support login by email OR username
+        $user = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE email = %s OR username = %s", 
+            $email, $email
+        ));
 
         if (!$user) {
-            return new WP_Error('invalid_email', 'User tidak ditemukan.', ['status' => 403]);
+            return new WP_Error('invalid_user', 'User tidak ditemukan.', ['status' => 403]);
         }
 
         if (!wp_check_password($password, $user->password_hash, $user->id)) {
@@ -111,20 +117,20 @@ class UMH_Users_API {
                 'id' => $user->id,
                 'name' => $user->full_name,
                 'email' => $user->email,
+                'username' => $user->username,
                 'role' => $user->role
             ]
         ]);
     }
 
     public function handle_wp_admin_login($request) {
-        // Logika sync admin WP ke React app (jika diperlukan)
-        // Sederhananya return data user WP saat ini
         $current_user = wp_get_current_user();
         return rest_ensure_response([
             'user' => [
                 'id' => $current_user->ID,
                 'name' => $current_user->display_name,
                 'email' => $current_user->user_email,
+                'username' => $current_user->user_login,
                 'role' => 'super_admin'
             ]
         ]);

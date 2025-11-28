@@ -1,134 +1,90 @@
+import React from 'react';
 import { createRoot } from 'react-dom/client';
-import React, { useState, useEffect } from 'react';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 
-// Import Components
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import { Toaster } from 'react-hot-toast';
-import { DataProvider, useData } from './contexts/DataContext';
-import { MENUS } from './utils/menuConfig'; // Import menu untuk lookup title
-
-// Import Pages
+// Import Layout (Optional wrapper if needed globally, but usually inside pages)
+// Pages Imports
 import Dashboard from './pages/Dashboard';
+import CreateBooking from './pages/CreateBooking'; // Modul Booking Baru
 import Packages from './pages/Packages';
 import Departures from './pages/Departures';
-import Jamaah from './pages/Jamaah';
-import Finance from './pages/Finance';
-import Marketing from './pages/Marketing';
-import Hotels from './pages/Hotels';
-import Users from './pages/Users';
-import Settings from './pages/Settings';
-import Tasks from './pages/Tasks';
-import HR from './pages/HR';
-import Logistics from './pages/Logistics';
-import Agents from './pages/Agents';
-import Flights from './pages/Flights';
-import Masters from './pages/Masters';
-import Categories from './pages/Categories';
 import PackageCategories from './pages/PackageCategories';
+import Flights from './pages/Flights';
+import Hotels from './pages/Hotels';
+import Jamaah from './pages/Jamaah';
+import Tasks from './pages/Tasks';
+import Logistics from './pages/Logistics';
+import Finance from './pages/Finance';
+import HR from './pages/HR';
+import Marketing from './pages/Marketing';
+import Agents from './pages/Agents';
+import Masters from './pages/Masters';
+import Users from './pages/Users';
 import Roles from './pages/Roles';
+import Settings from './pages/Settings';
 
-const AppContent = () => {
-    const { user, loading } = useData();
-    const [currentPage, setCurrentPage] = useState('dashboard');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-    // Default ke dashboard jika user berubah
-    useEffect(() => {
-        if (user) setCurrentPage('dashboard');
-    }, [user]);
-
-    // Handle navigasi dengan pengecekan hak akses
-    const handleNavigate = (page) => {
-        setCurrentPage(page);
-        setIsSidebarOpen(false);
-    };
-
-    // Helper untuk mendapatkan Judul Halaman berdasarkan current page
-    const getPageTitle = (path) => {
-        // Cari di config menu
-        for (const group of MENUS) {
-            const item = group.items.find(i => i.path === path);
-            if (item) return item.label;
-        }
-        // Fallback title formatter jika tidak ketemu di menu
-        return path.charAt(0).toUpperCase() + path.slice(1).replace('-', ' ');
-    };
-
-    const renderPage = () => {
-        // Jika loading user data, tampilkan spinner
-        if (loading) return <div className="flex items-center justify-center h-full text-gray-500">Memuat data pengguna...</div>;
-
-        // Switch Case Rendering
-        switch (currentPage) {
-            case 'dashboard': return <Dashboard />;
-            case 'packages': return <Packages />;
-            case 'departures': return <Departures />;
-            case 'jamaah': return <Jamaah />;
-            case 'finance': return <Finance />;
-            case 'marketing': return <Marketing />;
-            case 'tasks': return <Tasks />;
-            case 'hr': return <HR />;
-            case 'logistics': return <Logistics />;
-            
-            // Master Data
-            case 'hotels': return <Hotels />;
-            case 'flights': return <Flights />;
-            case 'agents': return <Agents />;
-            case 'users': return <Users />;
-            case 'settings': return <Settings />;
-            
-            // Extra pages
-            case 'masters': return <Masters />;
-            case 'categories': return <Categories />;
-            case 'package-categories': return <PackageCategories />;
-            case 'roles': return <Roles />;
-            
-            default: return <Dashboard />;
-        }
-    };
-
-    return (
-        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
-            <Sidebar 
-                isOpen={isSidebarOpen} 
-                toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-                activePage={currentPage}
-                onNavigate={handleNavigate}
-            />
-            
-            <div className="flex-1 flex flex-col overflow-hidden w-full relative">
-                <Header 
-                    toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-                    title={getPageTitle(currentPage)} 
-                />
-                
-                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">
-                    {/* Efek Fade In sederhana */}
-                    <div className="animate-fade-in">
-                        {renderPage()}
-                    </div>
-                </main>
-            </div>
-            
-            <Toaster position="top-right" toastOptions={{
-                className: '',
-                style: {
-                    borderRadius: '10px',
-                    background: '#333',
-                    color: '#fff',
-                },
-            }} />
+// Komponen Placeholder untuk halaman yang belum dibuat filenya
+const UnderConstruction = ({ title }) => (
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <div className="text-center p-8 bg-white rounded shadow-lg">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">{title}</h2>
+            <p className="text-gray-500">Halaman ini sedang dalam tahap pengembangan.</p>
+            <p className="text-xs text-gray-400 mt-4">Modul Enterprise V3</p>
         </div>
+    </div>
+);
+
+const App = () => {
+    return (
+        <HashRouter>
+            <Routes>
+                {/* === DASHBOARD === */}
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                
+                {/* === MODUL 1: TRANSAKSI === */}
+                <Route path="/bookings/create" element={<CreateBooking />} />
+                {/* List Data Booking belum ada filenya, pakai placeholder dulu */}
+                <Route path="/bookings" element={<UnderConstruction title="Data Transaksi Booking" />} />
+
+                {/* === MODUL 2: PRODUK & INVENTORY === */}
+                <Route path="/packages" element={<Packages />} />
+                <Route path="/departures" element={<Departures />} />
+                <Route path="/package-categories" element={<PackageCategories />} />
+                <Route path="/flights" element={<Flights />} />
+                <Route path="/hotels" element={<Hotels />} />
+
+                {/* === MODUL 3: CRM (JEMAAH) === */}
+                <Route path="/jamaah" element={<Jamaah />} />
+
+                {/* === MODUL 4: OPERASIONAL === */}
+                <Route path="/tasks" element={<Tasks />} />
+                <Route path="/logistics" element={<Logistics />} />
+
+                {/* === MODUL 5: KEUANGAN === */}
+                <Route path="/finance" element={<Finance />} />
+                <Route path="/finance/expenses" element={<Finance />} /> {/* Bisa dipisah nanti jika butuh view beda */}
+
+                {/* === MODUL 6: HR & KARYAWAN === */}
+                <Route path="/hr" element={<HR />} />
+
+                {/* === MODUL 7: MARKETING & AGEN === */}
+                <Route path="/marketing" element={<Marketing />} />
+                <Route path="/agents" element={<Agents />} />
+
+                {/* === MODUL 8: MASTER DATA & SYSTEM === */}
+                <Route path="/masters" element={<Masters />} />
+                <Route path="/users" element={<Users />} />
+                <Route path="/roles" element={<Roles />} />
+                <Route path="/settings" element={<Settings />} />
+
+                {/* Fallback Route (404) */}
+                <Route path="*" element={<UnderConstruction title="Halaman Tidak Ditemukan (404)" />} />
+            </Routes>
+        </HashRouter>
     );
 };
-
-const App = () => (
-    <DataProvider>
-        <AppContent />
-    </DataProvider>
-);
 
 const container = document.getElementById('umh-app-root');
 if (container) {

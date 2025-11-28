@@ -1,85 +1,115 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
-import Modal from '../components/Modal';
-import useCRUD from '../hooks/useCRUD';
-import { Plus } from 'lucide-react';
+import { StarIcon } from '@heroicons/react/24/solid';
+import { MapPinIcon } from '@heroicons/react/24/outline';
 
 const Hotels = () => {
-    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/hotels');
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState('create');
-    const [currentItem, setCurrentItem] = useState(null);
-    const [isCustomCity, setIsCustomCity] = useState(false);
-    const [formData, setFormData] = useState({ name: '', city: 'Makkah', rating: '5' });
-
-    const handleOpenModal = (mode, item = null) => {
-        setModalMode(mode); setCurrentItem(item);
-        const defaultCity = item?.city || 'Makkah';
-        const isStandard = ['Makkah', 'Madinah', 'Jeddah', 'Transit'].includes(defaultCity);
-        setIsCustomCity(!isStandard);
-        setFormData(item || { name: '', city: 'Makkah', rating: '5' });
-        setIsModalOpen(true);
+    
+    // Helper untuk render bintang
+    const renderStars = (count) => {
+        return (
+            <div className="flex text-yellow-400">
+                {[...Array(parseInt(count))].map((_, i) => (
+                    <StarIcon key={i} className="h-4 w-4" />
+                ))}
+            </div>
+        );
     };
 
-    // Point 6: Logic Tambah Kota Baru
-    const handleCitySelectChange = (e) => {
-        if (e.target.value === 'custom') {
-            setIsCustomCity(true);
-            setFormData(prev => ({ ...prev, city: '' }));
-        } else {
-            setIsCustomCity(false);
-            setFormData(prev => ({ ...prev, city: e.target.value }));
-        }
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const success = modalMode === 'create' ? await createItem(formData) : await updateItem(currentItem.id, formData);
-        if (success) setIsModalOpen(false);
-    };
-
+    // Konfigurasi Kolom Tabel
     const columns = [
-        { header: 'Nama Hotel', accessor: 'name' },
-        { header: 'Kota', accessor: 'city' },
-        { header: 'Bintang', accessor: 'rating' }
+        { 
+            header: 'Nama Hotel', 
+            accessor: 'name',
+            render: (val, row) => (
+                <div>
+                    <div className="font-bold text-gray-800">{val}</div>
+                    {row.map_url && (
+                        <a href={row.map_url} target="_blank" rel="noreferrer" className="text-xs text-blue-500 flex items-center hover:underline">
+                            <MapPinIcon className="h-3 w-3 mr-1" /> Lihat Peta
+                        </a>
+                    )}
+                </div>
+            )
+        },
+        { 
+            header: 'Kota', 
+            accessor: 'city',
+            render: (val) => val === 'Makkah' 
+                ? <span className="bg-black text-white px-2 py-1 rounded text-xs">Makkah</span> 
+                : <span className="bg-green-600 text-white px-2 py-1 rounded text-xs">Madinah</span>
+        },
+        { header: 'Bintang', accessor: 'star_rating', render: (val) => renderStars(val) },
+        { 
+            header: 'Jarak ke Haram', 
+            accessor: 'distance_to_haram', 
+            render: (val) => val > 0 ? `${val} meter` : '-' 
+        },
+    ];
+
+    // Konfigurasi Form Input
+    const formFields = [
+        { 
+            name: 'name', 
+            label: 'Nama Hotel', 
+            type: 'text', 
+            required: true,
+            placeholder: 'Contoh: Anjum Hotel Makkah' 
+        },
+        { 
+            name: 'city', 
+            label: 'Lokasi Kota', 
+            type: 'select', 
+            options: [
+                { value: 'Makkah', label: 'Makkah' },
+                { value: 'Madinah', label: 'Madinah' },
+                { value: 'Jeddah', label: 'Jeddah' },
+                { value: 'Lainnya', label: 'Lainnya' },
+            ],
+            required: true
+        },
+        { 
+            name: 'star_rating', 
+            label: 'Rating Bintang', 
+            type: 'select', 
+            options: [
+                { value: '5', label: '⭐⭐⭐⭐⭐ (5 Bintang)' },
+                { value: '4', label: '⭐⭐⭐⭐ (4 Bintang)' },
+                { value: '3', label: '⭐⭐⭐ (3 Bintang)' },
+            ]
+        },
+        { 
+            name: 'distance_to_haram', 
+            label: 'Jarak ke Masjid (Meter)', 
+            type: 'number',
+            placeholder: '0'
+        },
+        { 
+            name: 'map_url', 
+            label: 'Link Google Maps (Opsional)', 
+            type: 'text',
+            placeholder: 'https://maps.google.com/...'
+        },
     ];
 
     return (
-        <Layout title="Master Hotel">
-            <div className="mb-4 flex justify-end"><button onClick={() => handleOpenModal('create')} className="btn-primary flex gap-2"><Plus size={18}/> Tambah Hotel</button></div>
-            <CrudTable columns={columns} data={data} loading={loading} onEdit={i => handleOpenModal('edit', i)} onDelete={deleteItem} />
-            
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Data Hotel">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div><label className="label">Nama Hotel</label><input className="input-field" value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required /></div>
-                    
-                    {/* Point 6: Select dengan Opsi Custom */}
-                    <div>
-                        <label className="label">Kota Lokasi</label>
-                        {!isCustomCity ? (
-                            <select className="input-field" value={formData.city} onChange={handleCitySelectChange}>
-                                <option value="Makkah">Makkah</option>
-                                <option value="Madinah">Madinah</option>
-                                <option value="Jeddah">Jeddah</option>
-                                <option value="Transit">Transit</option>
-                                <option value="custom" className="font-bold text-blue-600">+ Tambah Kota Baru (Dubai, Turkey, dll)</option>
-                            </select>
-                        ) : (
-                            <div className="flex gap-2">
-                                <input className="input-field" placeholder="Ketik Nama Kota Baru..." value={formData.city} onChange={e=>setFormData({...formData, city: e.target.value})} autoFocus required />
-                                <button type="button" onClick={()=>{setIsCustomCity(false); setFormData(prev=>({...prev, city: 'Makkah'}))}} className="btn-secondary text-xs">Batal</button>
-                            </div>
-                        )}
-                    </div>
+        <Layout title="Data Hotel Rekanan">
+            <div className="bg-white rounded-lg shadow p-6">
+                <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 text-sm text-yellow-800">
+                    <p className="font-bold">Tips:</p>
+                    <p>Masukkan data hotel dengan lengkap (termasuk jarak). Data ini akan otomatis muncul saat Anda membuat Paket Umrah atau Jadwal Keberangkatan.</p>
+                </div>
 
-                    <div><label className="label">Rating</label><select className="input-field" value={formData.rating} onChange={e=>setFormData({...formData, rating: e.target.value})}><option value="5">5 Bintang</option><option value="4">4 Bintang</option></select></div>
-                    <div className="flex justify-end gap-2"><button type="button" onClick={()=>setIsModalOpen(false)} className="btn-secondary">Batal</button><button type="submit" className="btn-primary">Simpan</button></div>
-                </form>
-            </Modal>
+                <CrudTable
+                    endpoint="/umh/v1/hotels"
+                    columns={columns}
+                    formFields={formFields}
+                    title="Daftar Hotel"
+                />
+            </div>
         </Layout>
     );
 };
+
 export default Hotels;

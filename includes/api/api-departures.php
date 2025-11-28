@@ -1,43 +1,151 @@
 <?php
-if (!defined('ABSPATH')) exit;
-require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
+/**
+ * API Endpoint: Jadwal Keberangkatan (Inventory)
+ * Menghubungkan Paket, Hotel, dan Maskapai
+ */
 
-class UMH_Departures_API extends UMH_CRUD_Controller {
-    public function __construct() {
-        $schema = [
-            'package_id'     => ['type' => 'integer', 'required' => true],
-            'departure_date' => ['type' => 'string', 'format' => 'date', 'required' => true],
-            'quota'          => ['type' => 'integer', 'required' => true],
-            'filled_seats'   => ['type' => 'integer', 'default' => 0],
-            'status'         => ['type' => 'string', 'default' => 'open'],
-            // Point 2: Tambahkan field price_override ke schema agar bisa disimpan
-            'price_override' => ['type' => 'number', 'default' => 0], 
-        ];
+if (!defined('ABSPATH')) {
+    exit;
+}
 
-        // Join ke table packages untuk mengambil nama paket & harga dasar saat GET
-        parent::__construct('departures', 'umh_departures', $schema, ['get_items' => ['public']]); // Public read allowed for schedule
+class UMH_API_Departures {
+
+    public function register_routes() {
+        register_rest_route('umh/v1', '/departures', array(
+            'methods' => 'GET',
+            'callback' => array($this, 'get_items'),
+            'permission_callback' => array($this, 'permissions_check'),
+        ));
+
+        register_rest_route('umh/v1', '/departures', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'create_item'),
+            'permission_callback' => array($this, 'permissions_check'),
+        ));
+
+        register_rest_route('umh/v1', '/departures/(?P<id>\d+)', array(
+            'methods' => 'PUT',
+            'callback' => array($this, 'update_item'),
+            'permission_callback' => array($this, 'permissions_check'),
+        ));
+
+        register_rest_route('umh/v1', '/departures/(?P<id>\d+)', array(
+            'methods' => 'DELETE',
+            'callback' => array($this, 'delete_item'),
+            'permission_callback' => array($this, 'permissions_check'),
+        ));
     }
 
-    // Override get_items untuk join nama paket dan harga dasar
+    public function permissions_check() {
+        return current_user_can('manage_options');
+    }
+
+    /**
+     * GET: List Departures (Join dengan Paket & Hotel)
+     */
     public function get_items($request) {
         global $wpdb;
-        $table_packages = $wpdb->prefix . 'umh_packages';
-        
-        // Ambil parameter paginasi standar
-        $page = $request->get_param('page') ?? 1;
-        $per_page = $request->get_param('per_page') ?? 10;
-        $offset = ($page - 1) * $per_page;
-        
-        $sql = "SELECT d.*, p.name as package_name, p.price as base_price 
-                FROM {$this->table_name} d
-                LEFT JOIN $table_packages p ON d.package_id = p.id
-                ORDER BY d.departure_date ASC";
+        $table_dep = $wpdb->prefix . 'umh_departures';
+        $table_pkg = $wpdb->prefix . 'umh_packages';
+        $table_hotel = $wpdb->prefix . 'umh_master_hotels';
+        $table_air = $wpdb->prefix . 'umh_master_airlines';
 
-        // Jika ada paginasi, tambahkan LIMIT (Opsional, tergantung kebutuhan frontend)
-        // $sql .= " LIMIT $per_page OFFSET $offset";
+        // Query Kompleks dengan JOIN
+        $query = "
+            SELECT 
+                d.*,
+                p.name as package_name,
+                h_mk.name as hotel_makkah_name,
+                h_md.name as hotel_madinah_name,
+                a.name as airline_name,
+                a.logo_url as airline_logo
+            FROM $table_dep d
+            LEFT JOIN $table_pkg p ON d.package_id = p.id
+            LEFT JOIN $table_hotel h_mk ON d.hotel_makkah_id = h_mk.id
+            LEFT JOIN $table_hotel h_md ON d.hotel_madinah_id = h_md.id
+            LEFT JOIN $table_air a ON d.airline_id = a.id
+            ORDER BY d.departure_date ASC
+        ";
 
-        $results = $wpdb->get_results($sql, ARRAY_A);
-        return rest_ensure_response($results);
+        $items = $wpdb->get_results($query);
+        return rest_ensure_response($items);
+    }
+
+    /**
+     * POST: Buat Jadwal Baru
+     */
+    public function create_item($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'umh_departures';
+        $params = $request->get_json_params();
+
+        // Validasi Dasar
+        if (empty($params['package_id']) || empty($params['departure_date'])) {
+            return new WP_Error('missing_data', 'Paket dan Tanggal wajib diisi', ['status' => 400]);
+        }
+
+        $data = [
+            'package_id' => intval($params['package_id']),
+            'departure_date' => sanitize_text_field($params['departure_date']),
+            'return_date' => sanitize_text_field($params['return_date']),
+            'airline_id' => !empty($params['airline_id']) ? intval($params['airline_id']) : null,
+            'origin_airport_id' => !empty($params['origin_airport_id']) ? intval($params['origin_airport_id']) : null,
+            
+            'hotel_makkah_id' => !empty($params['hotel_makkah_id']) ? intval($params['hotel_makkah_id']) : null,
+            'hotel_madinah_id' => !empty($params['hotel_madinah_id']) ? intval($params['hotel_madinah_id']) : null,
+
+            'quota' => intval($params['quota'] ?? 45),
+            'available_seats' => intval($params['quota'] ?? 45),
+            
+            'price_quad' => floatval($params['price_quad']),
+            'price_triple' => floatval($params['price_triple']),
+            'price_double' => floatval($params['price_double']),
+            'currency' => sanitize_text_field($params['currency'] ?? 'IDR'),
+
+            'status' => 'open'
+        ];
+
+        if ($wpdb->insert($table, $data)) {
+            return rest_ensure_response(['success' => true, 'id' => $wpdb->insert_id, 'message' => 'Jadwal berhasil dibuat']);
+        }
+
+        return new WP_Error('db_error', 'Gagal menyimpan data: ' . $wpdb->last_error, ['status' => 500]);
+    }
+
+    /**
+     * PUT: Update Jadwal
+     */
+    public function update_item($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'umh_departures';
+        $id = $request->get_param('id');
+        $params = $request->get_json_params();
+
+        $data = [
+            'package_id' => intval($params['package_id']),
+            'departure_date' => sanitize_text_field($params['departure_date']),
+            'return_date' => sanitize_text_field($params['return_date']),
+            'airline_id' => intval($params['airline_id']),
+            'hotel_makkah_id' => intval($params['hotel_makkah_id']),
+            'hotel_madinah_id' => intval($params['hotel_madinah_id']),
+            'quota' => intval($params['quota']),
+            'price_quad' => floatval($params['price_quad']),
+            'price_triple' => floatval($params['price_triple']),
+            'price_double' => floatval($params['price_double']),
+            'status' => sanitize_text_field($params['status'])
+        ];
+
+        if ($wpdb->update($table, $data, ['id' => $id]) !== false) {
+            return rest_ensure_response(['success' => true, 'message' => 'Jadwal berhasil diupdate']);
+        }
+        return new WP_Error('db_error', 'Gagal update data', ['status' => 500]);
+    }
+
+    public function delete_item($request) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'umh_departures';
+        $id = $request->get_param('id');
+        $wpdb->delete($table, ['id' => $id]);
+        return rest_ensure_response(['success' => true, 'message' => 'Jadwal dihapus']);
     }
 }
-new UMH_Departures_API();

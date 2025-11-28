@@ -1,116 +1,182 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
-import Modal from '../components/Modal';
-import useCRUD from '../hooks/useCRUD';
-import { Plus, Calendar, DollarSign } from 'lucide-react';
-import { formatDate, formatCurrency } from '../utils/formatters';
+import api from '../utils/api';
+import { CalendarIcon, UserGroupIcon, BuildingOfficeIcon } from '@heroicons/react/24/outline';
 
 const Departures = () => {
-    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/departures');
-    const { data: packages } = useCRUD('umh/v1/packages');
+    // State untuk Data Dropdown
+    const [packages, setPackages] = useState([]);
+    const [hotels, setHotels] = useState([]);
+    const [airlines, setAirlines] = useState([]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    // Load Data Referensi saat halaman dibuka
+    useEffect(() => {
+        const loadReferences = async () => {
+            try {
+                const pkgRes = await api.get('/umh/v1/packages'); // Pastikan API packages sudah ada
+                const hotelRes = await api.get('/umh/v1/hotels');
+                const airRes = await api.get('/umh/v1/masters/airlines');
 
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState('create');
-    const [currentItem, setCurrentItem] = useState(null);
-    const [formData, setFormData] = useState({ package_id: '', departure_date: '', quota: 45, price_override: 0 });
+                if(pkgRes.data) setPackages(pkgRes.data.map(p => ({ value: p.id, label: p.name })));
+                if(hotelRes.data) setHotels(hotelRes.data.map(h => ({ value: h.id, label: `${h.name} (${h.city})` })));
+                if(airRes.data) setAirlines(airRes.data.map(a => ({ value: a.id, label: `${a.name} (${a.code})` })));
+            } catch (err) {
+                console.error("Gagal load referensi", err);
+            }
+        };
+        loadReferences();
+    }, []);
 
-    const handleOpenModal = (mode, item = null) => {
-        setModalMode(mode);
-        setCurrentItem(item);
-        // Reset form atau isi data edit
-        if (item) {
-            setFormData({
-                ...item,
-                departure_date: item.departure_date.split('T')[0] // Fix date format input
-            });
-        } else {
-            setFormData({ package_id: '', departure_date: '', quota: 45, price_override: 0 });
-        }
-        setIsModalOpen(true);
-    };
+    const formatPrice = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(val);
 
-    // Saat paket dipilih, ambil harga dasar dari paket sebagai default price_override
-    const handlePackageChange = (e) => {
-        const pkgId = e.target.value;
-        const selectedPkg = packages.find(p => String(p.id) === String(pkgId));
-        setFormData(prev => ({
-            ...prev,
-            package_id: pkgId,
-            price_override: selectedPkg ? selectedPkg.price : 0
-        }));
-    }
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const success = modalMode === 'create' ? await createItem(formData) : await updateItem(currentItem.id, formData);
-        if (success) { setIsModalOpen(false); fetchData(); }
-    };
-
+    // Konfigurasi Kolom
     const columns = [
-        { header: 'Tanggal Keberangkatan', accessor: 'departure_date', render: r => <div className="font-medium flex items-center gap-2"><Calendar size={16} className="text-blue-500"/> {formatDate(r.departure_date)}</div> },
-        { header: 'Paket', accessor: 'package_name', className: 'font-bold' },
-        { header: 'Harga Jual', accessor: 'price_override', render: r => (
-            <div className="flex items-center gap-1 text-green-700 font-semibold">
-                {formatCurrency(r.price_override || r.base_price)}
-            </div>
-        )},
-        { header: 'Kuota', accessor: 'quota', render: r => <span className="badge bg-blue-50 text-blue-700">{r.quota} Seat</span> },
-        { header: 'Status', accessor: 'status', render: r => <span className={`badge uppercase text-xs ${r.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{r.status}</span> }
+        { 
+            header: 'Tanggal', 
+            accessor: 'departure_date',
+            render: (val, row) => (
+                <div>
+                    <div className="font-bold flex items-center gap-1">
+                        <CalendarIcon className="h-4 w-4 text-gray-500"/> {val}
+                    </div>
+                    <div className="text-xs text-gray-500">Pulang: {row.return_date}</div>
+                </div>
+            )
+        },
+        { header: 'Paket', accessor: 'package_name' },
+        { 
+            header: 'Hotel & Maskapai', 
+            accessor: 'id', // Dummy accessor
+            render: (_, row) => (
+                <div className="text-xs">
+                    <div className="flex items-center gap-1"><BuildingOfficeIcon className="h-3 w-3"/> Mk: {row.hotel_makkah_name || '-'}</div>
+                    <div className="flex items-center gap-1"><BuildingOfficeIcon className="h-3 w-3"/> Md: {row.hotel_madinah_name || '-'}</div>
+                    <div className="mt-1 font-semibold text-blue-600">{row.airline_name || '-'}</div>
+                </div>
+            )
+        },
+        { 
+            header: 'Harga (Quad)', 
+            accessor: 'price_quad', 
+            render: (val) => <span className="font-bold text-green-700">{formatPrice(val)}</span> 
+        },
+        { 
+            header: 'Seat', 
+            accessor: 'available_seats',
+            render: (val, row) => (
+                <div className="text-center">
+                    <span className={`px-2 py-1 rounded text-xs font-bold ${val > 10 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {val} / {row.quota}
+                    </span>
+                </div>
+            )
+        },
+        { 
+            header: 'Status', 
+            accessor: 'status',
+            render: (val) => val === 'open' 
+                ? <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs uppercase">Open</span>
+                : <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-xs uppercase">{val}</span>
+        }
+    ];
+
+    // Konfigurasi Form
+    const formFields = [
+        { 
+            name: 'package_id', 
+            label: 'Pilih Paket Dasar', 
+            type: 'select', 
+            options: packages,
+            required: true 
+        },
+        { 
+            name: 'departure_date', 
+            label: 'Tanggal Berangkat', 
+            type: 'date', 
+            required: true 
+        },
+        { 
+            name: 'return_date', 
+            label: 'Tanggal Pulang', 
+            type: 'date', 
+            required: true 
+        },
+        { 
+            name: 'airline_id', 
+            label: 'Maskapai Penerbangan', 
+            type: 'select', 
+            options: airlines 
+        },
+        { 
+            name: 'hotel_makkah_id', 
+            label: 'Hotel Makkah', 
+            type: 'select', 
+            options: hotels.filter(h => h.label.includes('Makkah')) // Filter sederhana
+        },
+        { 
+            name: 'hotel_madinah_id', 
+            label: 'Hotel Madinah', 
+            type: 'select', 
+            options: hotels.filter(h => h.label.includes('Madinah')) 
+        },
+        { 
+            name: 'quota', 
+            label: 'Total Kuota Seat', 
+            type: 'number', 
+            defaultValue: 45 
+        },
+        { 
+            name: 'price_quad', 
+            label: 'Harga Quad (Sekamar Ber-4)', 
+            type: 'number', 
+            placeholder: 'Contoh: 28500000',
+            required: true
+        },
+        { 
+            name: 'price_triple', 
+            label: 'Harga Triple (Sekamar Ber-3)', 
+            type: 'number', 
+            placeholder: 'Contoh: 30500000'
+        },
+        { 
+            name: 'price_double', 
+            label: 'Harga Double (Sekamar Ber-2)', 
+            type: 'number', 
+            placeholder: 'Contoh: 32500000'
+        },
+        { 
+            name: 'status', 
+            label: 'Status Penjualan', 
+            type: 'select', 
+            options: [
+                { value: 'open', label: 'Open (Buka)' },
+                { value: 'closed', label: 'Closed (Tutup)' },
+                { value: 'departed', label: 'Departed (Sudah Berangkat)' },
+            ] 
+        }
     ];
 
     return (
-        <Layout title="Jadwal Keberangkatan">
-            <div className="mb-6 flex justify-between items-center">
-                <p className="text-gray-500 text-sm">Atur tanggal dan harga spesifik untuk setiap keberangkatan.</p>
-                <button onClick={() => handleOpenModal('create')} className="btn-primary flex items-center gap-2">
-                    <Plus size={18} /> Tambah Jadwal
-                </button>
-            </div>
-
-            <CrudTable columns={columns} data={data} loading={loading} onEdit={(item) => handleOpenModal('edit', item)} onDelete={deleteItem} />
-            
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={modalMode === 'create' ? "Jadwal Baru" : "Edit Jadwal"}>
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
-                        <label className="label text-blue-800">1. Pilih Paket Perjalanan</label>
-                        <select className="input-field" value={formData.package_id} onChange={handlePackageChange} required disabled={modalMode === 'edit'}>
-                            <option value="">-- Pilih Paket --</option>
-                            {packages?.map(p => (
-                                <option key={p.id} value={p.id}>{p.name}</option>
-                            ))}
-                        </select>
-                        <p className="text-xs text-blue-600 mt-1">Pilih paket master terlebih dahulu.</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="label">2. Tanggal Berangkat</label>
-                            <input type="date" className="input-field" value={formData.departure_date} onChange={e => setFormData({...formData, departure_date: e.target.value})} required />
-                        </div>
-                        <div>
-                             <label className="label">3. Kuota Seat</label>
-                             <input type="number" className="input-field" value={formData.quota} onChange={e => setFormData({...formData, quota: e.target.value})} />
-                        </div>
-                    </div>
-                    
+        <Layout title="Jadwal Keberangkatan (Inventory)">
+             <div className="bg-white rounded-lg shadow p-6">
+                <div className="mb-6 flex items-start gap-4 bg-blue-50 p-4 rounded-lg text-sm text-blue-800">
+                    <UserGroupIcon className="h-6 w-6 flex-shrink-0" />
                     <div>
-                        <label className="label font-bold text-gray-800 flex items-center gap-2">
-                            <DollarSign size={16} /> 4. Harga Jual (Tanggal Ini)
-                        </label>
-                        <input type="number" className="input-field font-semibold text-lg" value={formData.price_override} onChange={e => setFormData({...formData, price_override: e.target.value})} />
-                        <p className="text-xs text-gray-500 mt-1">Anda bisa mengubah harga ini berbeda dari harga dasar paket (misal: High Season).</p>
+                        <p className="font-bold">Manajemen Inventory</p>
+                        <p>Di sini Anda mengatur tanggal keberangkatan spesifik. Pastikan Anda sudah membuat <strong>Master Paket</strong>, <strong>Hotel</strong>, dan <strong>Maskapai</strong> terlebih dahulu agar muncul di pilihan.</p>
                     </div>
+                </div>
 
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Batal</button>
-                        <button type="submit" className="btn-primary">Simpan Jadwal</button>
-                    </div>
-                </form>
-            </Modal>
+                <CrudTable
+                    endpoint="/umh/v1/departures"
+                    columns={columns}
+                    formFields={formFields}
+                    title="Daftar Keberangkatan"
+                />
+            </div>
         </Layout>
     );
 };
+
 export default Departures;

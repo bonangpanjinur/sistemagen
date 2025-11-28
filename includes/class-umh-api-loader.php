@@ -20,6 +20,7 @@ class UMH_Api_Loader {
         require_once UMH_PLUGIN_DIR . 'includes/api/api-agents.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-finance.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-logistics.php';
+        require_once UMH_PLUGIN_DIR . 'includes/api/api-bookings.php';
         require_once UMH_PLUGIN_DIR . 'includes/api/api-departures.php'; // <--- PASTIKAN INI ADA
 
         

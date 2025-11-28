@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import { useData } from '../contexts/DataContext';
 import api from '../utils/api';
-import { Users, DollarSign, Briefcase, CheckCircle, Megaphone, TrendingUp, Calendar } from 'lucide-react';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { Users, DollarSign, Calendar, CheckSquare, Plane, TrendingUp, AlertCircle } from 'lucide-react';
+import formatters from '../utils/formatters';
 
 const Dashboard = () => {
     const { user } = useData();
@@ -13,10 +13,10 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const data = await api.get('stats/totals');
-                setStats(data);
+                const response = await api.get('umh/v1/dashboard-stats');
+                setStats(response);
             } catch (error) {
-                console.error("Gagal memuat statistik", error);
+                console.error("Failed to fetch dashboard stats", error);
             } finally {
                 setLoading(false);
             }
@@ -24,138 +24,132 @@ const Dashboard = () => {
         fetchStats();
     }, []);
 
-    const StatCard = ({ title, value, icon: Icon, colorClass, bgClass, trend }) => (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-300 relative overflow-hidden">
-            <div className={`absolute top-0 right-0 p-4 opacity-10 ${colorClass}`}>
-                <Icon size={64} />
+    if (loading) return <Layout title="Dashboard"><div className="p-8 text-center">Memuat Data Dashboard...</div></Layout>;
+
+    // Card Component
+    const StatCard = ({ title, value, icon: Icon, color, subtext }) => (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-start justify-between hover:shadow-md transition-all">
+            <div>
+                <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
+                <h3 className="text-2xl font-bold text-gray-800">{value}</h3>
+                {subtext && <p className="text-xs text-gray-400 mt-2">{subtext}</p>}
             </div>
-            <div className="flex justify-between items-start relative z-10">
-                <div>
-                    <p className="text-gray-500 text-sm font-medium mb-1">{title}</p>
-                    <h3 className="text-3xl font-bold text-gray-800">{value}</h3>
-                    {trend && <p className="text-xs text-green-600 mt-2 flex items-center gap-1"><TrendingUp size={12}/> {trend}</p>}
-                </div>
-                <div className={`p-3 rounded-xl ${bgClass} ${colorClass}`}>
-                    <Icon size={24} />
-                </div>
+            <div className={`p-3 rounded-lg ${color} bg-opacity-10 text-white`}>
+                <Icon size={24} className={color.replace('bg-', 'text-')} />
             </div>
         </div>
     );
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Memuat data dashboard...</div>;
-
     return (
-        <div className="space-y-6">
-            {/* Welcome Banner */}
-            <div className="bg-gradient-to-r from-blue-800 to-indigo-900 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-                <div className="relative z-10">
-                    <h1 className="text-2xl font-bold mb-2">Assalamu'alaikum, {user?.name || 'Admin'}!</h1>
-                    <p className="text-blue-100 opacity-90">Semoga harimu berkah. Berikut ringkasan aktivitas travel hari ini.</p>
+        <Layout title={`Selamat Datang, ${user?.name || 'Admin'}`}>
+            <div className="space-y-6">
+                
+                {/* 1. Top Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <StatCard 
+                        title="Jemaah Aktif" 
+                        value={stats?.cards?.active_jamaah} 
+                        icon={Users} 
+                        color="bg-blue-600"
+                        subtext="Menunggu Keberangkatan"
+                    />
+                    <StatCard 
+                        title="Omset Bulan Ini" 
+                        value={formatters.currency(stats?.cards?.monthly_revenue)} 
+                        icon={DollarSign} 
+                        color="bg-green-600"
+                        subtext="Pemasukan terverifikasi"
+                    />
+                    <StatCard 
+                        title="Jadwal Terdekat" 
+                        value={stats?.cards?.next_departure ? 
+                            formatters.date(stats?.cards?.next_departure.departure_date) : '-'} 
+                        icon={Plane} 
+                        color="bg-purple-600"
+                        subtext={stats?.cards?.next_departure ? 
+                            `${stats.cards.next_departure.booked} / ${stats.cards.next_departure.quota} Seat Terisi` : 'Belum ada jadwal'}
+                    />
+                    <StatCard 
+                        title="Tugas Pending" 
+                        value={stats?.cards?.pending_tasks} 
+                        icon={CheckSquare} 
+                        color="bg-orange-500"
+                        subtext="Perlu diselesaikan"
+                    />
                 </div>
-                <div className="absolute right-0 bottom-0 opacity-10 transform translate-y-1/4 translate-x-1/4">
-                    <svg width="200" height="200" viewBox="0 0 200 200" fill="currentColor"><path d="M45.7,157.3C-21.2,102.8,-2.5,16.3,48.4,-24.2C99.4,-64.7,182.6,-59.2,214.2,-8.7C245.8,41.8,225.8,137.3,168.3,177.3C110.8,217.3,112.6,201.8,45.7,157.3Z" /></svg>
-                </div>
-            </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard 
-                    title="Total Jemaah" 
-                    value={stats?.total_jamaah || 0} 
-                    icon={Users} 
-                    colorClass="text-blue-600" 
-                    bgClass="bg-blue-50" 
-                />
-                <StatCard 
-                    title="Pemasukan" 
-                    value={formatCurrency(stats?.total_revenue || 0)} 
-                    icon={DollarSign} 
-                    colorClass="text-green-600" 
-                    bgClass="bg-green-50" 
-                />
-                <StatCard 
-                    title="Paket Aktif" 
-                    value={stats?.total_packages || 0} 
-                    icon={Briefcase} 
-                    colorClass="text-purple-600" 
-                    bgClass="bg-purple-50" 
-                />
-                <StatCard 
-                    title="Prospek Leads" 
-                    value="Aktif" 
-                    icon={Megaphone} 
-                    colorClass="text-orange-600" 
-                    bgClass="bg-orange-50" 
-                    trend="+5 minggu ini"
-                />
-            </div>
-
-            {/* Recent Activity & Status */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Jadwal Keberangkatan */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 col-span-2">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                            <Calendar size={20} className="text-blue-600"/> Keberangkatan Terdekat
-                        </h3>
-                        <button className="text-sm text-blue-600 hover:underline">Lihat Semua</button>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-50 text-gray-600 border-b border-gray-100">
-                                <tr>
-                                    <th className="py-3 px-4 rounded-tl-lg">Tanggal</th>
-                                    <th className="py-3 px-4">Paket</th>
-                                    <th className="py-3 px-4 rounded-tr-lg text-center">Keterisian</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {stats?.upcoming_departures && stats.upcoming_departures.length > 0 ? (
-                                    stats.upcoming_departures.map((row, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                                            <td className="py-3 px-4 font-medium text-gray-800">{formatDate(row.departure_date)}</td>
-                                            <td className="py-3 px-4 text-gray-600">{row.package_name}</td>
-                                            <td className="py-3 px-4 text-center">
-                                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${row.available_seats < 5 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                    {row.slots_filled} / {row.total_seats}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* 2. Upcoming Departures Table */}
+                    <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                <Calendar size={18} className="text-blue-600"/> Jadwal Keberangkatan
+                            </h3>
+                            <button className="text-sm text-blue-600 font-medium hover:underline">Lihat Semua</button>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="bg-gray-50 text-gray-600 font-semibold border-b">
                                     <tr>
-                                        <td colSpan="3" className="text-center py-8 text-gray-400">Belum ada jadwal keberangkatan.</td>
+                                        <th className="py-3 px-4">Paket</th>
+                                        <th className="py-3 px-4">Tanggal</th>
+                                        <th className="py-3 px-4 text-center">Seat</th>
+                                        <th className="py-3 px-4 text-center">Status</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {stats?.upcoming?.map((item) => {
+                                        const occupancy = (item.booked / item.quota) * 100;
+                                        return (
+                                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="py-3 px-4 font-medium text-gray-800">{item.name}</td>
+                                                <td className="py-3 px-4 text-gray-600">{formatters.date(item.departure_date)}</td>
+                                                <td className="py-3 px-4">
+                                                    <div className="flex items-center gap-2 justify-center">
+                                                        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                                            <div className={`h-full ${occupancy > 90 ? 'bg-red-500' : 'bg-green-500'}`} style={{width: `${occupancy}%`}}></div>
+                                                        </div>
+                                                        <span className="text-xs text-gray-500">{item.booked}/{item.quota}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 text-center">
+                                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold uppercase">{item.status}</span>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
+                                    {(!stats?.upcoming || stats.upcoming.length === 0) && (
+                                        <tr><td colSpan="4" className="text-center py-4 text-gray-400">Tidak ada jadwal dalam waktu dekat</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
 
-                {/* Status Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <CheckCircle size={20} className="text-green-600"/> Status Sistem
-                    </h3>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                            <span className="text-gray-600 text-sm">Versi</span>
-                            <span className="font-mono font-bold text-xs bg-gray-200 px-2 py-1 rounded">v1.3.2</span>
-                        </div>
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                            <span className="text-gray-600 text-sm">Database</span>
-                            <span className="text-green-600 font-bold text-sm flex items-center gap-1">
-                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Online
-                            </span>
-                        </div>
-                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-100">
-                            <span className="text-gray-600 text-sm">User</span>
-                            <span className="text-blue-600 font-bold text-sm capitalize">{user?.role?.replace('_', ' ')}</span>
+                    {/* 3. Quick Actions / Alerts */}
+                    <div className="space-y-6">
+                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                <TrendingUp size={18} className="text-green-600"/> Pertumbuhan
+                            </h3>
+                            {/* Simple Chart Placeholder using HTML/CSS */}
+                            <div className="h-40 flex items-end justify-between gap-2 border-b border-gray-200 pb-2">
+                                {stats?.chart?.map((c, idx) => (
+                                    <div key={idx} className="flex flex-col items-center gap-1 w-full">
+                                        <div 
+                                            className="w-full bg-blue-500 rounded-t opacity-80 hover:opacity-100 transition-all" 
+                                            style={{height: `${Math.min(c.count * 10, 100)}%`}}
+                                        ></div>
+                                        <span className="text-[10px] text-gray-400">{c.month.split('-')[1]}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-xs text-center text-gray-400 mt-2">Pendaftaran 6 Bulan Terakhir</p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </Layout>
     );
 };
 

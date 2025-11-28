@@ -1,302 +1,278 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
-import CrudTable from '../components/CrudTable';
-import Modal from '../components/Modal';
-import Pagination from '../components/Pagination';
-import useCRUD from '../hooks/useCRUD';
 import api from '../utils/api';
-import { Plus, Printer, Upload, CheckSquare, Square, Filter, Search } from 'lucide-react';
-import { formatCurrency, formatDate } from '../utils/formatters';
-import toast from 'react-hot-toast';
+import Alert from '../components/Alert';
+import { 
+    BanknotesIcon, MagnifyingGlassIcon, CalculatorIcon 
+} from '@heroicons/react/24/outline';
 
 const Finance = () => {
-    // 1. Data Utama Finance
-    const { 
-        data, 
-        loading, 
-        pagination,
-        fetchData, 
-        deleteItem,
-        changePage,
-        changeLimit
-    } = useCRUD('umh/v1/finance');
+    const [activeTab, setActiveTab] = useState('input'); // input | history
+    const [loading, setLoading] = useState(false);
+    const [msg, setMsg] = useState(null);
 
-    // 2. Data Relasi untuk Dropdown
-    const { data: jamaahList, fetchData: fetchJamaah } = useCRUD('umh/v1/jamaah');
-    const { data: employeeList, fetchData: fetchEmployees } = useCRUD('umh/v1/hr');
-    const { data: agentList, fetchData: fetchAgents } = useCRUD('umh/v1/agents');
-    const { data: campaignList, fetchData: fetchCampaigns } = useCRUD('umh/v1/marketing');
+    // State untuk Input Pembayaran
+    const [searchBooking, setSearchBooking] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [payForm, setPayForm] = useState({
+        amount: '', method: 'transfer', bank_name: '', transaction_date: new Date().toISOString().split('T')[0], notes: ''
+    });
 
-    // State
-    const [selectedIds, setSelectedIds] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [file, setFile] = useState(null);
-    const [filters, setFilters] = useState({ type: '', category: '', startDate: '', endDate: '' });
+    // State untuk History
+    const [history, setHistory] = useState([]);
 
-    // Initial Load
+    // --- LOGIC INPUT PEMBAYARAN ---
+
+    // Cari Booking saat user mengetik
     useEffect(() => {
-        fetchData();
-        fetchJamaah();
-        fetchEmployees();
-        fetchAgents();
-        fetchCampaigns();
-    }, []);
-
-    // Initial Form State
-    const initialForm = { 
-        type: 'income', 
-        date: new Date().toISOString().split('T')[0], 
-        amount: 0, 
-        category: 'pembayaran_paket', 
-        jamaah_id: '', 
-        employee_id: '',
-        agent_id: '',
-        campaign_id: '',
-        description: '' 
-    };
-    const [formData, setFormData] = useState(initialForm);
-
-    // Handle Filter Change
-    const handleFilterChange = (key, value) => {
-        const newFilters = { ...filters, [key]: value };
-        setFilters(newFilters);
-        // Build query string for filter
-        // Note: useCRUD fetchData supports custom url params if we implemented it, 
-        // but for simplicity here we might just reload or pass params.
-        // Assuming fetchData accepts (page, limit, search, customParams)
-        // Let's just trigger refresh for now (backend need to support filter params)
-        fetchData(1, pagination.limit, '', newFilters);
-    };
-
-    const handleSave = async (e) => {
-        e.preventDefault();
-        const loadingId = toast.loading('Menyimpan transaksi...');
-        
-        try {
-            // Bersihkan data relasi yang tidak relevan dengan kategori
-            const payload = { ...formData };
-            if (payload.category !== 'pembayaran_paket') delete payload.jamaah_id;
-            if (payload.category !== 'gaji') delete payload.employee_id;
-            if (payload.category !== 'komisi_agen') delete payload.agent_id;
-            if (payload.category !== 'marketing') delete payload.campaign_id;
-
-            // 1. Simpan Data Transaksi
-            const res = await api.post('umh/v1/finance', payload);
-            const newId = res.id;
-
-            // 2. Upload Bukti jika ada
-            if (file && newId) {
-                const uploadRes = await api.upload(file, 'proof_payment');
-                if (uploadRes.url) {
-                    await api.post(`umh/v1/finance/${newId}`, { proof_file: uploadRes.url });
+        const delayDebounce = setTimeout(async () => {
+            if (searchBooking.length >= 3) {
+                try {
+                    const res = await api.get(`/umh/v1/payments/search-booking?term=${searchBooking}`);
+                    setSearchResults(res.data);
+                } catch (err) {
+                    console.error(err);
                 }
+            } else {
+                setSearchResults([]);
             }
+        }, 500);
+        return () => clearTimeout(delayDebounce);
+    }, [searchBooking]);
 
-            toast.success('Transaksi berhasil disimpan!', { id: loadingId });
-            setIsModalOpen(false);
-            setFormData(initialForm);
-            setFile(null);
-            fetchData();
+    const selectBooking = (booking) => {
+        setSelectedBooking(booking);
+        setSearchBooking('');
+        setSearchResults([]);
+    };
+
+    const handlePaySubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedBooking) return;
+        setLoading(true);
+        try {
+            const payload = {
+                booking_id: selectedBooking.id,
+                ...payForm
+            };
+            await api.post('/umh/v1/payments', payload);
+            setMsg({ type: 'success', text: 'Pembayaran berhasil disimpan!' });
+            // Reset
+            setSelectedBooking(null);
+            setPayForm({ amount: '', method: 'transfer', bank_name: '', transaction_date: new Date().toISOString().split('T')[0], notes: '' });
         } catch (err) {
-            toast.error('Gagal menyimpan: ' + err.message, { id: loadingId });
+            setMsg({ type: 'error', text: err.response?.data?.message || 'Gagal menyimpan' });
+        } finally {
+            setLoading(false);
         }
     };
 
-    const toggleSelect = (id) => {
-        setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    };
-
-    const handleBulkPrint = () => {
-        if (selectedIds.length === 0) return toast.error('Pilih minimal satu transaksi');
-        const url = `${window.umhData.root}umh/v1/print/receipt?ids=${selectedIds.join(',')}&_wpnonce=${window.umhData.nonce}`;
-        window.open(url, '_blank');
-    };
-
-    const handleSinglePrint = (id) => {
-        const url = `${window.umhData.root}umh/v1/print/receipt?ids=${id}&_wpnonce=${window.umhData.nonce}`;
-        window.open(url, '_blank');
-    };
-
-    const columns = [
-        { 
-            header: <div className="flex justify-center"><CheckSquare size={16}/></div>,
-            accessor: 'id',
-            render: (row) => (
-                <div className="flex justify-center cursor-pointer" onClick={() => toggleSelect(row.id)}>
-                    {selectedIds.includes(row.id) 
-                        ? <CheckSquare size={18} className="text-blue-600" /> 
-                        : <Square size={18} className="text-gray-300" />}
-                </div>
-            )
-        },
-        { header: 'Tanggal', accessor: 'date', render: r => formatDate(r.date) },
-        { header: 'Kategori', accessor: 'category', render: r => <span className="capitalize">{r.category?.replace(/_/g, ' ')}</span> },
-        { 
-            header: 'Relasi', 
-            accessor: 'relation', 
-            render: r => {
-                if (r.jamaah_name) return <div className="text-xs font-medium text-blue-600">Jemaah: {r.jamaah_name}</div>;
-                if (r.employee_name) return <div className="text-xs font-medium text-purple-600">Staff: {r.employee_name}</div>;
-                if (r.agent_name) return <div className="text-xs font-medium text-orange-600">Agen: {r.agent_name}</div>;
-                if (r.campaign_name) return <div className="text-xs font-medium text-pink-600">Iklan: {r.campaign_name}</div>;
-                return <span className="text-gray-400">-</span>;
-            } 
-        },
-        { header: 'Nominal', accessor: 'amount', className: 'text-right', render: r => (
-            <span className={`font-bold ${r.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                {r.type === 'income' ? '+' : '-'} {formatCurrency(r.amount)}
-            </span>
-        )},
-        { header: 'Bukti', accessor: 'proof_file', render: r => r.proof_file ? <a href={r.proof_file} target="_blank" className="text-blue-500 underline text-xs flex items-center gap-1"><Upload size={10}/> Lihat</a> : '-' },
-        { 
-            header: 'Aksi', accessor: 'actions', 
-            render: r => r.type === 'income' && (
-                <button onClick={() => handleSinglePrint(r.id)} className="text-gray-600 hover:text-blue-600" title="Cetak Kwitansi">
-                    <Printer size={16}/>
-                </button>
-            )
+    // --- LOGIC HISTORY ---
+    useEffect(() => {
+        if (activeTab === 'history') {
+            const fetchHistory = async () => {
+                const res = await api.get('/umh/v1/payments');
+                setHistory(res.data);
+            };
+            fetchHistory();
         }
-    ];
+    }, [activeTab]);
+
+    const formatPrice = (val) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(val);
 
     return (
         <Layout title="Keuangan & Kasir">
-            {/* Toolbar Filter */}
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex gap-2 items-center w-full md:w-auto overflow-x-auto">
-                    <div className="flex items-center gap-2 border px-3 py-2 rounded-md bg-gray-50">
-                        <Filter size={16} className="text-gray-500"/>
-                        <select className="bg-transparent text-sm outline-none" onChange={e => handleFilterChange('type', e.target.value)}>
-                            <option value="">Semua Tipe</option>
-                            <option value="income">Pemasukan</option>
-                            <option value="expense">Pengeluaran</option>
-                        </select>
-                    </div>
-                    
-                    {selectedIds.length > 0 && (
-                        <button onClick={handleBulkPrint} className="bg-gray-800 text-white px-3 py-2 rounded text-sm flex items-center gap-2 hover:bg-gray-900 transition shadow-sm">
-                            <Printer size={14}/> Cetak ({selectedIds.length})
-                        </button>
-                    )}
+            <div className="bg-white rounded shadow min-h-[500px]">
+                {/* TABS */}
+                <div className="flex border-b">
+                    <button 
+                        onClick={() => setActiveTab('input')}
+                        className={`px-6 py-4 font-bold flex items-center gap-2 ${activeTab === 'input' ? 'border-b-2 border-green-500 text-green-700' : 'text-gray-500'}`}
+                    >
+                        <CalculatorIcon className="h-5 w-5"/> Input Pembayaran
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('history')}
+                        className={`px-6 py-4 font-bold flex items-center gap-2 ${activeTab === 'history' ? 'border-b-2 border-blue-500 text-blue-700' : 'text-gray-500'}`}
+                    >
+                        <BanknotesIcon className="h-5 w-5"/> Riwayat Transaksi
+                    </button>
                 </div>
 
-                <button onClick={() => { setFormData(initialForm); setIsModalOpen(true); }} className="btn-primary flex gap-2">
-                    <Plus size={20}/> Transaksi Baru
-                </button>
-            </div>
+                <div className="p-6">
+                    {msg && <Alert type={msg.type} message={msg.text} />}
 
-            {/* Table Area */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-                <CrudTable 
-                    columns={columns} 
-                    data={data} 
-                    loading={loading} 
-                    onDelete={deleteItem} 
-                />
-                <Pagination 
-                    pagination={pagination}
-                    onPageChange={changePage}
-                    onLimitChange={changeLimit}
-                />
-            </div>
+                    {/* === TAB 1: INPUT PEMBAYARAN === */}
+                    {activeTab === 'input' && (
+                        <div className="max-w-3xl mx-auto">
+                            {!selectedBooking ? (
+                                // STEP 1: CARI BOOKING
+                                <div className="text-center py-10">
+                                    <h3 className="text-lg font-bold mb-4">Cari Tagihan Booking</h3>
+                                    <div className="relative max-w-lg mx-auto">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                                        </div>
+                                        <input 
+                                            type="text" 
+                                            className="block w-full pl-10 pr-3 py-3 border rounded-lg focus:ring-green-500 focus:border-green-500" 
+                                            placeholder="Ketik Kode Booking atau Nama Jemaah..."
+                                            value={searchBooking}
+                                            onChange={(e) => setSearchBooking(e.target.value)}
+                                        />
+                                        
+                                        {/* Dropdown Hasil Pencarian */}
+                                        {searchResults.length > 0 && (
+                                            <div className="absolute z-10 w-full bg-white shadow-xl border rounded-lg mt-1 text-left">
+                                                {searchResults.map(b => (
+                                                    <div 
+                                                        key={b.id} 
+                                                        onClick={() => selectBooking(b)}
+                                                        className="p-3 hover:bg-green-50 cursor-pointer border-b last:border-0"
+                                                    >
+                                                        <div className="font-bold text-blue-600">{b.booking_code}</div>
+                                                        <div className="text-sm">{b.contact_name}</div>
+                                                        <div className="text-xs text-red-500 font-bold">Sisa Tagihan: {formatPrice(b.remaining)}</div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-gray-400 text-sm mt-2">Hanya booking yang belum lunas yang akan muncul.</p>
+                                </div>
+                            ) : (
+                                // STEP 2: FORM BAYAR
+                                <form onSubmit={handlePaySubmit} className="bg-gray-50 p-6 rounded-lg border">
+                                    <div className="flex justify-between items-start mb-6 border-b pb-4">
+                                        <div>
+                                            <div className="text-sm text-gray-500">Pembayaran Untuk:</div>
+                                            <div className="text-xl font-bold text-blue-700">{selectedBooking.booking_code}</div>
+                                            <div className="font-medium">{selectedBooking.contact_name}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-sm text-gray-500">Sisa Tagihan:</div>
+                                            <div className="text-xl font-bold text-red-600">{formatPrice(selectedBooking.remaining)}</div>
+                                        </div>
+                                    </div>
 
-            {/* Modal Form */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Catat Transaksi">
-                <form onSubmit={handleSave} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="label">Jenis Transaksi</label>
-                            <select className="input-field font-medium" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                                <option value="income">Pemasukan (In)</option>
-                                <option value="expense">Pengeluaran (Out)</option>
-                            </select>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-sm font-bold mb-1">Tanggal Transaksi</label>
+                                            <input 
+                                                type="date" 
+                                                required
+                                                className="w-full border p-2 rounded"
+                                                value={payForm.transaction_date}
+                                                onChange={e => setPayForm({...payForm, transaction_date: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold mb-1">Nominal Pembayaran (IDR)</label>
+                                            <input 
+                                                type="number" 
+                                                required
+                                                className="w-full border p-2 rounded text-lg font-bold"
+                                                placeholder="0"
+                                                value={payForm.amount}
+                                                onChange={e => setPayForm({...payForm, amount: e.target.value})}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold mb-1">Metode Bayar</label>
+                                            <select 
+                                                className="w-full border p-2 rounded"
+                                                value={payForm.method}
+                                                onChange={e => setPayForm({...payForm, method: e.target.value})}
+                                            >
+                                                <option value="transfer">Transfer Bank</option>
+                                                <option value="cash">Tunai (Cash)</option>
+                                                <option value="credit_card">Kartu Kredit</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold mb-1">Bank Tujuan (Jika Transfer)</label>
+                                            <input 
+                                                type="text" 
+                                                className="w-full border p-2 rounded"
+                                                placeholder="Contoh: BCA 123456"
+                                                value={payForm.bank_name}
+                                                onChange={e => setPayForm({...payForm, bank_name: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-sm font-bold mb-1">Catatan</label>
+                                            <textarea 
+                                                className="w-full border p-2 rounded"
+                                                placeholder="Keterangan tambahan..."
+                                                value={payForm.notes}
+                                                onChange={e => setPayForm({...payForm, notes: e.target.value})}
+                                            ></textarea>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setSelectedBooking(null)} 
+                                            className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                                        >
+                                            Batal / Ganti Booking
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            disabled={loading}
+                                            className="flex-1 px-4 py-2 bg-green-600 text-white font-bold rounded hover:bg-green-700"
+                                        >
+                                            {loading ? 'Memproses...' : 'SIMPAN PEMBAYARAN'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
                         </div>
-                        <div>
-                            <label className="label">Tanggal</label>
-                            <input type="date" className="input-field" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required />
+                    )}
+
+                    {/* === TAB 2: HISTORY === */}
+                    {activeTab === 'history' && (
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-sm">
+                                <thead>
+                                    <tr className="bg-gray-100 border-b">
+                                        <th className="p-3 text-left">Tanggal</th>
+                                        <th className="p-3 text-left">Kode Booking</th>
+                                        <th className="p-3 text-left">Penyetor</th>
+                                        <th className="p-3 text-left">Metode</th>
+                                        <th className="p-3 text-right">Nominal</th>
+                                        <th className="p-3 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {history.map(item => (
+                                        <tr key={item.id} className="border-b hover:bg-gray-50">
+                                            <td className="p-3">{item.transaction_date}</td>
+                                            <td className="p-3 font-mono font-bold text-blue-600">{item.booking_code}</td>
+                                            <td className="p-3">{item.contact_name}</td>
+                                            <td className="p-3 uppercase">
+                                                {item.method} 
+                                                {item.bank_name && <span className="text-gray-500 text-xs ml-1">({item.bank_name})</span>}
+                                            </td>
+                                            <td className="p-3 text-right font-bold text-green-700">{formatPrice(item.amount)}</td>
+                                            <td className="p-3 text-center">
+                                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs uppercase">{item.status}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {history.length === 0 && (
+                                        <tr><td colSpan="6" className="p-6 text-center text-gray-400">Belum ada riwayat transaksi.</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <label className="label">Kategori</label>
-                        <select className="input-field" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
-                            <option value="pembayaran_paket">Pembayaran Paket Jemaah</option>
-                            <option value="operasional">Biaya Operasional</option>
-                            <option value="gaji">Gaji Karyawan</option>
-                            <option value="marketing">Biaya Marketing / Iklan</option>
-                            <option value="komisi_agen">Komisi Agen</option>
-                            <option value="lainnya">Lainnya</option>
-                        </select>
-                    </div>
-
-                    {/* Dynamic Relation Fields */}
-                    <div className="bg-gray-50 p-3 rounded border border-gray-200 animate-fade-in">
-                        {formData.category === 'pembayaran_paket' && (
-                            <div>
-                                <label className="label text-blue-700">Pilih Jemaah</label>
-                                <select className="input-field" value={formData.jamaah_id} onChange={e => setFormData({...formData, jamaah_id: e.target.value})} required>
-                                    <option value="">-- Cari Jemaah --</option>
-                                    {jamaahList?.map(j => <option key={j.id} value={j.id}>{j.full_name}</option>)}
-                                </select>
-                            </div>
-                        )}
-
-                        {formData.category === 'gaji' && (
-                            <div>
-                                <label className="label text-purple-700">Pilih Karyawan</label>
-                                <select className="input-field" value={formData.employee_id} onChange={e => setFormData({...formData, employee_id: e.target.value})} required>
-                                    <option value="">-- Cari Karyawan --</option>
-                                    {employeeList?.map(e => <option key={e.id} value={e.id}>{e.name} - {e.position}</option>)}
-                                </select>
-                            </div>
-                        )}
-
-                        {formData.category === 'komisi_agen' && (
-                            <div>
-                                <label className="label text-orange-700">Pilih Agen</label>
-                                <select className="input-field" value={formData.agent_id} onChange={e => setFormData({...formData, agent_id: e.target.value})} required>
-                                    <option value="">-- Cari Agen --</option>
-                                    {agentList?.map(a => <option key={a.id} value={a.id}>{a.name} ({a.city})</option>)}
-                                </select>
-                            </div>
-                        )}
-
-                        {formData.category === 'marketing' && (
-                            <div>
-                                <label className="label text-pink-700">Pilih Kampanye Iklan</label>
-                                <select className="input-field" value={formData.campaign_id} onChange={e => setFormData({...formData, campaign_id: e.target.value})} required>
-                                    <option value="">-- Cari Kampanye --</option>
-                                    {campaignList?.map(c => <option key={c.id} value={c.id}>{c.title} ({c.platform})</option>)}
-                                </select>
-                            </div>
-                        )}
-                        
-                        {['operasional', 'lainnya'].includes(formData.category) && (
-                            <p className="text-xs text-gray-500 italic">Kategori ini tidak memerlukan relasi data khusus.</p>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="label">Nominal (Rp)</label>
-                        <input type="number" className="input-field font-bold text-lg" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} required />
-                    </div>
-
-                    <div>
-                        <label className="label">Keterangan</label>
-                        <textarea className="input-field" rows="2" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Catatan tambahan..."></textarea>
-                    </div>
-                    
-                    <div className="border-t pt-3">
-                        <label className="label flex items-center gap-2 text-gray-700"><Upload size={16}/> Upload Bukti Transfer (Opsional)</label>
-                        <input type="file" className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" onChange={e => setFile(e.target.files[0])} accept="image/*,application/pdf" />
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Batal</button>
-                        <button type="submit" className="btn-primary w-32">Simpan</button>
-                    </div>
-                </form>
-            </Modal>
+                    )}
+                </div>
+            </div>
         </Layout>
     );
 };
+
 export default Finance;

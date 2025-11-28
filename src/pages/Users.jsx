@@ -6,14 +6,12 @@ import Modal from '../components/Modal';
 import SearchInput from '../components/SearchInput';
 import Pagination from '../components/Pagination';
 import { useData } from '../contexts/DataContext';
-import { User, Shield, UserCheck, AlertTriangle } from 'lucide-react';
+import { User, Shield, UserCheck, Mail, Phone, Key } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Users = () => {
-    // Mengambil data user yang sedang login untuk proteksi hapus
     const { user: currentUser } = useData();
     
-    // Destructuring lengkap dari useCRUD termasuk pagination
     const { 
         data, 
         loading, 
@@ -34,7 +32,6 @@ const Users = () => {
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    // Handle Pencarian
     const handleSearch = (q) => {
         setSearchQuery(q);
         fetchData(1, pagination.limit, q);
@@ -43,7 +40,6 @@ const Users = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Validasi Password Match
         if (!editId && formData.password !== confirmPassword) {
             return toast.error('Password dan Konfirmasi Password tidak sama!');
         }
@@ -52,20 +48,17 @@ const Users = () => {
         }
 
         const payload = { ...formData };
-        
-        // Hapus password jika kosong (agar tidak mereset password user saat edit)
         if (editId && !payload.password) delete payload.password;
 
         const success = editId ? await updateItem(editId, payload) : await createItem(payload);
         if (success) {
             setIsModalOpen(false);
-            setConfirmPassword(''); // Reset confirm password
+            setConfirmPassword('');
             toast.success(editId ? 'User berhasil diperbarui' : 'User baru berhasil dibuat');
         }
     };
 
     const handleDelete = async (item) => {
-        // Proteksi Hapus Diri Sendiri
         if (currentUser && item.id === currentUser.id) {
             return toast.error("Anda tidak dapat menghapus akun Anda sendiri!");
         }
@@ -77,10 +70,10 @@ const Users = () => {
 
     const openModal = (item = null) => {
         if (item) {
-            setFormData({ ...item, password: '' }); // Password dikosongkan saat edit
+            setFormData({ ...item, password: '' });
             setEditId(item.id);
         } else {
-            setFormData({ roles: 'subscriber' });
+            setFormData({ role: 'subscriber', status: 'active' });
             setEditId(null);
         }
         setConfirmPassword('');
@@ -89,28 +82,31 @@ const Users = () => {
 
     const columns = [
         { 
-            header: 'Username', 
+            header: 'User Info', 
             accessor: 'username', 
             render: r => (
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-gray-100 rounded-full text-gray-600">
-                        <User size={16} />
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold text-lg">
+                        {r.full_name ? r.full_name.charAt(0).toUpperCase() : 'U'}
                     </div>
                     <div>
-                        <div className="font-bold text-gray-900">{r.username}</div>
-                        {currentUser && r.id === currentUser.id && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">It's You</span>
-                        )}
+                        <div className="font-bold text-gray-900">{r.full_name}</div>
+                        <div className="text-xs text-gray-500">@{r.username}</div>
                     </div>
                 </div>
             )
         },
-        { header: 'Email', accessor: 'email' },
+        { header: 'Kontak', accessor: 'email', render: r => (
+            <div className="text-sm">
+                <div className="flex items-center gap-1"><Mail size={12} className="text-gray-400"/> {r.email}</div>
+                <div className="flex items-center gap-1"><Phone size={12} className="text-gray-400"/> {r.phone || '-'}</div>
+            </div>
+        )},
         { 
             header: 'Role', 
-            accessor: 'roles', 
+            accessor: 'role', 
             render: r => {
-                const role = Array.isArray(r.roles) ? r.roles[0] : r.roles;
+                const role = r.role;
                 let colorClass = 'bg-gray-100 text-gray-800';
                 if (role === 'administrator') colorClass = 'bg-purple-100 text-purple-800';
                 if (role === 'agent') colorClass = 'bg-blue-100 text-blue-800';
@@ -123,16 +119,20 @@ const Users = () => {
                     </span>
                 );
             } 
-        }
+        },
+        { header: 'Status', accessor: 'status', render: r => (
+             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${r.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                 {r.status}
+             </span>
+        )}
     ];
 
     return (
         <Layout title="Manajemen Pengguna">
-            {/* Header Toolbar */}
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="w-full md:w-1/3">
                     <SearchInput 
-                        placeholder="Cari username atau email..." 
+                        placeholder="Cari nama, username atau email..." 
                         onSearch={handleSearch} 
                     />
                 </div>
@@ -144,7 +144,6 @@ const Users = () => {
                 </button>
             </div>
 
-            {/* Content Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                 <CrudTable 
                     columns={columns} 
@@ -160,97 +159,129 @@ const Users = () => {
                 />
             </div>
 
-            {/* Modal Form */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editId ? "Edit User" : "Tambah User Baru"}>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Username (Read-only saat edit untuk keamanan konsistensi) */}
-                    <div>
-                        <label className="label">Username</label>
-                        <input 
-                            className={`input-field ${editId ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                            value={formData.username || ''} 
-                            onChange={e => setFormData({...formData, username: e.target.value})} 
-                            required 
-                            disabled={!!editId} 
-                            placeholder="username"
-                        />
-                        {editId && <p className="text-xs text-gray-500 mt-1">Username tidak dapat diubah.</p>}
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    
+                    {/* Section: Akun Login */}
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <h4 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2"><Key size={14}/> Informasi Login</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="label">Username</label>
+                                <input 
+                                    className={`input-field ${editId ? 'bg-gray-100' : ''}`}
+                                    value={formData.username || ''} 
+                                    onChange={e => setFormData({...formData, username: e.target.value})} 
+                                    required 
+                                    disabled={!!editId} 
+                                    placeholder="johndoe"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Email</label>
+                                <input 
+                                    type="email" 
+                                    className="input-field" 
+                                    value={formData.email || ''} 
+                                    onChange={e => setFormData({...formData, email: e.target.value})} 
+                                    required 
+                                    placeholder="user@email.com"
+                                />
+                            </div>
+                        </div>
                     </div>
 
+                    {/* Section: Profil Pengguna */}
                     <div>
-                        <label className="label">Alamat Email</label>
-                        <input 
-                            type="email" 
-                            className="input-field" 
-                            value={formData.email || ''} 
-                            onChange={e => setFormData({...formData, email: e.target.value})} 
-                            required 
-                            placeholder="user@example.com"
-                        />
+                        <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><User size={14}/> Profil Pengguna</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="label">Nama Lengkap</label>
+                                <input 
+                                    className="input-field" 
+                                    value={formData.full_name || ''} 
+                                    onChange={e => setFormData({...formData, full_name: e.target.value})} 
+                                    required 
+                                    placeholder="Nama Lengkap User"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">No. Telepon</label>
+                                <input 
+                                    className="input-field" 
+                                    value={formData.phone || ''} 
+                                    onChange={e => setFormData({...formData, phone: e.target.value})} 
+                                    placeholder="0812..."
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Role / Peran</label>
+                                <select 
+                                    className="input-field capitalize" 
+                                    value={formData.role || 'subscriber'} 
+                                    onChange={e => setFormData({...formData, role: e.target.value})}
+                                >
+                                    <option value="subscriber">Subscriber (Jemaah)</option>
+                                    <option value="administrator">Administrator (Full)</option>
+                                    <option value="admin_staff">Admin Staff</option>
+                                    <option value="finance_staff">Finance Staff</option>
+                                    <option value="marketing_staff">Marketing Staff</option>
+                                    <option value="agent">Agent (Mitra)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="label">Status Akun</label>
+                                <select 
+                                    className="input-field" 
+                                    value={formData.status || 'active'} 
+                                    onChange={e => setFormData({...formData, status: e.target.value})}
+                                >
+                                    <option value="active">Aktif</option>
+                                    <option value="inactive">Non-Aktif / Blokir</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Role Selection */}
-                    <div>
-                        <label className="label">Role / Peran</label>
-                        <select 
-                            className="input-field capitalize" 
-                            value={Array.isArray(formData.roles) ? formData.roles[0] : (formData.roles || 'subscriber')} 
-                            onChange={e => setFormData({...formData, roles: e.target.value})}
-                        >
-                            <option value="subscriber">Subscriber (Jemaah)</option>
-                            <option value="administrator">Administrator (Full Access)</option>
-                            <option value="editor">Editor / Staff</option>
-                            <option value="agent">Agent (Mitra)</option>
-                        </select>
-                    </div>
-
-                    {/* Password Section */}
+                    {/* Section: Password */}
                     <div className="border-t pt-4 mt-2">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                            <Shield size={14} className="text-blue-600"/> 
-                            {editId ? 'Ubah Password (Opsional)' : 'Atur Password'}
-                        </h4>
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <Shield size={14}/> {editId ? 'Ubah Password (Opsional)' : 'Buat Password'}
+                            </h4>
+                        </div>
                         
                         {editId && (
-                            <div className="bg-yellow-50 p-3 rounded border border-yellow-200 mb-3 flex gap-2 items-start">
-                                <AlertTriangle size={16} className="text-yellow-600 mt-0.5 shrink-0"/>
-                                <p className="text-xs text-yellow-700">
-                                    Biarkan kolom password kosong jika Anda tidak ingin mengubah password user ini.
-                                </p>
+                            <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded mb-2">
+                                Kosongkan jika tidak ingin mengubah password.
                             </div>
                         )}
 
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="label">Password {editId && 'Baru'}</label>
+                                <label className="label">Password</label>
                                 <input 
                                     type="password" 
                                     className="input-field" 
                                     value={formData.password || ''} 
                                     onChange={e => setFormData({...formData, password: e.target.value})} 
-                                    placeholder={editId ? "Biarkan kosong..." : "Masukkan password"} 
+                                    placeholder="********" 
                                     required={!editId} 
                                     minLength={6}
                                 />
                             </div>
                             
-                            {/* Konfirmasi Password hanya muncul jika membuat baru atau sedang mengetik password saat edit */}
-                            {(!editId || formData.password) && (
-                                <div className="animate-fade-in">
-                                    <label className="label">Konfirmasi Password</label>
-                                    <input 
-                                        type="password" 
-                                        className={`input-field ${confirmPassword && formData.password !== confirmPassword ? 'border-red-500 focus:ring-red-500' : ''}`}
-                                        value={confirmPassword} 
-                                        onChange={e => setConfirmPassword(e.target.value)} 
-                                        placeholder="Ketik ulang password" 
-                                        required
-                                    />
-                                    {confirmPassword && formData.password !== confirmPassword && (
-                                        <p className="text-xs text-red-500 mt-1">Password tidak cocok!</p>
-                                    )}
-                                </div>
-                            )}
+                            <div>
+                                <label className="label">Konfirmasi</label>
+                                <input 
+                                    type="password" 
+                                    className={`input-field ${confirmPassword && formData.password !== confirmPassword ? 'border-red-500' : ''}`}
+                                    value={confirmPassword} 
+                                    onChange={e => setConfirmPassword(e.target.value)} 
+                                    placeholder="********" 
+                                    required={!editId || formData.password}
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -265,7 +296,7 @@ const Users = () => {
                         <button 
                             type="submit" 
                             className="btn-primary w-32"
-                            disabled={!editId && formData.password !== confirmPassword}
+                            disabled={!editId && (!formData.password || formData.password !== confirmPassword)}
                         >
                             Simpan
                         </button>

@@ -1,51 +1,106 @@
-import React from 'react';
 import { 
-    LayoutDashboard, Users, Briefcase, Calendar, Wallet, Megaphone, 
-    ClipboardList, UserCog, Settings, Box, Plane, Building, UserCheck 
-} from 'lucide-react';
+  HomeIcon, 
+  UsersIcon, 
+  CalendarIcon, 
+  BriefcaseIcon, 
+  CurrencyDollarIcon, 
+  ClipboardDocumentListIcon, 
+  PlusCircleIcon,
+  BanknotesIcon,
+  TagIcon,
+  PaperAirplaneIcon,
+  BuildingOfficeIcon,
+  ClipboardDocumentCheckIcon,
+  TruckIcon,
+  ChartBarIcon,
+  IdentificationIcon,
+  MegaphoneIcon,
+  FunnelIcon,
+  UserCircleIcon,
+  ServerIcon,
+  LockClosedIcon,
+  Cog6ToothIcon,
+  DocumentTextIcon
+} from '@heroicons/react/24/outline';
 
-export const MENUS = [
-    {
-        header: 'Utama',
-        items: [
-            { path: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, roles: ['all'] },
-            { path: 'jamaah', label: 'Data Jemaah', icon: <Users size={20} />, roles: ['super_admin', 'administrator', 'owner', 'admin_staff', 'agent'] },
-            { path: 'packages', label: 'Paket Umrah/Haji', icon: <Briefcase size={20} />, roles: ['super_admin', 'administrator', 'owner', 'admin_staff', 'marketing_staff'] },
-            { path: 'departures', label: 'Jadwal Keberangkatan', icon: <Calendar size={20} />, roles: ['super_admin', 'administrator', 'owner', 'admin_staff'] }
-        ]
-    },
-    {
-        header: 'Keuangan & Bisnis',
-        items: [
-            { path: 'finance', label: 'Keuangan & Kasir', icon: <Wallet size={20} />, roles: ['super_admin', 'administrator', 'owner', 'finance_staff'] },
-            { path: 'marketing', label: 'Marketing & Leads', icon: <Megaphone size={20} />, roles: ['super_admin', 'administrator', 'owner', 'marketing_staff'] },
-            // Point 7: Menu Sub Agent (Gabung di Agents page tapi label jelas)
-            { path: 'agents', label: 'Agen & Mitra', icon: <UserCheck size={20} />, roles: ['super_admin', 'administrator', 'owner', 'marketing_staff'] }
-        ]
-    },
-    {
-        header: 'Operasional Internal',
-        items: [
-            { path: 'tasks', label: 'Tugas Tim', icon: <ClipboardList size={20} />, roles: ['super_admin', 'administrator', 'owner', 'admin_staff', 'hr_staff'] },
-            { path: 'logistics', label: 'Logistik', icon: <Box size={20} />, roles: ['super_admin', 'administrator', 'owner', 'admin_staff'] },
-            // Point 6: HR Menu
-            { path: 'hr', label: 'HR & Karyawan', icon: <UserCog size={20} />, roles: ['super_admin', 'administrator', 'owner', 'hr_staff'] }
-        ]
-    },
-    {
-        header: 'Master Data',
-        items: [
-            { path: 'hotels', label: 'Hotel', icon: <Building size={18} />, roles: ['super_admin', 'administrator', 'owner'] },
-            { path: 'flights', label: 'Maskapai', icon: <Plane size={18} />, roles: ['super_admin', 'administrator', 'owner'] },
-            { path: 'users', label: 'Pengguna Sistem', icon: <Users size={18} />, roles: ['super_admin', 'administrator', 'owner'] },
-            { path: 'settings', label: 'Pengaturan', icon: <Settings size={18} />, roles: ['super_admin', 'administrator'] }
-        ]
-    }
+export const menuItems = [
+  { path: '/dashboard', label: 'Dashboard', icon: HomeIcon },
+  
+  // MODUL 1: TRANSAKSI (Core Business)
+  { 
+    label: 'Transaksi', 
+    icon: ClipboardDocumentListIcon,
+    submenu: [
+      { path: '/bookings/create', label: 'Buat Booking Baru', icon: PlusCircleIcon },
+      { path: '/bookings', label: 'Data Transaksi', icon: DocumentTextIcon },
+    ]
+  },
+
+  // MODUL 2: PRODUK & INVENTORY
+  { 
+    label: 'Produk Paket', 
+    icon: BriefcaseIcon,
+    submenu: [
+      { path: '/packages', label: 'Katalog Paket', icon: BriefcaseIcon },
+      { path: '/departures', label: 'Jadwal Keberangkatan', icon: CalendarIcon },
+      { path: '/package-categories', label: 'Kategori Paket', icon: TagIcon },
+      { path: '/flights', label: 'Data Penerbangan', icon: PaperAirplaneIcon },
+      { path: '/hotels', label: 'Data Hotel', icon: BuildingOfficeIcon },
+    ]
+  },
+
+  // MODUL 3: CRM (JEMAAH)
+  { path: '/jamaah', label: 'Data Jemaah (CRM)', icon: UsersIcon },
+
+  // MODUL 4: OPERASIONAL
+  { 
+    label: 'Operasional', 
+    icon: ClipboardDocumentCheckIcon,
+    submenu: [
+      { path: '/tasks', label: 'Manajemen Tugas', icon: ClipboardDocumentCheckIcon },
+      { path: '/logistics', label: 'Logistik & Perlengkapan', icon: TruckIcon },
+    ]
+  },
+
+  // MODUL 5: KEUANGAN
+  { 
+    label: 'Keuangan', 
+    icon: CurrencyDollarIcon,
+    submenu: [
+      { path: '/finance', label: 'Laporan Keuangan', icon: ChartBarIcon },
+      { path: '/finance/expenses', label: 'Pengeluaran', icon: BanknotesIcon },
+    ]
+  },
+
+  // MODUL 6: HR & KARYAWAN
+  { 
+    label: 'HR & Kepegawaian', 
+    icon: IdentificationIcon,
+    submenu: [
+      { path: '/hr', label: 'Data Karyawan & Absensi', icon: IdentificationIcon },
+    ]
+  },
+
+  // MODUL 7: MARKETING & AGEN
+  { 
+    label: 'Marketing & Agen', 
+    icon: MegaphoneIcon,
+    submenu: [
+      { path: '/marketing', label: 'Leads & Prospek', icon: FunnelIcon },
+      { path: '/agents', label: 'Kemitraan Agen', icon: UserCircleIcon },
+    ]
+  },
+
+  // MODUL 8: SYSTEM & MASTER DATA
+  { 
+    label: 'Master Data', 
+    icon: ServerIcon,
+    submenu: [
+      { path: '/masters', label: 'Master Umum', icon: ServerIcon },
+      { path: '/users', label: 'Pengguna Sistem', icon: UsersIcon },
+      { path: '/roles', label: 'Hak Akses (Role)', icon: LockClosedIcon },
+    ]
+  },
+
+  { path: '/settings', label: 'Pengaturan', icon: Cog6ToothIcon },
 ];
-
-export const hasAccess = (userRole, allowedRoles) => {
-    if (!userRole) return false;
-    if (allowedRoles.includes('all')) return true;
-    if (userRole === 'super_admin' || userRole === 'administrator') return true; // Admin WP selalu allow
-    return allowedRoles.includes(userRole);
-};

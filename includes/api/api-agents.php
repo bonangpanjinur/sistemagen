@@ -1,50 +1,54 @@
 <?php
 if (!defined('ABSPATH')) { exit; }
 
-add_action('rest_api_init', 'umh_register_agents_routes');
+// Kita extend class controller untuk override method create_item
+class UMH_Agents_API extends UMH_CRUD_Controller {
 
-function umh_register_agents_routes() {
-    $namespace = 'umh/v1';
-    $base = 'agents';
+    public function __construct() {
+        $schema = [
+            'name' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+            'phone' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
+            'city' => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
+            'code' => ['type' => 'string', 'required' => false], // Tidak required di payload, karena auto-gen
+            'commission_rate' => ['type' => 'number', 'default' => 0],
+            'parent_id' => ['type' => 'integer', 'required' => false],
+            'type' => ['type' => 'string', 'default' => 'master'], // master / sub
+        ];
 
-    $agents_schema = [
-        'name' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-        'phone' => ['type' => 'string', 'required' => true, 'sanitize_callback' => 'sanitize_text_field'],
-        'city' => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-        'code' => ['type' => 'string', 'required' => false, 'sanitize_callback' => 'sanitize_text_field'],
-        'commission_rate' => ['type' => 'number', 'default' => 0],
-        'parent_id' => ['type' => 'integer', 'required' => false],
-        'type' => ['type' => 'string', 'default' => 'master', 'sanitize_callback' => 'sanitize_text_field'],
-    ];
-
-    $agents_permissions = [
-        'get_items' => ['owner', 'admin_staff', 'marketing'],
-        'get_item' => ['owner', 'admin_staff', 'marketing'],
-        'create_item' => ['owner', 'admin_staff'],
-        'update_item' => ['owner', 'admin_staff'],
-        'delete_item' => ['owner'],
-    ];
-
-    $searchable_fields = ['name', 'code', 'city', 'phone'];
-
-    // HOOK AUTO GENERATE CODE
-    add_filter("umh_crud_{$base}_before_create", 'umh_auto_generate_agent_code', 10, 1);
-
-    new UMH_CRUD_Controller($base, 'umh_agents', $agents_schema, $agents_permissions, $searchable_fields);
-}
-
-function umh_auto_generate_agent_code($data) {
-    // Generate kode unik jika kosong
-    if (empty($data['code'])) {
-        global $wpdb;
-        $prefix = ($data['type'] === 'sub') ? 'SB' : 'AG';
-        
-        // Ambil ID terakhir untuk sequence number (Simpel approach)
-        $last_id = $wpdb->get_var("SELECT id FROM {$wpdb->prefix}umh_agents ORDER BY id DESC LIMIT 1");
-        $next_id = ($last_id) ? $last_id + 1 : 1;
-        
-        // Format: AG-0001
-        $data['code'] = $prefix . '-' . str_pad($next_id, 4, '0', STR_PAD_LEFT);
+        parent::__construct('agents', 'umh_agents', $schema, [
+            'get_items' => ['owner', 'admin_staff', 'marketing'],
+            'create_item' => ['owner', 'admin_staff'],
+            'update_item' => ['owner', 'admin_staff'],
+            'delete_item' => ['owner'],
+        ]);
     }
-    return $data;
+
+    // Override create_item untuk memastikan kode unik
+    public function create_item($request) {
+        global $wpdb;
+        $params = $request->get_json_params();
+        
+        // Auto Generate Code jika kosong
+        if (empty($params['code'])) {
+            $prefix = (isset($params['type']) && $params['type'] === 'sub') ? 'SB' : 'AG';
+            
+            // Cari ID terakhir untuk sequence
+            $last_id = $wpdb->get_var("SELECT id FROM {$this->table_name} ORDER BY id DESC LIMIT 1");
+            $next_num = ($last_id) ? $last_id + 1 : 1;
+            
+            // Loop cek agar tidak duplikat (safety check)
+            do {
+                $new_code = $prefix . '-' . str_pad($next_num, 4, '0', STR_PAD_LEFT);
+                $exists = $wpdb->get_var($wpdb->prepare("SELECT id FROM {$this->table_name} WHERE code = %s", $new_code));
+                if ($exists) $next_num++;
+            } while ($exists);
+
+            $params['code'] = $new_code;
+            $request->set_body_params($params); // Update request params
+        }
+
+        return parent::create_item($request);
+    }
 }
+
+new UMH_Agents_API();

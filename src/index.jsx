@@ -6,76 +6,123 @@ import './index.css';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import { Toaster } from 'react-hot-toast';
-import { DataProvider } from './contexts/DataContext';
+import { DataProvider, useData } from './contexts/DataContext';
+import { hasAccess } from './utils/menuConfig';
 
 // Import Pages
 import Dashboard from './pages/Dashboard';
 import Packages from './pages/Packages';
-import Departures from './pages/Departures'; // <--- PASTIKAN INI DI-IMPORT
+import Departures from './pages/Departures';
 import Jamaah from './pages/Jamaah';
 import Finance from './pages/Finance';
 import Marketing from './pages/Marketing';
 import Hotels from './pages/Hotels';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import Tasks from './pages/Tasks';
+import HR from './pages/HR';
+import Logistics from './pages/Logistics';
+import Agents from './pages/Agents';
+import Flights from './pages/Flights';
+import Masters from './pages/Masters';
+import Categories from './pages/Categories';
+import PackageCategories from './pages/PackageCategories';
+import Roles from './pages/Roles';
 
-const App = () => {
-    // State untuk routing sederhana (hash based atau state based)
+const AppContent = () => {
+    const { user, loading } = useData();
     const [currentPage, setCurrentPage] = useState('dashboard');
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-    // Handle navigasi dari Sidebar
+    // Default ke dashboard jika user berubah
+    useEffect(() => {
+        if (user) setCurrentPage('dashboard');
+    }, [user]);
+
+    // Handle navigasi dengan pengecekan hak akses
     const handleNavigate = (page) => {
         setCurrentPage(page);
-        // Simpan state page terakhir jika perlu (opsional)
-        // localStorage.setItem('last_page', page);
+        setIsSidebarOpen(false);
     };
 
     const renderPage = () => {
+        // Daftar pemetaan page ke komponen dan role yang dibutuhkan
+        // Kita gunakan mapping sederhana berdasarkan menuConfig
+        
+        // Jika loading user data, tampilkan spinner
+        if (loading) return <div className="flex items-center justify-center h-full text-gray-500">Memuat data pengguna...</div>;
+
+        // Switch Case Rendering
         switch (currentPage) {
             case 'dashboard': return <Dashboard />;
             case 'packages': return <Packages />;
-            case 'departures': return <Departures />; // <--- TAMBAHKAN CASE INI
+            case 'departures': return <Departures />;
             case 'jamaah': return <Jamaah />;
             case 'finance': return <Finance />;
             case 'marketing': return <Marketing />;
+            case 'tasks': return <Tasks />;
+            case 'hr': return <HR />;
+            case 'logistics': return <Logistics />;
+            
+            // Master Data
             case 'hotels': return <Hotels />;
+            case 'flights': return <Flights />;
+            case 'agents': return <Agents />;
             case 'users': return <Users />;
             case 'settings': return <Settings />;
+            
+            // Extra pages
+            case 'masters': return <Masters />;
+            case 'categories': return <Categories />;
+            case 'package-categories': return <PackageCategories />;
+            case 'roles': return <Roles />;
+            
             default: return <Dashboard />;
         }
     };
 
     return (
-        <DataProvider>
-            <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
-                <Sidebar 
-                    isOpen={isSidebarOpen} 
+        <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden">
+            <Sidebar 
+                isOpen={isSidebarOpen} 
+                toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
+                activePage={currentPage}
+                onNavigate={handleNavigate}
+            />
+            
+            <div className="flex-1 flex flex-col overflow-hidden w-full relative">
+                <Header 
                     toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-                    activePage={currentPage}
-                    onNavigate={handleNavigate}
+                    title={currentPage.charAt(0).toUpperCase() + currentPage.slice(1).replace('-', ' ')} 
                 />
                 
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    <Header 
-                        toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
-                        title={currentPage.charAt(0).toUpperCase() + currentPage.slice(1)} // Capitalize title
-                    />
-                    
-                    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 md:p-6">
+                <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-6">
+                    {/* Efek Fade In sederhana */}
+                    <div className="animate-fade-in">
                         {renderPage()}
-                    </main>
-                </div>
-                
-                {/* Global Toast Notification */}
-                <Toaster position="top-right" />
+                    </div>
+                </main>
             </div>
-        </DataProvider>
+            
+            <Toaster position="top-right" toastOptions={{
+                className: '',
+                style: {
+                    borderRadius: '10px',
+                    background: '#333',
+                    color: '#fff',
+                },
+            }} />
+        </div>
     );
 };
 
-// Mount App
-const container = document.getElementById('umroh-manager-app');
+const App = () => (
+    <DataProvider>
+        <AppContent />
+    </DataProvider>
+);
+
+const container = document.getElementById('umh-app-root');
 if (container) {
     const root = createRoot(container);
     root.render(<App />);

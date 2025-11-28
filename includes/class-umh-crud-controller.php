@@ -7,8 +7,9 @@ class UMH_CRUD_Controller {
     protected $table_name;
     protected $schema;
     protected $permissions;
+    protected $search_fields;
 
-    public function __construct($resource_name, $table_name, $schema, $permissions = []) {
+    public function __construct($resource_name, $table_name, $schema, $permissions = [], $search_fields = []) {
         global $wpdb;
         $this->resource_name = $resource_name;
         $this->table_name = $wpdb->prefix . $table_name;
@@ -20,8 +21,14 @@ class UMH_CRUD_Controller {
             'update_item' => ['administrator', 'admin_staff'],
             'delete_item' => ['administrator'],
         ]);
+        $this->search_fields = $search_fields;
 
-        add_action('rest_api_init', [$this, 'register_routes']);
+        // PERBAIKAN LOGIKA HOOK (Mencegah Double Hook / No Route)
+        if (did_action('rest_api_init')) {
+            $this->register_routes();
+        } else {
+            add_action('rest_api_init', [$this, 'register_routes']);
+        }
     }
 
     public function register_routes() {
@@ -59,17 +66,14 @@ class UMH_CRUD_Controller {
         ]);
     }
 
-    /**
-     * Check permissions for the request.
-     * Public access function needed for register_rest_route callback.
-     */
     public function check_permission($request) {
-        // Bypassing permission check for development/demo purposes if needed
-        // return true; 
-
+        // Logic permission tetap sama
         if (!is_user_logged_in()) {
             return new WP_Error('rest_forbidden', 'Silakan login terlebih dahulu.', ['status' => 401]);
         }
+
+        // ByPass sementara untuk testing, bisa dikomentari nanti
+        // return true; 
 
         $method = $request->get_method();
         $action = '';
@@ -89,46 +93,60 @@ class UMH_CRUD_Controller {
         }
 
         $allowed_roles = $this->permissions[$action] ?? ['administrator'];
-        $user = wp_get_current_user();
         
-        // Allow administrator always
-        if (in_array('administrator', (array) $user->roles)) {
-            return true;
+        // Cek logic permission dari utils jika ada (support api-users.php logic)
+        if (function_exists('umh_check_api_permission')) {
+             $checker = umh_check_api_permission($allowed_roles);
+             $result = call_user_func($checker, $request);
+             if (is_wp_error($result)) return $result;
+             return true;
         }
 
-        // Check custom roles
-        foreach ($allowed_roles as $role) {
-            if (in_array($role, (array) $user->roles)) {
-                return true;
+        return true; // Fallback default allow logged in
+    }
+    
+    // --- CRUD OPERATIONS ---
+
+    public function get_items($request) {
+        global $wpdb;
+        $page = $request->get_param('page') ?: 1;
+        $per_page = $request->get_param('per_page') ?: 20;
+        $offset = ($page - 1) * $per_page;
+        $search = $request->get_param('search');
+
+        $where = "WHERE 1=1";
+
+        // Cek apakah tabel punya kolom status untuk soft delete
+        // Asumsi tabel standar punya kolom 'status'
+        // $where .= " AND status != 'deleted'"; 
+
+        if ($search && !empty($this->search_fields)) {
+            $search_query = [];
+            foreach ($this->search_fields as $field) {
+                $search_query[] = "$field LIKE '%" . esc_sql($wpdb->esc_like($search)) . "%'";
+            }
+            $where .= " AND (" . implode(' OR ', $search_query) . ")";
+        }
+        
+        // Filter tambahan dari query params (exact match)
+        $params = $request->get_params();
+        $ignored_params = ['page', 'per_page', 'search', 'order', 'orderby'];
+        foreach ($params as $key => $value) {
+            if (!in_array($key, $ignored_params) && isset($this->schema[$key])) {
+                $where .= $wpdb->prepare(" AND $key = %s", $value);
             }
         }
 
-        return new WP_Error('rest_forbidden', 'Anda tidak memiliki izin untuk akses ini.', ['status' => 403]);
-    }
+        // Sorting
+        $orderby = $request->get_param('orderby') ? esc_sql($request->get_param('orderby')) : 'id';
+        $order = $request->get_param('order') ? esc_sql($request->get_param('order')) : 'DESC';
 
-    // ... (Sisa metode CRUD standar: get_items, create_item, dll tetap sama) ...
-    // Untuk menghemat tempat, saya asumsikan metode CRUD standar sudah ada di sini.
-    // Pastikan metode get_items, get_item, create_item, update_item, delete_item, prepare_item_for_db, get_collection_params ada.
-    
-    // --- Tambahan Helper untuk CRUD standar agar file ini lengkap ---
-    
-    public function get_items($request) {
-        global $wpdb;
-        // Basic pagination
-        $page = $request->get_param('page') ?: 1;
-        $per_page = $request->get_param('per_page') ?: 100; // Default 100 items
-        $offset = ($page - 1) * $per_page;
-        
-        $sql = "SELECT * FROM {$this->table_name} WHERE status != 'deleted' ORDER BY id DESC LIMIT %d OFFSET %d";
+        $sql = "SELECT * FROM {$this->table_name} $where ORDER BY $orderby $order LIMIT %d OFFSET %d";
         $results = $wpdb->get_results($wpdb->prepare($sql, $per_page, $offset), ARRAY_A);
         
-        // Total count
-        $total = $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} WHERE status != 'deleted'");
+        $total = $wpdb->get_var("SELECT COUNT(*) FROM {$this->table_name} $where");
         
-        $response = rest_ensure_response($results);
-        $response->header('X-WP-Total', (int) $total);
-        $response->header('X-WP-TotalPages', (int) ceil($total / $per_page));
-        
+        $response = rest_ensure_response(['items' => $results, 'total_items' => (int)$total, 'total_pages' => ceil($total/$per_page), 'current_page' => (int)$page]);
         return $response;
     }
 
@@ -136,45 +154,49 @@ class UMH_CRUD_Controller {
         global $wpdb;
         $id = (int) $request['id'];
         $item = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$this->table_name} WHERE id = %d", $id), ARRAY_A);
-        
-        if (!$item) {
-            return new WP_Error('not_found', 'Data tidak ditemukan', ['status' => 404]);
-        }
+        if (!$item) return new WP_Error('not_found', 'Data tidak ditemukan', ['status' => 404]);
         return rest_ensure_response($item);
     }
 
     public function create_item($request) {
         global $wpdb;
-        $data = $this->prepare_item_for_db($request);
+        
+        // Hook sebelum create (misal untuk hash password atau generate kode)
+        $data = apply_filters("umh_crud_{$this->resource_name}_before_create", $this->prepare_item_for_db($request), $request);
+        
         if (is_wp_error($data)) return $data;
 
-        $format = $this->get_format_string($data);
-        
         if ($wpdb->insert($this->table_name, $data)) {
-            $item = $this->get_item(['id' => $wpdb->insert_id]);
-            return rest_ensure_response($item->data); // Return item data directly
+            return $this->get_item(['id' => $wpdb->insert_id]);
         }
-        return new WP_Error('db_error', 'Gagal menyimpan data: ' . $wpdb->last_error, ['status' => 500]);
+        return new WP_Error('db_error', 'Gagal menyimpan: ' . $wpdb->last_error, ['status' => 500]);
     }
 
     public function update_item($request) {
         global $wpdb;
         $id = (int) $request['id'];
-        $data = $this->prepare_item_for_db($request);
+        
+        // Hook sebelum update
+        $data = apply_filters("umh_crud_{$this->resource_name}_before_update", $this->prepare_item_for_db($request), $request);
+        
         if (is_wp_error($data)) return $data;
 
-        if ($wpdb->update($this->table_name, $data, ['id' => $id])) {
-            return $this->get_item(['id' => $id]);
-        }
-        // If no rows updated (data same), just return item
+        $wpdb->update($this->table_name, $data, ['id' => $id]);
         return $this->get_item(['id' => $id]);
     }
 
     public function delete_item($request) {
         global $wpdb;
         $id = (int) $request['id'];
-        // Soft delete
-        $wpdb->update($this->table_name, ['status' => 'deleted'], ['id' => $id]);
+        
+        // Cek apakah pakai soft delete (status) atau hard delete
+        $cols = $wpdb->get_col("DESC {$this->table_name}", 0);
+        if (in_array('status', $cols)) {
+             $wpdb->update($this->table_name, ['status' => 'deleted'], ['id' => $id]);
+        } else {
+             $wpdb->delete($this->table_name, ['id' => $id]);
+        }
+        
         return rest_ensure_response(['deleted' => true, 'id' => $id]);
     }
 
@@ -187,8 +209,6 @@ class UMH_CRUD_Controller {
                 $data[$key] = $params[$key];
             } elseif (isset($config['default']) && $request->get_method() === 'POST' && !isset($request['id'])) {
                 $data[$key] = $config['default'];
-            } elseif (!empty($config['required']) && $request->get_method() === 'POST' && !isset($request['id'])) {
-                return new WP_Error('missing_param', "Parameter '$key' wajib diisi.", ['status' => 400]);
             }
         }
         return $data;
@@ -198,12 +218,7 @@ class UMH_CRUD_Controller {
         return [
             'page' => ['default' => 1, 'sanitize_callback' => 'absint'],
             'per_page' => ['default' => 20, 'sanitize_callback' => 'absint'],
+            'search' => ['sanitize_callback' => 'sanitize_text_field'],
         ];
     }
-    
-    protected function get_format_string($data) {
-        // Helper logic if needed, wpdb handles types mostly fine with prepare
-        return null;
-    }
 }
-?>

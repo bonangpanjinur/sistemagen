@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Umroh Manager Hybrid
  * Description: Sistem Manajemen Travel Umroh & Haji (React + WP API)
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: Bonang Panji
  */
 
@@ -47,9 +47,9 @@ function umh_register_admin_page() {
     add_menu_page(
         'Umroh Manager',
         'Umroh Manager',
-        'read', // Capability minimal 'read' agar semua staff bisa akses, permission API yang akan memfilter data
+        'read', 
         'umroh-manager',
-        'umroh_manager_render_dashboard_react', // Fungsi ada di admin/dashboard-react.php
+        'umroh_manager_render_dashboard_react', 
         'dashicons-palmtree',
         6
     );
@@ -61,7 +61,7 @@ function umh_register_admin_page() {
         'Pengaturan',
         'manage_options',
         'umh-settings',
-        'umh_render_settings_page' // Fungsi ada di admin/settings-page.php
+        'umh_render_settings_page' 
     );
 }
 
@@ -74,14 +74,20 @@ function umh_enqueue_react_scripts($hook) {
         return;
     }
 
-    $asset_file = include(UMH_PLUGIN_DIR . 'build/index.asset.php');
+    $asset_file_path = UMH_PLUGIN_DIR . 'build/index.asset.php';
+    
+    if (!file_exists($asset_file_path)) {
+        return; // Jangan lanjut jika build belum ada untuk mencegah error fatal
+    }
+
+    $asset_file = include($asset_file_path);
 
     // 1. Load CSS Khusus Admin (Untuk Immersive Mode)
     wp_enqueue_style(
         'umh-admin-global',
         UMH_PLUGIN_URL . 'assets/css/admin-style.css',
         [],
-        time() // Force reload cache saat dev
+        '1.0.0'
     );
 
     // 2. Load React Script
@@ -93,13 +99,11 @@ function umh_enqueue_react_scripts($hook) {
         true
     );
 
-    // 3. Inject Data Penting ke React (FIX UTAMA)
-    // Ini penting agar React tahu URL API, Nonce, dan User yang login
+    // 3. Inject Data Penting ke React
     $current_user = wp_get_current_user();
     $roles = (array) $current_user->roles;
     $role = $roles[0] ?? 'subscriber';
     
-    // Tentukan role aplikasi berdasarkan capability WP
     $app_role = $role;
     if (current_user_can('manage_options')) {
         $app_role = 'super_admin';
@@ -108,7 +112,7 @@ function umh_enqueue_react_scripts($hook) {
     wp_localize_script('umh-react-app', 'umhData', [
         'root' => esc_url_raw(rest_url()),
         'nonce' => wp_create_nonce('wp_rest'),
-        'adminUrl' => admin_url(), // URL untuk tombol "Kembali ke WP"
+        'adminUrl' => admin_url(), 
         'user' => [
             'id' => $current_user->ID,
             'name' => $current_user->display_name,

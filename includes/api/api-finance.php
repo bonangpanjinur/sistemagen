@@ -5,33 +5,43 @@ require_once plugin_dir_path(__FILE__) . '../class-umh-crud-controller.php';
 class UMH_Finance_API extends UMH_CRUD_Controller {
     public function __construct() {
         $schema = [
-            'transaction_type' => ['type' => 'string', 'required' => true], // income | expense
+            'transaction_type' => ['type' => 'string', 'required' => true],
             'transaction_date' => ['type' => 'string', 'format' => 'date', 'required' => true],
             'amount'           => ['type' => 'number', 'required' => true],
-            'jamaah_id'        => ['type' => 'integer'],
-            'payment_stage'    => ['type' => 'string'], // DP, Pelunasan, Cicilan
-            'payment_method'   => ['type' => 'string'], // Cash, Transfer
-            'category'         => ['type' => 'string'], // Operasional, Fee Agen, dll
+            'category'         => ['type' => 'string'],
             'description'      => ['type' => 'string'],
-            'pic_name'         => ['type' => 'string'],
+            // Relasi ID (Opsional tergantung kategori)
+            'jamaah_id'        => ['type' => 'integer'],
+            'agent_id'         => ['type' => 'integer'],   // Relasi Agen
+            'employee_id'      => ['type' => 'integer'],   // Relasi Karyawan
+            'payment_method'   => ['type' => 'string'],
         ];
-        parent::__construct('finance', 'umh_finance', $schema, ['get_items' => ['admin_staff'], 'create_item' => ['admin_staff']]);
+        parent::__construct('finance', 'umh_finance', $schema, ['get_items' => ['admin_staff', 'finance_staff', 'owner'], 'create_item' => ['admin_staff', 'finance_staff', 'owner']]);
     }
 
-    // Override get_items untuk filter by type (income/expense)
+    // Override get_items untuk JOIN table Agen & Karyawan
     public function get_items($request) {
         global $wpdb;
         $type = $request->get_param('transaction_type');
+        $where = "WHERE 1=1";
         $params = [];
-        
-        $sql = "SELECT * FROM {$this->table_name} WHERE 1=1";
-        
+
         if ($type) {
-            $sql .= " AND transaction_type = %s";
+            $where .= " AND f.type = %s"; // Menggunakan alias 'f'
             $params[] = $type;
         }
         
-        $sql .= " ORDER BY transaction_date DESC";
+        // JOIN ke tabel Jamaah, Agen, dan Karyawan
+        $sql = "SELECT f.*, 
+                j.full_name as jamaah_name,
+                a.name as agent_name,
+                e.name as employee_name
+                FROM {$this->table_name} f
+                LEFT JOIN {$wpdb->prefix}umh_jamaah j ON f.jamaah_id = j.id
+                LEFT JOIN {$wpdb->prefix}umh_agents a ON f.agent_id = a.id
+                LEFT JOIN {$wpdb->prefix}umh_employees e ON f.employee_id = e.id
+                $where
+                ORDER BY f.date DESC"; // Pastikan kolom date di DB adalah 'date' atau 'transaction_date'
         
         if (!empty($params)) {
             $sql = $wpdb->prepare($sql, $params);
@@ -41,4 +51,3 @@ class UMH_Finance_API extends UMH_CRUD_Controller {
     }
 }
 new UMH_Finance_API();
-?>

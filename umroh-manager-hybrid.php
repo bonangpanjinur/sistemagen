@@ -97,7 +97,7 @@ $cors->add_cors_headers();
 // 5. Database Migration Hook (V3) - Pastikan pakai V3
 register_activation_hook(__FILE__, 'umh_activate_plugin');
 function umh_activate_plugin() {
-    require_once UMH_PLUGIN_DIR . 'includes/db-migration-v3.php';
+    require_once UMH_PLUGIN_DIR . 'includes/db-schema.php';
     if (function_exists('umh_run_migration_v3')) {
         umh_run_migration_v3();
     }

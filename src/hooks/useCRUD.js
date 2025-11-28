@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import api from '../utils/api';
 import toast from 'react-hot-toast'; 
 
-const useCRUD = (endpoint) => {
+const useCRUD = (endpoint, initialParams = {}) => {
     const [data, setData] = useState([]);
     const [pagination, setPagination] = useState({
         current_page: 1,
@@ -17,25 +17,31 @@ const useCRUD = (endpoint) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.get(endpoint, { params });
+            // Merge initial params dengan params baru
+            const queryParams = { ...initialParams, ...params };
+            const response = await api.get(endpoint, { params: queryParams });
             
-            // PERBAIKAN UTAMA: Handle struktur response dari Controller PHP
-            // Controller mengembalikan { items: [], total_items: 10, ... }
-            
-            if (response.data && Array.isArray(response.data.items)) {
-                // Jika formatnya object dengan property items (Pagination aktif)
-                setData(response.data.items);
+            // DEBUG: Cek di console apa isi response sebenarnya
+            console.log(`[useCRUD] Fetch ${endpoint}:`, response);
+
+            // Handle berbagai format response dari WP REST API
+            if (response && Array.isArray(response)) {
+                // Format 1: Langsung array
+                setData(response);
+            } else if (response && response.items && Array.isArray(response.items)) {
+                // Format 2: Object dengan properti items (Standard Controller kita)
+                setData(response.items);
                 setPagination({
-                    current_page: response.data.current_page || 1,
-                    total_pages: response.data.total_pages || 1,
-                    total_items: response.data.total_items || 0
+                    current_page: parseInt(response.current_page || 1),
+                    total_pages: parseInt(response.total_pages || 1),
+                    total_items: parseInt(response.total_items || 0)
                 });
-            } else if (Array.isArray(response.data)) {
-                // Jika formatnya langsung array (tanpa pagination)
-                setData(response.data);
+            } else if (response && response.data && Array.isArray(response.data)) {
+                 // Format 3: Terbungkus properti data
+                 setData(response.data);
             } else {
-                // Fallback jika format tidak dikenali
-                console.warn("Format data API tidak sesuai ekspektasi:", response.data);
+                // Fallback: Data kosong atau format tidak dikenal
+                console.warn("[useCRUD] Format data tidak dikenali, set ke array kosong.");
                 setData([]); 
             }
 
@@ -43,11 +49,11 @@ const useCRUD = (endpoint) => {
             const errMsg = err.response?.data?.message || err.message || 'Gagal memuat data';
             setError(errMsg);
             console.error("Fetch Error:", err);
-            setData([]); // Pastikan data kosong saat error untuk mencegah layar putih
+            // Jangan toast error saat fetch awal agar tidak spammy, cukup log/state
         } finally {
             setLoading(false);
         }
-    }, [endpoint]);
+    }, [endpoint, JSON.stringify(initialParams)]);
 
     // 2. Create Item
     const createItem = async (newItem) => {
@@ -55,12 +61,11 @@ const useCRUD = (endpoint) => {
         const toastId = toast.loading('Menyimpan data...');
         try {
             await api.post(endpoint, newItem);
-            await fetchData(); // Refresh data otomatis
             toast.success('Data berhasil disimpan!', { id: toastId });
+            await fetchData(); // Refresh data
             return true;
         } catch (err) {
-            const errMsg = err.response?.data?.message || 'Gagal menyimpan data';
-            setError(errMsg);
+            const errMsg = err.message || 'Gagal menyimpan data';
             toast.error(errMsg, { id: toastId });
             return false;
         } finally {
@@ -73,13 +78,13 @@ const useCRUD = (endpoint) => {
         setLoading(true);
         const toastId = toast.loading('Memperbarui data...');
         try {
+            // Support endpoint/id atau endpoint?id=...
             await api.post(`${endpoint}/${id}`, updatedItem); 
-            await fetchData();
             toast.success('Data berhasil diperbarui!', { id: toastId });
+            await fetchData();
             return true;
         } catch (err) {
-            const errMsg = err.response?.data?.message || 'Gagal memperbarui data';
-            setError(errMsg);
+            const errMsg = err.message || 'Gagal memperbarui data';
             toast.error(errMsg, { id: toastId });
             return false;
         } finally {
@@ -95,20 +100,14 @@ const useCRUD = (endpoint) => {
         const toastId = toast.loading('Menghapus data...');
         try {
             await api.delete(`${endpoint}/${id}`);
-            
-            // Optimistic update
-            setData((prev) => prev.filter((item) => item.id !== id));
-            
             toast.success('Data dihapus', { id: toastId });
-            
-            // Refetch untuk memastikan pagination update
-            fetchData(); 
+            // Optimistic update: Hapus dari state lokal dulu biar cepat
+            setData((prev) => prev.filter((item) => item.id !== id));
+            await fetchData(); 
             return true;
         } catch (err) {
-            const errMsg = err.response?.data?.message || 'Gagal menghapus data';
-            setError(errMsg);
+            const errMsg = err.message || 'Gagal menghapus data';
             toast.error(errMsg, { id: toastId });
-            fetchData(); // Rollback jika gagal
             return false;
         } finally {
             setLoading(false);
@@ -117,7 +116,7 @@ const useCRUD = (endpoint) => {
 
     return {
         data,
-        pagination, // Export pagination info
+        pagination,
         loading,
         error,
         fetchData,

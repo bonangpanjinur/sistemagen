@@ -22,6 +22,7 @@ require_once UMH_PLUGIN_DIR . 'includes/class-umh-api-loader.php';
 // Load Dashboard Renderer
 require_once UMH_PLUGIN_DIR . 'admin/dashboard-react.php';
 require_once UMH_PLUGIN_DIR . 'admin/settings-page.php';
+require_once UMH_PLUGIN_DIR . 'includes/admin-login-customizer.php';
 
 // Init API Loader
 new UMH_Api_Loader();

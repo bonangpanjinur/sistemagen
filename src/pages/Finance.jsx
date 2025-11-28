@@ -3,571 +3,411 @@ import Layout from '../components/Layout';
 import CrudTable from '../components/CrudTable';
 import Modal from '../components/Modal';
 import useCRUD from '../hooks/useCRUD';
-import { useData } from '../contexts/DataContext';
-import { Plus, CheckSquare, FileText, Loader2, User, Printer, Calculator, Wallet, AlertTriangle, History } from 'lucide-react';
+import { Plus, Wallet, ArrowUpCircle, ArrowDownCircle, Printer } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import api from '../utils/api';
 import toast from 'react-hot-toast';
 
 const Finance = () => {
-    const { user } = useData();
-    const { data, loading, createItem, updateItem, deleteItem } = useCRUD('finance');
-    const { data: jamaahList, fetchData: fetchJamaah } = useCRUD('jamaah'); 
-    
-    useEffect(() => {
-        fetchJamaah();
-    }, []);
+    // Pastikan endpoint API sudah benar sesuai backend
+    const { data, loading, fetchData, createItem, updateItem, deleteItem } = useCRUD('umh/v1/finance');
+    const { data: jamaahList } = useCRUD('umh/v1/jamaah'); 
 
+    // State untuk ringkasan saldo
+    const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
+    const [filterType, setFilterType] = useState('all'); // all, income, expense
+
+    // Hitung ulang saldo setiap kali data berubah
+    useEffect(() => {
+        if (data && Array.isArray(data)) {
+            const income = data
+                .filter(d => d.type === 'income')
+                .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+            
+            const expense = data
+                .filter(d => d.type === 'expense')
+                .reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
+            
+            setSummary({ income, expense, balance: income - expense });
+        }
+    }, [data]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState('create');
     const [currentItem, setCurrentItem] = useState(null);
     
-    // State Form
-    const [formData, setFormData] = useState({ 
-        type: 'income', 
-        amount: '', 
+    // Form State Default
+    const defaultForm = {
+        type: 'income',
         date: new Date().toISOString().split('T')[0],
-        category: 'pembayaran_paket',
-        jamaah_id: '',
-        payment_method: 'transfer',
+        amount: '',
+        category: 'pembayaran_paket', // default category
         description: '',
-        proof_url: ''
-    });
-
-    // State untuk Statistik & History Pembayaran Jamaah
-    const [selectedJamaahStats, setSelectedJamaahStats] = useState(null);
-    const [jamaahHistory, setJamaahHistory] = useState([]); // [NEW] Simpan history transaksi
-    
-    const [filterType, setFilterType] = useState('all');
-    const [isUploading, setIsUploading] = useState(false);
-
-    // Kategori
-    const incomeCategories = [
-        { value: 'pembayaran_paket', label: 'Pembayaran Paket Umrah/Haji' },
-        { value: 'pendaftaran', label: 'Biaya Pendaftaran/Booking' },
-        { value: 'upgrade_kamar', label: 'Upgrade Kamar/Hotel' },
-        { value: 'add_on', label: 'Tambahan (Paspor/Vaksin)' },
-        { value: 'lainnya', label: 'Pemasukan Lainnya' }
-    ];
-
-    const expenseCategories = [
-        { value: 'vendor_tiket', label: 'Pembayaran Tiket Pesawat' },
-        { value: 'vendor_hotel', label: 'Pembayaran Hotel/Land Arrangement' },
-        { value: 'vendor_visa', label: 'Biaya Visa' },
-        { value: 'operasional', label: 'Operasional Kantor' },
-        { value: 'marketing', label: 'Biaya Iklan/Marketing' },
-        { value: 'komisi_agen', label: 'Komisi Agen' },
-        { value: 'gaji', label: 'Gaji Karyawan' }
-    ];
-
-    // --- LOGIKA HITUNG PEMBAYARAN & HISTORY JAMAAH ---
-    useEffect(() => {
-        if (formData.jamaah_id && formData.type === 'income') {
-            const jamaah = jamaahList.find(j => String(j.id) === String(formData.jamaah_id));
-            if (jamaah) {
-                // Ambil semua transaksi milik jamaah ini
-                const transactions = data.filter(d => 
-                    String(d.jamaah_id) === String(formData.jamaah_id) && 
-                    d.type === 'income' &&
-                    (modalMode === 'create' || String(d.id) !== String(currentItem?.id))
-                );
-
-                // Urutkan transaksi terbaru di atas untuk history
-                const sortedHistory = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-                setJamaahHistory(sortedHistory);
-
-                const previousPayments = transactions.reduce((acc, curr) => acc + Number(curr.amount), 0);
-                const packagePrice = Number(jamaah.package_price) || 0;
-                const remaining = packagePrice - previousPayments;
-
-                setSelectedJamaahStats({
-                    name: jamaah.full_name,
-                    package: jamaah.package_name || 'Paket Custom',
-                    price: packagePrice,
-                    paid: previousPayments,
-                    remaining: remaining > 0 ? remaining : 0,
-                    isPaidOff: remaining <= 0 // Flag Lunas
-                });
-            }
-        } else {
-            setSelectedJamaahStats(null);
-            setJamaahHistory([]);
-        }
-    }, [formData.jamaah_id, formData.type, data, jamaahList, modalMode, currentItem]);
+        jamaah_id: '',
+        payment_method: 'transfer'
+    };
+    const [formData, setFormData] = useState(defaultForm);
 
     const handleOpenModal = (mode, item = null) => {
         setModalMode(mode);
         setCurrentItem(item);
-        setFormData(item || { 
-            type: 'income', 
-            amount: '', 
-            date: new Date().toISOString().split('T')[0],
-            category: 'pembayaran_paket',
-            jamaah_id: '',
-            payment_method: 'transfer',
-            description: '',
-            proof_url: ''
-        });
+        if (item) {
+            setFormData({
+                ...item,
+                // Pastikan format tanggal benar untuk input type="date"
+                date: item.date ? item.date.split('T')[0] : new Date().toISOString().split('T')[0]
+            });
+        } else {
+            setFormData(defaultForm);
+        }
         setIsModalOpen(true);
     };
 
-    const handleSubmit = async (e) => {
+    const handleSave = async (e) => {
         e.preventDefault();
         
-        // [NEW] Validasi Overpayment Sederhana (Warning Only)
-        if (selectedJamaahStats && formData.type === 'income') {
-            const inputAmount = Number(formData.amount);
-            if (inputAmount > selectedJamaahStats.remaining + 1000) { // Toleransi 1000 rupiah
-               if(!window.confirm(`PERINGATAN: Jumlah pembayaran (${formatCurrency(inputAmount)}) melebihi sisa tagihan (${formatCurrency(selectedJamaahStats.remaining)}). Apakah Anda yakin ingin melanjutkannya sebagai kelebihan bayar/deposit?`)) {
-                   return;
-               }
-            }
+        // Bersihkan data sebelum kirim
+        const payload = { ...formData };
+        
+        // Jika pengeluaran, hapus relasi jemaah agar tidak error/kotor di DB
+        if (payload.type === 'expense') {
+            payload.jamaah_id = null;
         }
 
         const success = modalMode === 'create' 
-            ? await createItem(formData) 
-            : await updateItem(currentItem.id, formData);
-            
-        if (success) setIsModalOpen(false);
-    };
-
-    const handleFileChange = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        setIsUploading(true);
-        const toastId = toast.loading('Mengunggah bukti...');
-
-        try {
-            const response = await api.upload(file, 'finance_proof', formData.jamaah_id);
-            setFormData(prev => ({ ...prev, proof_url: response.url }));
-            toast.success('Bukti berhasil diunggah!', { id: toastId });
-        } catch (error) {
-            console.error("Upload failed:", error);
-            toast.error('Gagal mengunggah file.', { id: toastId });
-        } finally {
-            setIsUploading(false);
+            ? await createItem(payload) 
+            : await updateItem(currentItem.id, payload);
+        
+        if (success) {
+            setIsModalOpen(false);
+            fetchData(); // Refresh data
         }
     };
 
-    // --- FITUR CETAK KWITANSI ---
-    const handlePrintReceipt = (transaction) => {
-        const jamaah = jamaahList.find(j => String(j.id) === String(transaction.jamaah_id));
-        const jamaahName = jamaah ? jamaah.full_name : 'Umum/Non-Jamaah';
-        const printWindow = window.open('', '_blank');
-        
-        printWindow.document.write(`
-            <html>
-            <head>
-                <title>Kwitansi - ${transaction.id}</title>
-                <style>
-                    body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; }
-                    .header { text-align: center; margin-bottom: 30px; border-bottom: 3px double #333; padding-bottom: 20px; }
-                    .header h1 { margin: 0; font-size: 24px; text-transform: uppercase; }
-                    .header p { margin: 5px 0; font-size: 14px; color: #666; }
-                    .kwitansi-title { text-align: center; font-size: 20px; font-weight: bold; text-decoration: underline; margin-bottom: 30px; }
-                    .content { margin-bottom: 40px; line-height: 2; font-size: 16px; }
-                    .row { display: flex; }
-                    .label { width: 180px; font-weight: bold; }
-                    .value { flex: 1; border-bottom: 1px dotted #999; }
-                    .amount-box { 
-                        background: #f0f0f0; border: 2px solid #333; 
-                        padding: 10px 20px; font-size: 20px; font-weight: bold; 
-                        display: inline-block; margin-top: 20px; border-radius: 8px;
-                    }
-                    .footer { display: flex; justify-content: space-between; margin-top: 50px; }
-                    .signature { text-align: center; width: 200px; }
-                    .signature-line { margin-top: 80px; border-top: 1px solid #333; }
-                    .meta { font-size: 10px; color: #999; margin-top: 50px; text-align: center; }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>Travel Umrah Berkah</h1>
-                    <p>Jl. H. Nawi Raya No. 12, Jakarta Selatan | Telp: (021) 777-8888</p>
-                    <p>Izin Umrah No. 123/2023 | Izin Haji No. 456/2023</p>
-                </div>
+    // Filter data tabel berdasarkan tab yang dipilih
+    const filteredData = filterType === 'all' 
+        ? data 
+        : data.filter(d => d.type === filterType);
 
-                <div class="kwitansi-title">KWITANSI PEMBAYARAN</div>
-
-                <div class="content">
-                    <div class="row">
-                        <span class="label">No. Transaksi</span>
-                        <span class="value">: #TRX-${String(transaction.id).padStart(6, '0')}</span>
-                    </div>
-                    <div class="row">
-                        <span class="label">Telah Terima Dari</span>
-                        <span class="value">: ${jamaahName}</span>
-                    </div>
-                    <div class="row">
-                        <span class="label">Untuk Pembayaran</span>
-                        <span class="value">: ${transaction.category.replace('_', ' ').toUpperCase()} - ${transaction.description || '-'}</span>
-                    </div>
-                    <div class="row">
-                        <span class="label">Metode Bayar</span>
-                        <span class="value">: ${transaction.payment_method.toUpperCase()} (${formatDate(transaction.date)})</span>
-                    </div>
-                    
-                    <div class="amount-box">
-                        ${formatCurrency(transaction.amount)}
-                    </div>
-                </div>
-
-                <div class="footer">
-                    <div class="signature">
-                        <p>Penyetor</p>
-                        <div class="signature-line">(${jamaahName})</div>
-                    </div>
-                    <div class="signature">
-                        <p>Jakarta, ${formatDate(new Date())}</p>
-                        <p>Kasir / Admin</p>
-                        <div class="signature-line">(${user?.name || 'Admin'})</div>
-                    </div>
-                </div>
-
-                <div class="meta">
-                    Dicetak otomatis oleh Sistem Manajemen Umrah pada ${new Date().toLocaleString()}
-                </div>
-
-                <script>
-                    window.onload = function() { window.print(); }
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
-
+    // Definisi Kolom Tabel
     const columns = [
-        { header: 'Tanggal', accessor: 'date', render: (row) => formatDate(row.date), sortable: true },
+        { 
+            header: 'Tanggal', 
+            accessor: 'date', 
+            render: (row) => <span className="text-sm text-gray-600">{formatDate(row.date)}</span> 
+        },
         { 
             header: 'Tipe', 
-            accessor: 'type',
+            accessor: 'type', 
             render: (row) => (
-                <span className={`px-2 py-1 rounded text-xs font-bold ${row.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                    row.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                }`}>
                     {row.type === 'income' ? 'Masuk' : 'Keluar'}
                 </span>
-            )
-        },
-        {
-            header: 'Terkait Jamaah',
-            accessor: 'jamaah_id',
-            render: (row) => {
-                const j = jamaahList.find(x => String(x.id) === String(row.jamaah_id));
-                return j ? <span className="font-medium text-blue-700">{j.full_name}</span> : <span className="text-gray-400">-</span>;
-            }
+            ) 
         },
         { 
-            header: 'Jumlah', 
-            accessor: 'amount', 
+            header: 'Kategori', 
+            accessor: 'category', 
             render: (row) => (
-                <span className={row.type === 'income' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                    {row.type === 'expense' ? '-' : '+'}{formatCurrency(row.amount)}
+                <span className="capitalize font-medium">
+                    {row.category ? row.category.replace(/_/g, ' ') : '-'}
                 </span>
-            ),
-            sortable: true
+            ) 
         },
-        {
-            header: 'Metode',
-            accessor: 'payment_method',
-            render: (row) => <span className="text-xs uppercase bg-gray-100 px-2 py-1 rounded">{row.payment_method}</span>
-        },
-        {
-            header: 'Aksi',
-            accessor: 'id',
+        { 
+            header: 'Keterangan', 
+            accessor: 'description',
             render: (row) => (
-                <div className="flex gap-2">
-                    {/* Tombol Cetak Kwitansi Khusus Pemasukan */}
-                    {row.type === 'income' && (
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); handlePrintReceipt(row); }}
-                            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded"
-                            title="Cetak Kwitansi"
-                        >
-                            <Printer size={16} />
-                        </button>
-                    )}
-                    {row.proof_url && (
-                        <a href={row.proof_url} target="_blank" rel="noopener noreferrer" className="p-1 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded" title="Lihat Bukti">
-                            <FileText size={16} />
-                        </a>
+                <div className="max-w-xs">
+                    <div className="truncate text-sm">{row.description || '-'}</div>
+                    {row.jamaah_name && (
+                        <div className="text-xs text-gray-500 mt-1">
+                            Oleh: {row.jamaah_name}
+                        </div>
                     )}
                 </div>
             )
-        }
+        },
+        { 
+            header: 'Jumlah (Rp)', 
+            accessor: 'amount', 
+            className: 'text-right',
+            render: (row) => (
+                <span className={`font-bold ${
+                    row.type === 'income' ? 'text-green-600' : 'text-red-600'
+                }`}>
+                    {row.type === 'expense' ? '-' : '+'} {formatCurrency(row.amount)}
+                </span>
+            ) 
+        },
     ];
 
-    const filteredData = filterType === 'all' ? data : data.filter(item => item.type === filterType);
-    const totalIncome = data.filter(d => d.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const totalExpense = data.filter(d => d.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const balance = totalIncome - totalExpense;
-
     return (
-        <Layout title="Keuangan & Kasir">
-            {/* Kartu Ringkasan Atas */}
+        <Layout title="Keuangan & Arus Kas">
+            {/* --- DASHBOARD RINGKASAN --- */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-white p-4 rounded shadow border-l-4 border-green-500 flex items-center justify-between">
+                {/* Kartu Saldo */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-blue-100 flex items-center justify-between">
                     <div>
-                        <p className="text-gray-500 text-sm">Total Pemasukan</p>
-                        <p className="text-xl font-bold text-gray-800">{formatCurrency(totalIncome)}</p>
+                        <p className="text-gray-500 text-sm font-medium mb-1">Sisa Saldo Kas</p>
+                        <h3 className={`text-2xl font-bold ${summary.balance < 0 ? 'text-red-600' : 'text-blue-700'}`}>
+                            {formatCurrency(summary.balance)}
+                        </h3>
                     </div>
-                    <div className="bg-green-100 p-2 rounded-full text-green-600"><Wallet size={24}/></div>
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-full">
+                        <Wallet size={24} />
+                    </div>
                 </div>
-                <div className="bg-white p-4 rounded shadow border-l-4 border-red-500 flex items-center justify-between">
+
+                {/* Kartu Pemasukan */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-green-100 flex items-center justify-between">
                     <div>
-                        <p className="text-gray-500 text-sm">Total Pengeluaran</p>
-                        <p className="text-xl font-bold text-gray-800">{formatCurrency(totalExpense)}</p>
+                        <p className="text-gray-500 text-sm font-medium mb-1">Total Pemasukan</p>
+                        <h3 className="text-2xl font-bold text-green-600">
+                            {formatCurrency(summary.income)}
+                        </h3>
                     </div>
-                    <div className="bg-red-100 p-2 rounded-full text-red-600"><Calculator size={24}/></div>
+                    <div className="p-3 bg-green-50 text-green-600 rounded-full">
+                        <ArrowUpCircle size={24} />
+                    </div>
                 </div>
-                <div className="bg-white p-4 rounded shadow border-l-4 border-blue-500 flex items-center justify-between">
+
+                {/* Kartu Pengeluaran */}
+                <div className="bg-white p-5 rounded-xl shadow-sm border border-red-100 flex items-center justify-between">
                     <div>
-                        <p className="text-gray-500 text-sm">Saldo Kas</p>
-                        <p className={`text-xl font-bold ${balance < 0 ? 'text-red-600' : 'text-blue-600'}`}>{formatCurrency(balance)}</p>
+                        <p className="text-gray-500 text-sm font-medium mb-1">Total Pengeluaran</p>
+                        <h3 className="text-2xl font-bold text-red-600">
+                            {formatCurrency(summary.expense)}
+                        </h3>
                     </div>
-                    <div className="bg-blue-100 p-2 rounded-full text-blue-600"><CheckSquare size={24}/></div>
+                    <div className="p-3 bg-red-50 text-red-600 rounded-full">
+                        <ArrowDownCircle size={24} />
+                    </div>
                 </div>
             </div>
 
-            <div className="flex justify-between mb-4">
+            {/* --- TOOLBAR & FILTER --- */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setFilterType('all')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            filterType === 'all' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                    >
+                        Semua
+                    </button>
+                    <button 
+                        onClick={() => setFilterType('income')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            filterType === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:text-green-600'
+                        }`}
+                    >
+                        Pemasukan
+                    </button>
+                    <button 
+                        onClick={() => setFilterType('expense')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                            filterType === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-500 hover:text-red-600'
+                        }`}
+                    >
+                        Pengeluaran
+                    </button>
+                </div>
+
                 <div className="flex gap-2">
-                    <button onClick={() => setFilterType('all')} className={`px-3 py-1 rounded text-sm ${filterType === 'all' ? 'bg-gray-800 text-white' : 'bg-white border'}`}>Semua</button>
-                    <button onClick={() => setFilterType('income')} className={`px-3 py-1 rounded text-sm ${filterType === 'income' ? 'bg-green-600 text-white' : 'bg-white border'}`}>Pemasukan</button>
-                    <button onClick={() => setFilterType('expense')} className={`px-3 py-1 rounded text-sm ${filterType === 'expense' ? 'bg-red-600 text-white' : 'bg-white border'}`}>Pengeluaran</button>
+                    <button className="btn-secondary flex items-center gap-2" title="Cetak Laporan">
+                        <Printer size={18} /> <span className="hidden md:inline">Cetak</span>
+                    </button>
+                    <button 
+                        onClick={() => handleOpenModal('create')} 
+                        className="btn-primary flex items-center gap-2"
+                    >
+                        <Plus size={18} /> Transaksi Baru
+                    </button>
                 </div>
-                <button 
-                    onClick={() => handleOpenModal('create')}
-                    className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-blue-700 shadow-sm"
-                >
-                    <Plus size={18} /> Transaksi Baru
-                </button>
             </div>
 
-            <CrudTable
-                columns={columns}
-                data={filteredData}
-                loading={loading}
-                onEdit={(item) => handleOpenModal('edit', item)}
-                onDelete={deleteItem}
-                userCapabilities={user?.role}
-                editCapability="manage_options" 
+            {/* --- TABEL DATA --- */}
+            <CrudTable 
+                columns={columns} 
+                data={filteredData} 
+                loading={loading} 
+                onEdit={(item) => handleOpenModal('edit', item)} 
+                onDelete={deleteItem} 
             />
 
-            <Modal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                title={modalMode === 'create' ? 'Tambah Transaksi' : 'Edit Transaksi'}
+            {/* --- MODAL FORM --- */}
+            <Modal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+                title={modalMode === 'create' ? 'Tambah Transaksi Baru' : 'Edit Transaksi'}
             >
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Tipe Transaksi */}
+                <form onSubmit={handleSave} className="space-y-4">
+                    {/* Baris 1: Tipe & Tanggal */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tipe Transaksi</label>
+                            <label className="label">Jenis Transaksi</label>
                             <select 
-                                className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border focus:ring-blue-500 focus:border-blue-500"
-                                value={formData.type}
-                                onChange={(e) => setFormData({
-                                    ...formData, 
-                                    type: e.target.value,
-                                    category: e.target.value === 'income' ? 'pembayaran_paket' : 'operasional',
-                                    jamaah_id: e.target.value === 'expense' ? '' : formData.jamaah_id
-                                })}
+                                className="input-field bg-gray-50" 
+                                value={formData.type} 
+                                onChange={(e) => {
+                                    const newType = e.target.value;
+                                    setFormData({
+                                        ...formData, 
+                                        type: newType,
+                                        // Reset kategori ke default yang sesuai saat tipe berubah
+                                        category: newType === 'income' ? 'pembayaran_paket' : 'operasional',
+                                        jamaah_id: '' 
+                                    });
+                                }}
                             >
-                                <option value="income">Pemasukan (Terima Uang)</option>
-                                <option value="expense">Pengeluaran (Bayar Vendor/Ops)</option>
+                                <option value="income">🔵 Pemasukan (Uang Masuk)</option>
+                                <option value="expense">🔴 Pengeluaran (Uang Keluar)</option>
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Tanggal</label>
+                            <label className="label">Tanggal Transaksi</label>
                             <input 
                                 type="date" 
-                                className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                                value={formData.date}
-                                onChange={(e) => setFormData({...formData, date: e.target.value})}
-                                required
+                                className="input-field" 
+                                value={formData.date} 
+                                onChange={(e) => setFormData({...formData, date: e.target.value})} 
+                                required 
                             />
                         </div>
                     </div>
 
-                    {/* PILIH JAMAAH (Khusus Income) */}
+                    {/* Baris 2: Kategori (Dinamis) */}
+                    <div>
+                        <label className="label">Kategori</label>
+                        <select 
+                            className="input-field" 
+                            value={formData.category} 
+                            onChange={(e) => setFormData({...formData, category: e.target.value})}
+                        >
+                            {formData.type === 'income' ? (
+                                <>
+                                    <optgroup label="Dari Jemaah">
+                                        <option value="pembayaran_paket">Pembayaran Paket Umrah/Haji</option>
+                                        <option value="dp">Uang Muka (DP)</option>
+                                        <option value="pelunasan">Pelunasan</option>
+                                        <option value="perlengkapan">Pembelian Perlengkapan</option>
+                                    </optgroup>
+                                    <optgroup label="Lainnya">
+                                        <option value="investasi">Suntikan Modal/Investasi</option>
+                                        <option value="lainnya">Pemasukan Lain-lain</option>
+                                    </optgroup>
+                                </>
+                            ) : (
+                                <>
+                                    <optgroup label="Operasional">
+                                        <option value="gaji">Gaji Karyawan</option>
+                                        <option value="fee_agen">Komisi/Fee Agen</option>
+                                        <option value="operasional">Operasional Kantor (Listrik/Air/Wifi)</option>
+                                        <option value="atk">ATK & Perlengkapan Kantor</option>
+                                    </optgroup>
+                                    <optgroup label="Pemasaran & Vendor">
+                                        <option value="iklan">Biaya Iklan (Ads)</option>
+                                        <option value="vendor_hotel">Bayar Hotel (Land Arrangement)</option>
+                                        <option value="vendor_tiket">Bayar Tiket Pesawat</option>
+                                        <option value="vendor_visa">Bayar Visa</option>
+                                    </optgroup>
+                                </>
+                            )}
+                        </select>
+                    </div>
+
+                    {/* Baris 3: Pilih Jemaah (Hanya jika Pemasukan) */}
                     {formData.type === 'income' && (
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                            <label className="block text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
-                                <User size={16} /> Pilih Jamaah Pembayar
-                            </label>
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <label className="label text-blue-800">Terima Dari (Jemaah)</label>
                             <select 
-                                className="block w-full rounded border-blue-300 shadow-sm p-2 border focus:ring-blue-500"
-                                value={formData.jamaah_id}
+                                className="input-field" 
+                                value={formData.jamaah_id} 
                                 onChange={(e) => setFormData({...formData, jamaah_id: e.target.value})}
                             >
-                                <option value="">-- Pilih Nama Jamaah --</option>
-                                {jamaahList && jamaahList.map(j => (
+                                <option value="">-- Pilih Nama Jemaah (Opsional) --</option>
+                                {jamaahList && jamaahList.map((j) => (
                                     <option key={j.id} value={j.id}>
-                                        {j.full_name} - {j.package_name || 'Tanpa Paket'}
+                                        {j.full_name} - {j.passport_number || 'Tanpa Paspor'}
                                     </option>
                                 ))}
                             </select>
-
-                            {/* KARTU KONTROL & HISTORY PEMBAYARAN */}
-                            {selectedJamaahStats && (
-                                <div className="mt-3 bg-white p-3 rounded border border-blue-100 shadow-sm text-sm">
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-gray-600">Harga Paket:</span>
-                                        <span className="font-semibold">{formatCurrency(selectedJamaahStats.price)}</span>
-                                    </div>
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-gray-600">Sudah Dibayar:</span>
-                                        <span className="font-semibold text-green-600">{formatCurrency(selectedJamaahStats.paid)}</span>
-                                    </div>
-                                    <div className="border-t my-2"></div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-gray-800 font-bold">Sisa Tagihan:</span>
-                                        <span className={`font-bold text-lg ${selectedJamaahStats.remaining > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                            {formatCurrency(selectedJamaahStats.remaining)}
-                                        </span>
-                                    </div>
-
-                                    {/* Indikator LUNAS */}
-                                    {selectedJamaahStats.isPaidOff && (
-                                        <div className="bg-green-100 text-green-800 text-center font-bold py-1 rounded mb-2 border border-green-200">
-                                            ✅ LUNAS
-                                        </div>
-                                    )}
-                                    
-                                    {/* TOMBOL BAYAR SISA */}
-                                    {selectedJamaahStats.remaining > 0 && (
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, amount: selectedJamaahStats.remaining }))}
-                                            className="w-full bg-blue-100 text-blue-700 py-1.5 rounded text-xs font-bold hover:bg-blue-200 transition-colors flex justify-center items-center gap-1 mb-3"
-                                        >
-                                            <Calculator size={14}/> Auto-fill Sisa Tagihan ({formatCurrency(selectedJamaahStats.remaining)})
-                                        </button>
-                                    )}
-
-                                    {/* [NEW] MINI HISTORY PEMBAYARAN */}
-                                    {jamaahHistory.length > 0 && (
-                                        <div className="mt-3 pt-2 border-t border-gray-200">
-                                            <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
-                                                <History size={12}/> Riwayat Pembayaran Sebelumnya:
-                                            </p>
-                                            <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
-                                                {jamaahHistory.map(tx => (
-                                                    <div key={tx.id} className="flex justify-between items-center text-xs bg-gray-50 p-1.5 rounded border border-gray-100">
-                                                        <div>
-                                                            <span className="text-gray-600">{formatDate(tx.date)}</span>
-                                                            <span className="mx-1">•</span>
-                                                            <span className="uppercase text-[10px] bg-gray-200 px-1 rounded">{tx.payment_method}</span>
-                                                        </div>
-                                                        <span className="font-medium text-green-700">{formatCurrency(tx.amount)}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                            <p className="text-xs text-blue-600 mt-1">
+                                *Pilih jemaah jika pembayaran terkait paket umrah.
+                            </p>
                         </div>
                     )}
 
+                    {/* Baris 4: Nominal */}
+                    <div>
+                        <label className="label">Nominal (Rp)</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-gray-500 font-bold">Rp</span>
+                            <input 
+                                type="number" 
+                                className="input-field pl-10 text-lg font-bold text-gray-800" 
+                                placeholder="0" 
+                                value={formData.amount} 
+                                onChange={(e) => setFormData({...formData, amount: e.target.value})} 
+                                required 
+                            />
+                        </div>
+                    </div>
+
+                    {/* Baris 5: Metode Bayar & Keterangan */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Kategori</label>
+                            <label className="label">Metode Pembayaran</label>
                             <select 
-                                className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                                value={formData.category}
-                                onChange={(e) => setFormData({...formData, category: e.target.value})}
-                                required
+                                className="input-field" 
+                                value={formData.payment_method} 
+                                onChange={(e) => setFormData({...formData, payment_method: e.target.value})}
                             >
-                                {formData.type === 'income' ? (
-                                    incomeCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)
-                                ) : (
-                                    expenseCategories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)
-                                )}
+                                <option value="transfer">Transfer Bank</option>
+                                <option value="cash">Tunai (Cash)</option>
+                                <option value="edc">Kartu Debit/Kredit (EDC)</option>
+                                <option value="qris">QRIS</option>
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Jumlah Uang (Rp)</label>
-                            <div className="relative">
-                                <input 
-                                    type="number" 
-                                    className={`mt-1 block w-full rounded border shadow-sm p-2 font-mono text-lg font-bold
-                                        ${selectedJamaahStats && Number(formData.amount) > selectedJamaahStats.remaining + 1000 ? 'border-red-500 text-red-600 bg-red-50' : 'border-gray-300'}`}
-                                    placeholder="0"
-                                    value={formData.amount}
-                                    onChange={(e) => setFormData({...formData, amount: e.target.value})}
-                                    required
-                                    min="1"
-                                />
-                                {selectedJamaahStats && Number(formData.amount) > selectedJamaahStats.remaining + 1000 && (
-                                    <div className="absolute right-2 top-3 text-red-500 animate-pulse">
-                                        <AlertTriangle size={20} />
-                                    </div>
-                                )}
-                            </div>
-                            {selectedJamaahStats && Number(formData.amount) > selectedJamaahStats.remaining + 1000 && (
-                                <p className="text-xs text-red-600 mt-1 font-bold">⚠️ Nominal melebihi sisa tagihan!</p>
-                            )}
-                        </div>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Metode Pembayaran</label>
-                        <div className="flex gap-4">
-                            {['transfer', 'tunai', 'qris', 'cek'].map(method => (
-                                <label key={method} className="flex items-center gap-2 cursor-pointer bg-gray-50 px-3 py-2 rounded border hover:bg-gray-100">
-                                    <input 
-                                        type="radio" 
-                                        name="payment_method"
-                                        value={method}
-                                        checked={formData.payment_method === method}
-                                        onChange={(e) => setFormData({...formData, payment_method: e.target.value})}
-                                        className="text-blue-600"
-                                    />
-                                    <span className="capitalize text-sm font-medium">{method}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Keterangan / Catatan</label>
+                        <label className="label">Keterangan / Catatan</label>
                         <textarea 
-                            className="mt-1 block w-full rounded border-gray-300 shadow-sm p-2 border"
-                            rows="2"
-                            placeholder="Contoh: Pelunasan Paket a.n Budi"
-                            value={formData.description || ''}
+                            className="input-field h-20" 
+                            placeholder="Contoh: Pelunasan Paket Hemat a.n Budi" 
+                            value={formData.description} 
                             onChange={(e) => setFormData({...formData, description: e.target.value})}
                         ></textarea>
                     </div>
 
-                    <div className="border p-3 rounded bg-gray-50 border-dashed border-gray-300">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Upload Bukti Transfer / Kwitansi
-                        </label>
-                        <div className="flex items-center gap-2">
-                            <input 
-                                type="file" 
-                                accept="image/*,.pdf"
-                                onChange={handleFileChange}
-                                disabled={isUploading}
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
-                            />
-                            {isUploading && <Loader2 className="animate-spin text-blue-600" size={20} />}
-                        </div>
-                        
-                        {formData.proof_url && !isUploading && (
-                            <p className="mt-2 text-xs text-green-600 flex items-center gap-1">
-                                <CheckSquare size={12}/> File Tersimpan di Server
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex justify-end gap-2 pt-4">
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-700 bg-gray-100 rounded hover:bg-gray-200">Batal</button>
-                        <button type="submit" className="px-4 py-2 text-white bg-blue-600 rounded hover:bg-blue-700 shadow flex items-center gap-2" disabled={isUploading}>
-                            {isUploading ? 'Mengunggah...' : (
-                                <><CheckSquare size={16}/> {modalMode === 'create' ? 'Simpan Transaksi' : 'Update Transaksi'}</>
+                    {/* Tombol Aksi */}
+                    <div className="flex justify-end gap-3 pt-4 border-t mt-2">
+                        <button 
+                            type="button" 
+                            onClick={() => setIsModalOpen(false)} 
+                            className="btn-secondary px-6"
+                        >
+                            Batal
+                        </button>
+                        <button 
+                            type="submit" 
+                            className={`btn-primary px-6 flex items-center gap-2 ${
+                                formData.type === 'income' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                            }`}
+                        >
+                            {loading ? 'Menyimpan...' : (
+                                <>
+                                    <Plus size={18} /> Simpan Transaksi
+                                </>
                             )}
                         </button>
                     </div>

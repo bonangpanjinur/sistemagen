@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { HashRouter, Routes, Route } from 'react-router-dom';
+import { DataProvider } from './contexts/DataContext'; // WAJIB ADA: Import Context Data
 import Layout from './components/Layout';
+
+// Import Pages
 import Dashboard from './pages/Dashboard';
 import Agents from './pages/Agents';
 import Bookings from './pages/Bookings';
@@ -30,29 +33,17 @@ import './index.css';
 const container = document.getElementById('umroh-manager-app');
 
 if (container) {
-  // Cek apakah createRoot tersedia (React 18+)
-  if (ReactDOM.createRoot) {
-    const root = ReactDOM.createRoot(container);
-    root.render(
-      <React.StrictMode>
+  const root = ReactDOM.createRoot(container);
+  root.render(
+    <React.StrictMode>
+      {/* WAJIB: Bungkus aplikasi dengan DataProvider agar tidak error 'undefined' */}
+      <DataProvider>
         <HashRouter>
           <AppRoutes />
         </HashRouter>
-      </React.StrictMode>
-    );
-  } else {
-    // Fallback untuk React versi lama (React 17 kebawah / WP lama)
-    // Note: Anda mungkin perlu import 'render' dari 'react-dom' jika menggunakan versi lama sekali,
-    // tapi biasanya render masih ada di default export ReactDOM untuk kompatibilitas.
-    ReactDOM.render(
-      <React.StrictMode>
-        <HashRouter>
-          <AppRoutes />
-        </HashRouter>
-      </React.StrictMode>,
-      container
-    );
-  }
+      </DataProvider>
+    </React.StrictMode>
+  );
 }
 
 function AppRoutes() {

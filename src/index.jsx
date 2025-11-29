@@ -1,5 +1,5 @@
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -8,63 +8,81 @@ import Bookings from './pages/Bookings';
 import CreateBooking from './pages/CreateBooking';
 import Packages from './pages/Packages';
 import PackageCategories from './pages/PackageCategories';
-import Departures from './pages/Departures';
 import Flights from './pages/Flights';
 import Hotels from './pages/Hotels';
-import Jamaah from './pages/Jamaah';
-import Users from './pages/Users';
-import Roles from './pages/Roles';
-import Finance from './pages/Finance';
-import HR from './pages/HR';
-import Logistics from './pages/Logistics';
-import Marketing from './pages/Marketing';
-import Masters from './pages/Masters';
-import Settings from './pages/Settings';
+import Departures from './pages/Departures';
 import Manifest from './pages/Manifest';
 import RoomingList from './pages/RoomingList';
+import Jamaah from './pages/Jamaah';
+import Logistics from './pages/Logistics';
+import Finance from './pages/Finance';
+import Marketing from './pages/Marketing';
+import HR from './pages/HR';
+import Users from './pages/Users';
+import Roles from './pages/Roles';
+import Settings from './pages/Settings';
+import Masters from './pages/Masters';
+import Categories from './pages/Categories';
 import Tasks from './pages/Tasks';
 import Payroll from './pages/Payroll';
-import Categories from './pages/Categories';
-import { DataProvider } from './contexts/DataContext';
 import './index.css';
 
-const container = document.getElementById('umroh-manager-dashboard');
+const container = document.getElementById('umroh-manager-app');
 
 if (container) {
-    const root = createRoot(container);
+  // Cek apakah createRoot tersedia (React 18+)
+  if (ReactDOM.createRoot) {
+    const root = ReactDOM.createRoot(container);
     root.render(
-        <React.StrictMode>
-            <HashRouter>
-                <DataProvider>
-                    <Routes>
-                        <Route path="/" element={<Layout />}>
-                            <Route index element={<Dashboard />} />
-                            <Route path="agents" element={<Agents />} />
-                            <Route path="bookings" element={<Bookings />} />
-                            <Route path="bookings/create" element={<CreateBooking />} />
-                            <Route path="packages" element={<Packages />} />
-                            <Route path="packages/categories" element={<PackageCategories />} />
-                            <Route path="departures" element={<Departures />} />
-                            <Route path="flights" element={<Flights />} />
-                            <Route path="hotels" element={<Hotels />} />
-                            <Route path="jamaah" element={<Jamaah />} />
-                            <Route path="users" element={<Users />} />
-                            <Route path="roles" element={<Roles />} />
-                            <Route path="finance" element={<Finance />} />
-                            <Route path="hr" element={<HR />} />
-                            <Route path="logistics" element={<Logistics />} />
-                            <Route path="marketing" element={<Marketing />} />
-                            <Route path="masters" element={<Masters />} />
-                            <Route path="settings" element={<Settings />} />
-                            <Route path="manifest" element={<Manifest />} />
-                            <Route path="rooming" element={<RoomingList />} />
-                            <Route path="tasks" element={<Tasks />} />
-                            <Route path="payroll" element={<Payroll />} />
-                            <Route path="categories" element={<Categories />} />
-                        </Route>
-                    </Routes>
-                </DataProvider>
-            </HashRouter>
-        </React.StrictMode>
+      <React.StrictMode>
+        <HashRouter>
+          <AppRoutes />
+        </HashRouter>
+      </React.StrictMode>
     );
+  } else {
+    // Fallback untuk React versi lama (React 17 kebawah / WP lama)
+    // Note: Anda mungkin perlu import 'render' dari 'react-dom' jika menggunakan versi lama sekali,
+    // tapi biasanya render masih ada di default export ReactDOM untuk kompatibilitas.
+    ReactDOM.render(
+      <React.StrictMode>
+        <HashRouter>
+          <AppRoutes />
+        </HashRouter>
+      </React.StrictMode>,
+      container
+    );
+  }
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Dashboard />} />
+        <Route path="agents" element={<Agents />} />
+        <Route path="bookings" element={<Bookings />} />
+        <Route path="bookings/create" element={<CreateBooking />} />
+        <Route path="packages" element={<Packages />} />
+        <Route path="packages/categories" element={<PackageCategories />} />
+        <Route path="inventory/flights" element={<Flights />} />
+        <Route path="inventory/hotels" element={<Hotels />} />
+        <Route path="departures" element={<Departures />} />
+        <Route path="operations/manifest" element={<Manifest />} />
+        <Route path="operations/rooming" element={<RoomingList />} />
+        <Route path="operations/logistics" element={<Logistics />} />
+        <Route path="jamaah" element={<Jamaah />} />
+        <Route path="finance" element={<Finance />} />
+        <Route path="marketing" element={<Marketing />} />
+        <Route path="hr" element={<HR />} />
+        <Route path="hr/payroll" element={<Payroll />} />
+        <Route path="users/list" element={<Users />} />
+        <Route path="users/roles" element={<Roles />} />
+        <Route path="masters" element={<Masters />} />
+        <Route path="masters/categories" element={<Categories />} />
+        <Route path="tasks" element={<Tasks />} />
+        <Route path="settings" element={<Settings />} />
+      </Route>
+    </Routes>
+  );
 }
